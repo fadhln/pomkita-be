@@ -110,7 +110,7 @@ func NewService(store Store, config Config) *Service {
 	}
 	audience := config.Audience
 	if audience == "" {
-		audience = "spbu-recon"
+		audience = "pomkita"
 	}
 	now := config.Now
 	if now == nil {

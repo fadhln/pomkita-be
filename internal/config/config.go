@@ -20,7 +20,7 @@ func Load() Config {
 		DatabaseURL:   valueOrDefault("DATABASE_URL", "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable"),
 		MigrationsDir: valueOrDefault("MIGRATIONS_DIR", "migrations"),
 		JWTIssuer:     valueOrDefault("JWT_ISSUER", "pomkita"),
-		JWTAudience:   valueOrDefault("JWT_AUDIENCE", "spbu-recon"),
+		JWTAudience:   valueOrDefault("JWT_AUDIENCE", "pomkita"),
 		JWTSecrets:    jwtSecrets(),
 	}
 }

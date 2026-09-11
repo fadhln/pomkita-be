@@ -66,7 +66,7 @@ func TestService_VerifyRejectsInvalidClaimsWithDistinctErrors(t *testing.T) {
 	store := &memoryStore{keys: map[string]Key{"key_1": key}, sessions: map[uuid.UUID]Session{
 		jti: {JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(10 * time.Minute)},
 	}}
-	service := NewService(store, Config{Issuer: "pomkita", Audience: "spbu-recon", Now: func() time.Time { return now }})
+	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return now }})
 
 	cases := []struct {
 		name   string
@@ -100,7 +100,7 @@ func TestService_IssueCreatesFifteenMinuteSessionAndUUIDv4JTI(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	key := Key{KID: "key_1", Secret: "secret", Status: KeyActive, MaxTokenExpiry: now.Add(15 * time.Minute)}
 	store := &memoryStore{keys: map[string]Key{"key_1": key}, sessions: map[uuid.UUID]Session{}}
-	service := NewService(store, Config{Issuer: "pomkita", Audience: "spbu-recon", Now: func() time.Time { return now }})
+	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return now }})
 
 	token, claims, err := service.Issue(context.Background(), uuid.MustParse("33333333-3333-4333-8333-333333333333"))
 	if err != nil {
@@ -134,7 +134,7 @@ func TestService_PreviousKeyAcceptedUntilMaximumTokenExpiry(t *testing.T) {
 		jti: {JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: previousExpiry},
 	}}
 	clock := now
-	service := NewService(store, Config{Issuer: "pomkita", Audience: "spbu-recon", Now: func() time.Time { return clock }})
+	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return clock }})
 	token := signedToken(t, key.Secret, key.KID, nil, userID, jti, now)
 	if _, err := service.Verify(context.Background(), token); err != nil {
 		t.Fatalf("previous key rejected before cutoff: %v", err)
@@ -161,7 +161,7 @@ func TestService_LogoutRevokesSession(t *testing.T) {
 func standardClaims(subject, jti uuid.UUID, now time.Time) map[string]any {
 	return map[string]any{
 		"iss": "pomkita", "sub": subject.String(), "jti": jti.String(),
-		"iat": now.Unix(), "exp": now.Add(10 * time.Minute).Unix(), "aud": "spbu-recon",
+		"iat": now.Unix(), "exp": now.Add(10 * time.Minute).Unix(), "aud": "pomkita",
 	}
 }
 

@@ -14,7 +14,7 @@ func TestLoadUsesB0DatabaseAndJWTDefaults(t *testing.T) {
 	if cfg.MigrationsDir != "migrations" {
 		t.Fatalf("migrations directory: got %q", cfg.MigrationsDir)
 	}
-	if cfg.JWTIssuer != "pomkita" || cfg.JWTAudience != "spbu-recon" {
+	if cfg.JWTIssuer != "pomkita" || cfg.JWTAudience != "pomkita" {
 		t.Fatalf("JWT defaults: issuer=%q audience=%q", cfg.JWTIssuer, cfg.JWTAudience)
 	}
 }
