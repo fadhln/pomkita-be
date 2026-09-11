@@ -86,6 +86,11 @@ Perilaku di atas threshold:
 - Loss entry tanpa evidence tidak boleh disubmit.
 - Alert event masuk daftar anomali Owner.
 
+Kebijakan evidence (configurable Admin/Owner, per SPBU):
+- Mode `opsional` (default): evidence diminta tapi boleh dikosongkan.
+- Mode `wajib`: entry di atas threshold tidak dapat disubmit tanpa evidence (foto meter/kas, foto dokumen DO, atau nomor referensi).
+- Jenis evidence yang diterima per aturan juga configurable (foto wajib vs. referensi cukup).
+
 Perilaku di bawah threshold: tercatat normal, tanpa paksaan evidence.
 
 ## 6. Isolasi Multi-Tenant
