@@ -85,7 +85,7 @@ create table public.user_station_roles (
 alter table public.user_station_roles owner to user_owner;
 
 create table public.sessions (
-  jti uuid primary key,
+  jti uuid primary key default app.gen_random_uuid(),
   kid text not null,
   issued_at timestamptz(6) not null,
   expires_at timestamptz(6) not null,
