@@ -40,6 +40,9 @@ $$;
 
 revoke all on schema public from public;
 grant usage on schema public to pomkita_app;
+grant usage on schema public to org_owner, station_owner, user_owner, auth_owner, registry_owner, audit_lock_owner;
+grant usage on schema app to org_owner, station_owner, user_owner, auth_owner, registry_owner, audit_lock_owner;
+grant execute on function app.hmac(text, text, text) to auth_owner;
 
 create table public.organizations (
   org_id uuid primary key default app.gen_random_uuid(),
@@ -134,6 +137,8 @@ alter table public.users enable row level security;
 alter table public.users force row level security;
 create policy users_context on public.users
   using (org_id::text = current_setting('app.org_id', true));
+create policy users_authentication on public.users to auth_owner
+  using (true);
 
 alter table public.user_station_roles enable row level security;
 alter table public.user_station_roles force row level security;
@@ -141,6 +146,8 @@ create policy user_station_roles_context on public.user_station_roles
   using (org_id::text = current_setting('app.org_id', true)
      and (current_setting('app.station_id', true) = ''
        or station_id::text = current_setting('app.station_id', true)));
+create policy user_station_roles_authentication on public.user_station_roles to auth_owner
+  using (true);
 
 alter table public.audit_chain_locks enable row level security;
 alter table public.audit_chain_locks force row level security;
@@ -150,6 +157,8 @@ create policy audit_chain_locks_context on public.audit_chain_locks
 revoke all on all tables in schema public from public, pomkita_app, report_writer, audit_owner, relay;
 revoke all on all sequences in schema public from public, pomkita_app, report_writer, audit_owner, relay;
 revoke all on all functions in schema public from public, pomkita_app, report_writer, audit_owner, relay;
+
+grant select on public.users, public.user_station_roles to auth_owner;
 
 alter default privileges revoke all on tables from public, pomkita_app, report_writer, audit_owner, relay;
 alter default privileges revoke all on sequences from public, pomkita_app, report_writer, audit_owner, relay;
