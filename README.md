@@ -31,3 +31,5 @@ The implementation follows the phases in `../BE-PLAN.md`. API contract artifacts
 ## Development conventions
 
 Read `AGENTS.md` before you change code. Read `docs/CONVENTIONS.md` for architecture, API, database, security, test, Git, and handoff rules.
+
+Always use the red-green-refactor TDD sequence for an implementation or a defect fix.

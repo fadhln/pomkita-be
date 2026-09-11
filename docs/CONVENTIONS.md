@@ -47,7 +47,39 @@ Before implementation, record these items in the task or handoff:
 
 Do not add speculative abstractions. Add an abstraction after a second clear use case exists.
 
-## 4. Go conventions
+## 4. Test-driven development
+
+Always use test-driven development (TDD) for an implementation or a defect fix. Use the red-green-refactor sequence.
+
+### Red
+
+1. Select one observable behavior from the plan or defect report.
+2. Add the smallest test that specifies this behavior.
+3. Run only the applicable test.
+4. Confirm that the test fails.
+5. Confirm that the failure is caused by the missing behavior.
+
+Do not change production code before the red step. If the test passes, the test does not prove the new behavior. Correct the test or select a different test boundary.
+
+### Green
+
+1. Add the smallest production change that can pass the test.
+2. Run the applicable test.
+3. Stop and correct the implementation if the test fails.
+4. Run the related package tests after the applicable test passes.
+
+Do not add unrelated behavior during the green step.
+
+### Refactor
+
+1. Improve names, structure, or duplication only after the test is green.
+2. Do not change behavior during this step.
+3. Run the applicable tests after each material refactor.
+4. Run the full repository check before handoff.
+
+A documentation-only change has no production behavior. Run `git diff --check` and the repository check for this type of change.
+
+## 5. Go conventions
 
 - Run `gofmt` on all Go files.
 - Use short package names in lowercase.
@@ -64,7 +96,7 @@ Do not add speculative abstractions. Add an abstraction after a second clear use
 
 Use typed configuration. Reject a missing required production value at process start. Do not read environment variables from business code.
 
-## 5. HTTP conventions
+## 6. HTTP conventions
 
 Use `/api/v1` for product endpoints. Keep `/health` and `/ready` outside the version prefix.
 
@@ -101,7 +133,7 @@ Return `X-Request-ID` on every response. Preserve a valid caller request ID. Gen
 
 Do not retry a write inside an HTTP handler. Retry a complete serializable transaction only for an approved serialization rule.
 
-## 6. API contract conventions
+## 7. API contract conventions
 
 Keep the OpenAPI document and JSON Schemas in this repository. Treat them as source files. Generate derived clients and fixtures from them.
 
@@ -117,7 +149,7 @@ For each endpoint, define:
 
 Reject unknown fields in canonical mutation payloads. Keep array sort rules and `hash_version` explicit. Make an additive change when possible. Coordinate a breaking contract change with a frontend release.
 
-## 7. Database conventions
+## 8. Database conventions
 
 Name migrations with an ordered numeric prefix and a short action. Example: `000001_create_identity_tables.up.sql`.
 
@@ -138,7 +170,7 @@ Follow the global lock order in `PLAN.md`. Sort rows by table name and primary k
 
 Use PostgreSQL `numeric` for money and volume. Check overflow before a cast, multiplication, sum, or variance operation. Map SQLSTATE `22003` to HTTP 422.
 
-## 8. Security conventions
+## 9. Security conventions
 
 Use the verified session JWT as the only actor identity. Do not trust an actor ID, organization ID, station ID, or role from request data.
 
@@ -148,11 +180,38 @@ Deny access when request context is missing or invalid. Apply a deny rule before
 
 Store secrets outside the repository. Commit only safe example values. Review every migration for grants and owner changes.
 
-## 9. Test conventions
+## 10. Test conventions
 
 Use a unit test for pure Go logic. Use a PostgreSQL integration test for a database rule. Use a concurrency test for locks, leases, idempotency, or cardinality.
 
 Test the success case and the denied cases. Test no context, wrong tenant, wrong station, wrong role, stale state, duplicate request, and numeric boundary when they apply.
+
+Use these rules for each test:
+
+- Prove one behavior or one invariant.
+- Give the test a name that states the condition and result.
+- Use arrange, act, and assert sections when the test has more than one step.
+- Assert an observable result. Do not assert a private implementation detail.
+- Use explicit expected values. Do not use an assertion that only checks for a non-empty result when an exact value is known.
+- Keep the test deterministic. Use a fixed clock, fixed identifier, and deterministic seed data when they apply.
+- Do not use `time.Sleep` to coordinate a test. Use a controllable clock, channel, barrier, or database lock.
+- Keep tests independent. Do not depend on test order or data from a different test.
+- Clean up each resource that the test creates.
+- Mark a helper with `t.Helper()`.
+- Use a table test only when all cases use the same behavior and assertion structure.
+- Use `t.Parallel()` only when the test data and external resources are isolated.
+- Do not call a production external service from a test.
+- Do not skip or retry a flaky test. Find and correct the cause.
+
+Name a Go test with this pattern when it improves clarity:
+
+```text
+Test<Unit>_<Condition>_<Result>
+```
+
+For a defect fix, first add a regression test that fails on the old code. Keep the regression test after the fix.
+
+Mock an external boundary only when a real boundary is not part of the behavior under test. Do not mock PostgreSQL behavior that PostgreSQL enforces. Use a real PostgreSQL container.
 
 For a migration change, test these operations:
 
@@ -162,15 +221,15 @@ For a migration change, test these operations:
 4. Apply the paired down migration when the phase permits it.
 5. Apply the up migration again.
 
-Do not mock PostgreSQL behavior that PostgreSQL enforces. Use a real PostgreSQL container.
-
 Run this command before handoff:
 
 ```sh
 make check
 ```
 
-## 10. Git and review conventions
+Test coverage is a signal. It is not proof of correct behavior. Cover each changed branch and each applicable failure path.
+
+## 11. Git and review conventions
 
 Keep one purpose in one commit. Use an imperative commit subject. Keep the subject short. Add the phase prefix when a phase applies.
 
@@ -186,14 +245,15 @@ Do not rewrite unrelated code. Do not commit secrets, local environment files, t
 
 A pull request must state the problem, the new behavior, the plan reference, migration impact, contract impact, security impact, and validation commands.
 
-## 11. Handoff format
+## 12. Handoff format
 
 Use this order in the final handoff:
 
 1. State the delivered behavior.
 2. List the important changed files.
 3. State the API and migration effect.
-4. State the checks and their results.
-5. State a material risk or an open dependency.
+4. State the red-step command and the expected failure.
+5. State the green-step and full-check commands.
+6. State a material risk or an open dependency.
 
 Do not state that work is complete when a required check did not run.

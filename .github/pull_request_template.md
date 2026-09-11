@@ -15,7 +15,9 @@ State the applicable `PLAN.md` and `BE-PLAN.md` sections.
 
 ## Validation
 
-List the commands and results.
+- Red-step command and expected failure:
+- Focused passing test:
+- Full check:
 
 ## Risk
 
