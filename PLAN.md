@@ -1,230 +1,493 @@
-# PLAN.md — Aplikasi Rekonsiliasi SPBU (nama TBD)
+# PLAN.md — SPBU Reconciliation Application (name TBD)
 
-Status: draft v18 (BUILD TARGET — resolusi review putaran 16; loop maks 25 putaran)
-Bahasa UI: Seluruh copywriting wajib Bahasa Indonesia (ID). Dokumen teknis memakai ASD-STE100 (Simplified Technical English).
+Status: draft v19, build target.
+UI language: All user-facing copy is Bahasa Indonesia. Technical text uses ASD-STE100 Simplified Technical English.
 
-## 1. Tujuan
+## 1. Product target
 
-Aplikasi multi-vendor untuk pelaporan dan monitoring operasi SPBU per shift.
-Fokus MVP: pencegahan fraud pada pencatatan losses/gains dan penjualan.
-Latar belakang: kerugian IDR 200 juta karena supervisor mencatat 100L sebagai losses padahal kehilangan uang.
+The application supports one organization and many SPBU stations. It records one manual shift report per station and reconciles the report at nozzle level.
 
-## 2. Ruang Lingkup MVP
+The MVP prevents fraud in loss/gain and sales declarations. It has two separate reconciliation units:
 
-Termasuk:
-- 1 organisasi, N SPBU. Input manual. Rekonsiliasi per nozzle.
-- DUA varian rekonsiliasi terpisah (liter + Rupiah), dua threshold.
-- Laporan immutable + amendment + audit trail + policy versioning + printout.
+- volume, in liters, with separate loss and gain thresholds;
+- money, in Rupiah, with a separate variance threshold.
 
-Ditunda: rekonsiliasi kas, ack Operator, notifikasi eksternal, integrasi dispenser, koreksi suhu, multi-organisasi.
+The default loss-liter threshold is 10.00 L. The threshold is a versioned policy value and can be changed by the Owner.
 
-## 3. Peran, Izin, dan Pemisahan Tugas
+The MVP includes immutable reports, amendment, re-acknowledgement, audit trail, policy versioning, anomaly records, and printout. It does not include cash reconciliation, Operator acknowledgement, external notification, dispenser integration, temperature correction, or multiple organizations.
 
-| Peran | Cakupan | Kewenangan MVP |
+## 2. Roles, permissions, and separation of duties
+
+| Role | Scope | MVP authority |
 |---|---|---|
-| Operator | 1 SPBU | Akun saja; aksi ditunda |
-| Supervisor | 1 SPBU | Mulai/selesai shift; input; printout; ajukan amendment |
-| Admin SPBU | 1..N SPBU | Ack shift; approve amendment; generate_report; view_all_stations; manage_dispensers |
-| Owner | Organisasi | Buat user; approve amendment; audit/reports/anomali; ubah kebijakan; fallback ack |
-| Superadmin | Semua | Break-glass wajib ber-alasan; ter-audit |
+| Operator | One station | Account only. Operational actions are deferred. |
+| Supervisor | One station | Open and submit a shift; enter data; print; request amendment. |
+| Station Admin | One or more stations | Acknowledge shift; approve amendment; generate report; view all assigned stations; manage dispenser. |
+| Owner | Organization | Create users; approve amendment; view audit, reports, and anomalies; change policy; fallback acknowledgement. |
+| Superadmin | All organizations | Break-glass actions only with a reason. All actions are audited. |
 
-SoD (server-enforced, per user_id, deny precedence, evaluator per-aksi):
-1. Pembuat data tidak bisa meng-ack shift berisi datanya. 2. Requester ≠ approver amendment. 3. Satu amendment aktif per versi. 4. Multi-role boleh; SoD tetap. 5. `ack_shift` hanya efektif bagi Admin SPBU/Owner. 6. Owner tidak menginput operasional.
-Break-glass: Owner/Superadmin boleh menembak SoD, wajib alasan non-kosong (divalidasi DB/API), ter-audit (`is_superadmin`/`is_break_glass`), masuk daftar anomali.
+The server evaluates every action for the user_id from the verified session JWT. Deny rules have precedence over allow rules. Multiple roles do not bypass separation of duties.
 
-Permission flag: `ack_shift`, `approve_amendment`, `manage_users`, `generate_report`, `view_all_stations`, `manage_dispensers`.
+The server enforces these rules:
 
-## 4. Skema Data
+1. A user who created data in a report cannot acknowledge that shift.
+2. An amendment requester cannot approve the same amendment.
+3. One pending amendment is allowed for one base report.
+4. ack_shift is effective only for Station Admin and Owner.
+5. Owner cannot enter operational data.
+6. Break-glass is available to Owner and Superadmin only. It requires a non-empty reason. The database validates the reason, stores is_break_glass, is_superadmin, and the reason, writes an audit event, and exposes the action in the anomaly list.
 
-- ack_decisions schema eksplisit (parent UNIQUE(org_id, station_id, ack_id)): id PK, org_id, station_id, shift_id, report_id, version_no; FK komposit (org_id, station_id, shift_id, report_id, version_no) → shift_reports parent UNIQUE(org_id, station_id, shift_id, report_id, version_no) — DEFINISI RESMI parent ini; ack_seq integer, decision: acked|rejected, actor, decided_at, rejection_reason, is_superadmin, is_break_glass, break_glass_reason.
-- LOSS constraint canonical (SATU): loss_entries UNIQUE(org_id, station_id, shift_report_id, loss_logical_id) — tenant-complete; semua FK loss komposit tenant (parent key sesuai katalog §4).
-- Draft children parent keys eksplisit: draft_readings UNIQUE(org_id, station_id, draft_row_id) (row_id PK ditambahkan); draft_sales, draft_losses, draft_evidence_staging sama (row PK + parent tenant key + FK komposit ke parent).
-- policy_snapshot_items FK: (org_id, station_id, shift_id, set_id, item_id) FK → parent UNIQUE(org_id, station_id, shift_id, set_id, item_id) pada items.
-- source-reading FK + dispenser_readings: TAMBAH kolom eksplisit shift_id + report_id di dispenser_readings; UNIQUE(org_id, station_id, shift_id, report_id, reading_id); FK (org_id, station_id, source_shift_id, source_shift_report_id, source_reading_row_id). DEFINISI INI MENGHAPUS definisi lama di baris dispenser_readings.
-- LOSS: canonical UNIQUE = (org_id, station_id, shift_id, report_id, row_id); FK loss_exception = exact komposit ini. Definisi (shift_report_id, loss_logical_id) LAMA DIHAPUS.
-- ack_decisions: PK = ack_id (bukan id); semua referensi pakai ack_id.
-- loss_entries FK parent: UNIQUE(org_id, station_id, shift_id, report_id, row_id) — FK komposit exact (org_id, station_id, shift_id, shift_report_id, loss_row_id).
-- ack_decisions: kolom id DIRENAME ack_id (konsistensi parent key: UNIQUE(org_id, station_id, ack_id)); semua referensi memakai (org_id, station_id, ack_id).
-- idempotency: kolom lease_started_at + lease_expires_at (absolut, 10 menit dgn heartbeat tiap 60 detik memperpanjang; heartbeat claim-gated). Retry: key SAMA + payload SAMA = request_hash SAMA (bukan baru); payload berubah = 409; retry failed = INSERT ulang dgn idempotency_key BARU.
-- RLS FINAL (penyempurnaan): app role TIDAK punya akses view apa pun — baca data HANYA via SECURITY DEFINER functions (read_* fn) yang mem-verifikasi JWT server-side; set_config memakai transaction-local (set_config(..., true)); owner roles NOLOGIN NOBYPASSRLS; FORCE ROW LEVEL SECURITY; fail-closed bila context hilang. Tidak ada akses langsung view/tabel dari app role.
-- CURRENT-POINTER parent key: shift_reports UNIQUE(org_id, station_id, shift_id, report_id) DIDEKLARASIKAN RESMI (lihat definisi shift_reports); FK pointer (org_id, station_id, shift_id, current_report_id) mengikat exact.
+Permission names are ack_shift, approve_amendment, manage_users, generate_report, view_all_stations, and manage_dispensers.
+
+## 3. Authoritative state rules
+
+This section is the only lifecycle definition in this plan.
+
+### 3.1 Shift lifecycle
+
+The shifts.status enum is:
+
+open | submitting | failed | abandoned | awaiting_confirmation | needs_correction | locked
+
+Allowed transitions are:
+
+| From | To | Server condition |
+|---|---|---|
+| open | submitting | fn_submit_shift owns the draft lease. |
+| submitting | awaiting_confirmation | Report, snapshot, anomaly, and evidence checks commit. |
+| submitting | failed | Submit transaction fails. The report transaction rolls back. |
+| failed | open | fn_reopen_failed_shift finds no report and increments draft revision. |
+| failed | abandoned | Scheduler finds a failed shift older than 24 hours. |
+| awaiting_confirmation | locked | fn_ack_shift accepts the current report. |
+| awaiting_confirmation | needs_correction | fn_ack_shift rejects the current report. |
+| needs_correction | awaiting_confirmation | fn_approve_amendment creates the next report. This transition requires a report. |
+| locked | awaiting_confirmation | fn_approve_amendment creates the next report from the current locked report, supersedes its acknowledgement, and requires re-acknowledgement. |
+
+abandoned is terminal. It does not block a new shift. needs_correction does not block a new shift. A partial unique index allows at most one shift per station with status open, submitting, failed, or awaiting_confirmation.
+
+Backfill is a flag, not a status. A backfill stores original_event_date, shift_ke, backfilled, backfill_approver, backfill_approved_at, and backfill_reason. The approval is by Owner. The partial unique key is (org_id, station_id, original_event_date, shift_ke) where backfilled = true. More than one shift can exist on one event date when shift_ke differs.
+
+Every transition uses fn_transition_shift. The procedure locks the station, then the shift, checks the table above, inserts one shift_transitions row, and writes one audit event in the same transaction.
+
+### 3.2 Report lifecycle and immutability
+
+shift_reports.status is submitted | locked. shifts.current_report_id is the only current-report pointer. There is no is_current column.
+
+fn_submit_shift creates version 1. fn_approve_amendment creates the next version by cloning the complete base report and applying only the amendment allowlist. The old report is never edited. A locked base report is allowed, but its old acknowledgement is superseded and the new report requires acknowledgement.
+
+The database enforces immutability:
+
+- shift_reports has a BEFORE DELETE trigger that always raises 23514.
+- shift_reports has a BEFORE UPDATE trigger. It allows only submitted -> locked, and only when current_user = report_writer and the transaction-local value app.transition = lock_report is set by fn_ack_shift. Every other column must be byte-for-byte unchanged. Any other update raises 23514.
+- Report child tables (dispenser_readings, sales_declared, loss_entries, loss_exception, delivery_snapshots, dip_snapshots, and evidence_event) have BEFORE UPDATE OR DELETE triggers that always raise 23514.
+- shifts.current_report_id, report status, and acknowledgement pointers can change only in the named transition procedures. Their triggers reject direct changes and reject a pointer that is not the same tenant and shift.
+- The application role has no table DML grant. The report_writer role is NOLOGIN and is reached only through allowlisted SECURITY DEFINER procedures with a fixed search_path.
+
+The transition context is narrow and database-owned. fn_submit_shift may insert one report, its children, and its ack_head, and may update the matching draft, submit_idempotency row, and shift status. fn_ack_shift may update only report status submitted -> locked, ack_head, ack_decisions, ack_supersessions, and the matching shift status. fn_approve_amendment may insert the new report and its children, set the amendment decision, supersede the old head, insert the replacement head, and move the current pointer. fn_transition_shift may update only the shift status and insert its transition row. Each procedure sets one exact transaction-local context value; each trigger accepts only the context that names its allowed columns. No procedure accepts arbitrary column names or SQL text.
+
+If a report insert, immutable trigger, policy check, anomaly calculation, audit append, or outbox insert fails, the complete business transaction rolls back. No partial report is visible.
+
+### 3.3 Amendment lifecycle
+
+amendments.status is pending | approved | rejected | superseded.
+
+- pending -> approved creates exactly one new report and sets applied_report_id.
+- pending -> rejected requires rejection_reason.
+- pending -> superseded is used when a new amendment replaces a pending amendment for the same base version.
+
+Approval locks the station, shift, amendment, and current report in the global order in §8. The base report must be the current report and must have status submitted or locked. It checks that base_report_id = shifts.current_report_id, checks stale_check_hash, checks requester/approver separation, clones all report rows, applies the allowlist, re-evaluates anomaly and evidence rules, and moves the current pointer. A stale base returns 409 and stays pending until the requester submits a new amendment.
+
+Allowed amendment paths are exactly:
+
+- sales_declared.cash_amount and sales_declared.cashless_amount;
+- loss_entries.liters, loss_entries.cash_amount, and loss_entries.note;
+- references to existing deliveries and dip_readings.
+
+Meter fields and meter source fields are never allowed. The requester cannot amend data created by the requester, unless break-glass is used with a reason. Polymorphic amendment targets are checked by fn_approve_amendment; the target must exist in the base report snapshot and must have the same tenant and shift. old_value and new_value are jsonb values, and old_value must equal the base snapshot value before the new value is applied. stale_check_hash is SHA-256 of the versioned RFC 8785 canonical base-report payload plus version_no. Static SQL foreign keys cannot express this check.
+
+### 3.4 Acknowledgement lifecycle and cardinality
+
+An acknowledgement decision is acked or rejected. A rejected decision remains the active decision until it is superseded. The active decision is the one referenced by ack_head.active_ack_id; it is not inferred from MAX(ack_seq).
+
+The schema is:
+
+    ack_decisions(
+      ack_id uuid primary key,
+      org_id uuid not null, station_id uuid not null, shift_id uuid not null,
+      report_id uuid not null, version_no integer not null,
+      ack_seq bigint not null, decision ack_decision not null,
+      actor_user_id uuid not null, decided_at timestamptz(6) not null,
+      rejection_reason text null,
+      is_superadmin boolean not null, is_break_glass boolean not null,
+      break_glass_reason text null,
+      unique(org_id, station_id, shift_id, report_id, version_no, ack_id),
+      unique(org_id, station_id, shift_id, report_id, version_no, ack_seq),
+      foreign key(org_id, station_id, shift_id, report_id, version_no)
+        references shift_reports(org_id, station_id, shift_id, report_id, version_no)
+    )
+
+    ack_head(
+      org_id uuid not null, station_id uuid not null, shift_id uuid not null,
+      report_id uuid not null, version_no integer not null,
+      active_ack_id uuid null,
+      primary key(org_id, station_id, shift_id, report_id, version_no),
+      foreign key(org_id, station_id, shift_id, report_id, version_no)
+        references shift_reports(org_id, station_id, shift_id, report_id, version_no),
+      foreign key(org_id, station_id, shift_id, report_id, version_no, active_ack_id)
+        references ack_decisions(org_id, station_id, shift_id, report_id, version_no, ack_id)
+        deferrable initially deferred
+    )
+
+ack_head is inserted with active_ack_id = NULL with every report. This gives one and only one head row for every report version by a primary key. The second foreign key gives declarative membership: a non-null active pointer can reference only a decision for the same tenant, station, shift, report, and version.
+
+fn_ack_shift locks the station, shift, current report, and head. It rejects a non-null head, allocates ack_seq under the report lock, inserts one decision, updates the head, and changes the shift to locked or needs_correction. A deferred constraint trigger requires exactly one non-null head for the current report when the shift enters locked or needs_correction, and requires a null head before an acknowledgement. A second deferred trigger requires every superseded acknowledgement to have one ack_supersessions row and every replacement to be the next report version. Direct DML is denied, so no procedure can create two active decisions.
+
+ack_decisions and ack_head have BEFORE UPDATE OR DELETE triggers. ack_decisions are insert-only. ack_head changes are accepted only in fn_submit_shift, fn_ack_shift, or fn_approve_amendment with their exact transition context.
+
+For an amendment of a locked report, fn_approve_amendment inserts ack_supersessions with the old full acknowledgement key and the new full report key, then sets the old head to NULL and creates the new head with NULL in one transaction. ack_supersessions.superseded_ack_id is unique. This is the only way to deactivate an acknowledgement.
+
+## 4. Database model and tenant keys
+
+All UUID identifiers are generated by the database. All money calculations use numeric, never floating point. Decimal values in JSON are strings. timestamptz columns used for audit and state events have precision 6.
 
 ### 4.1 Master data
-- organizations, stations (timezone, versi: timezone dapat berubah; shift menyimpan snapshot timezone)
-- nozzles (meter_max numeric(10,1) = nilai tampilan maksimum; modulus efektif = meter_max + 0.1 karena counter berhenti di 99999.9 lalu ke 0.0; meter decimal(10,1))
-- nozzle_tank_map (nozzle, tank, tstretch tstzrange; EXCLUDE USING gist non-overlap)
-- dispenser_prices (nozzle, harga numeric(14,0), tstretch tstzrange, created_by; exclusion non-overlap)
 
-### 4.2 Operasional
-- shifts (org_id, station_id, supervisor_id, opened_at, closed_at, timezone_snapshot, business_date, status enum: open|submitting|failed|abandoned|awaiting_confirmation|needs_correction|locked; ...; partial UNIQUE(org_id, station_id, original_event_date, shift_ke) WHERE backfilled AND original_event_date IS NOT NULL)
-- AMENDMENT ELIGIBILITY (SATU aturan final): amendment approval HANYA bila base_report = shifts.current_report_id SAAT approval (guard di dalam shift-row lock, re-cek stale hash). Base boleh SUBMITTED atau LOCKED. LOCKED base → versi baru + supersede ack lama. Stale (bukan current) → 409, ajukan ulang.
-- shift_drafts (org_id, station_id, shift_id, owned_by, claim_token uuid, claim_expires_at timestamptz, status: editing|submitting|submitted|failed|recovering, updated_by, updated_at, revision integer; UNIQUE(shift_id) — satu draft per shift SEUMUR HIDUP; claim = UPDATE WHERE status='editing' AND (claim_expires_at IS NULL OR claim_expires_at < now()) SET claim_token+expiry (lease 5 menit); recovery job: submitting > 10 menit → recovering → editing/failed; failed → retry = status editing dengan revision++ ; setiap mutasi child menaikkan revision) + TABEL DRAF ANAK (semua membawa org_id+station_id, FK komposit ke shift_drafts):
-  - draft_readings (draft_id, nozzle_id, meter_start, meter_end, created_by; UNIQUE(draft_id, nozzle_id))
-  - draft_sales (draft_id, dispenser_id, cash_amount, cashless_amount, created_by; UNIQUE(draft_id, dispenser_id))
-  - draft_losses (draft_id, loss_id immutable PK (= loss_logical yang dipromosikan), direction, reason_code, liters, cash_amount, note, created_by)
-  - draft_evidence_staging (draft_id, loss_id FK draft_losses, status: uploaded|verified|finalized, object_key, content_hash, size, mime, uploaded_by)
-- submit_idempotency (idem_id PK UUID, org_id, station_id, shift_id, idempotency_key, request_hash, status: in_progress|succeeded|failed, claim_token, attempt_count, lease_started_at NOT NULL, lease_expires_at NOT NULL (absolut; SERAGAM: takeover & stale = lease_expires_at < now() — SATU timeout 10 menit; heartbeat tiap 60 detik memperpanjang lease_expires_at, claim-gated), resulting_report_id nullable, error_detail nullable, created_at, updated_at; UNIQUE(org_id, station_id, shift_id, idempotency_key)). PROTOCOL (SATU definisi): (1) INSERT ... ON CONFLICT DO NOTHING; menang = pemilik. (2) kalah → baca: succeeded → kembalikan report lama (re-otorisasi); in_progress + belum expired → 409; in_progress + expired → TAKEOVER (conditional UPDATE ... RETURNING; 0 rows = 409). (3) HASH: canonical hash = sha256(JSON kanonik payload TANPA idempotency_key); payload SAMA dgn key SAMA = hash SAMA; payload berubah (key sama) = 409 SELALU; retry failed = INSERT ulang dgn key BARU. (4) Finalisasi claim-gated; 0 rows → ROLLBACK seluruh tx report. Report+set succeeded = SATU transaksi; set failed = transaksi terpisah.
-- shift_reports (id = report_id UUID global PK; org_id, station_id, shift_id; UNIQUE(org_id, station_id, shift_id, version_no); parent key utk FK = UNIQUE(org_id, station_id, report_id); supersedes_report_id → FK (org_id, station_id, shift_id, supersedes_report_id) + trigger cek same-shift; TIDAK ADA kolom is_current — sumber kebenaran tunggal = shifts.current_report_id, FK komposit (org_id, station_id, shift_id, current_report_id) — report dari shift lain tidak mungkin; status: submitted|locked; submitted_by, submitted_at; policy_snapshot_set_id → policy_snapshot_sets (bukan policy_snapshots); versi fisik loss/evidence per version_no)
-- policy_snapshots: snapshot_set model — policy_snapshot_sets (set_id PK, org_id, station_id, shift_id, created_at; parent UNIQUE(org_id, station_id, set_id)) + policy_snapshot_items (item_id PK, set_id FK komposit, policy_kind: threshold|evidence, policy_id, rev_id, scope, canonical payload jsonb (payload utuh bundle per kind — satu item per kind), hash sha256; UNIQUE(set_id, policy_kind); UNIQUE(rev_id) dalam set). shift_reports.policy_snapshot_set_id → FK komposit (org_id, station_id, shift_id, set_id). COMPLETENESS: deferred trigger mengecek set punya ≥1 item threshold + 1 item evidence sebelum report bisa disubmit. Tombstone: resolusi henti pada revisi disabled → aturan tidak berlaku.
-- dispenser_readings (reading_id PK UUID, org_id, station_id, shift_report_id, nozzle_id, meter_start, meter_end, price_used, expected_sale_rupiah, created_by, observed boolean default true, is_carried_forward boolean default false, source_shift_report_id nullable FK, source_reading_row_id nullable FK (wajib bila is_carried_forward; CHECK: is_carried_forward=true ⇔ kedua source kolom NOT NULL); parent key UNIQUE(org_id, station_id, reading_id); UNIQUE(shift_report_id, nozzle_id))
-- sales_declared (sales_id PK UUID, org_id, station_id, shift_report_id, dispenser_id, cash_amount REQUIRED, cashless_amount REQUIRED default 0, created_by; parent key UNIQUE(org_id, station_id, sales_id); UNIQUE(shift_report_id, dispenser_id)) — amendment men-target sales_id
-- submit_idempotency (idem_id PK UUID, ...; protocol finalisasi: jika final UPDATE claim-gated menghasilkan 0 rows → ROLLBACK seluruh transaksi report (report tidak dibuat) → baca ulang status; heartbeat: worker update updated_at tiap 60 detik; submit dibatasi maks 10 menit (lease); retry: request_hash SAMA untuk payload sama (bukan baru), idempotency_key baru hanya utk payload berbeda — hash mismatch selalu 409)
-- loss_identity: tabel pemisah loss_logical (org_id, station_id, loss_id PK global; dibuat sekali per klaim) + loss_entries versi (org_id, station_id, shift_report_id, loss_logical_id FK, row_id PK; UNIQUE(shift_report_id, loss_logical_id)); amendment men-target loss_logical_id; evidence_event scoped (org_id, station_id, shift_report_id, loss_logical_id, loss_row_id) — snapshot evidence per report version immutable; event per loss punya event_seq integer + legal transition (uploaded→verified→finalized) + per-loss lock saat insert event (prosedur).
-- loss_exception: (id PK, org_id, station_id, shift_report_id, loss_logical_id, reason NOT NULL, actor NOT NULL, at NOT NULL; FK komposit ke loss_entries versi (parent UNIQUE(org_id, station_id, shift_report_id, loss_logical_id)); UNIQUE(org_id, station_id, shift_report_id, loss_logical_id) — satu exception per report-version/loss, INSERT-only; append-only DB protection).
-- amendment target scope: setiap amendment_item wajib target benar-benar ADA di snapshot base report (prosedur cek: target_logical_id ada di child rows report versi base — bukan cuma same-shift).
-- meter_reset_events (org_id, station_id, nozzle FK komposit, old_value (harus = meter_end laporan locked terakhir nozzle itu — di-cek prosedur), new_value, effective_shift_id FK komposit, reason, actor, approver ≠ actor, approved_at, status pending|approved; UNIQUE(org_id, station_id, nozzle, effective_shift_id) WHERE status='approved'; URUTAN: reset hanya dibuat jika nozzle punya ≥1 laporan locked ATAU via baseline awal eksplisit saat provisioning; reset approval ikut station lock yang sama dgn open/submit/backfill — diserialisasi per station+nozzle)
-- amendments (org_id, station_id, base_report_id FK, reason, status pending|approved|rejected|superseded, requester, approver, decided_at, rejection_reason, applied_report_id FK same-shift (org_id, station_id, shift_id sama dengan base), stale_check_hash, is_break_glass + break_glass_reason nullable; partial UNIQUE(base_report_id) WHERE status='pending'; approval = transaksi atomik: lock shift+current report → verifikasi stale_check_hash → clone penuh report snapshot (semua child rows) → terapkan hanya allowlist → recompute anomali/evidence → set applied_report_id). Items: amendment_items (amendment_id, org_id, station_id, shift_id, target_kind enum, target_logical_id, field, old_value, new_value).
-- ack_supersessions (id PK, org_id, station_id, shift_id, superseded_ack_id FK komposit → ack_decisions parent UNIQUE(org_id, station_id, ack_id), replacement_report_id FK komposit (org_id, station_id, shift_id, report_id) (wajib = report current BERIKUTNYA, version = old+1), reason, created_at; UNIQUE(superseded_ack_id); INSERT-only). Invariant atomik (SATU transaksi, shift-row lock): old report = current → buat report baru (version+1) → INSERT supersession (replacement=new report) → pindah current_report_id. Terminologi: event_type vocabulary = fired|cleared (konsisten di semua tabel alert). JWT key registry: tabel jwt_keys (kid PK, secret_ref, status active|previous|retired, activated_at, retired_at; rotasi dua fase: new=active, old=previous, retire old saat semua token dgn exp ≤ now aktif-time; EXECUTE inventory: setiap prosedur wajib terdaftar di tabel procedure_registry (name, allowed_roles) — CI men-cek prosedur tanpa klasifikasi = gagal).
-- alert_events: period_bucket timestamptz GENERATED (kolom fisik, IMMUTABLE): date_bin(interval '1 hour', period_start, timestamptz '1970-01-01 00:00:00+00') — bucket per jam UTC; SATU constraint fired (subject bucket — rule period_start LAMA dihapus); alert_rules dedup line diganti merujuk constraint sama.
-- audit FAILED-request durability: denied request ditulis ke tabel audit_denied (append-only, transaksi TERPISAH via koneksi pool berbeda — bukan outbox yang ikut rollback). audit_outbox hanya utk event yang sukses.
-- amendment_items: kolom: (item_id PK, amendment_id FK, org_id, station_id, shift_id, target_kind enum: sales_declared|loss_entry|delivery|dip_reading, target_logical_id, field, old_value, new_value) — target_logical_id = sales_id / loss_id(logical) / delivery_id / dip_id (semua PK UUID yang ada); FK/prosedur cek scope (org+station+shift sama dgn base report) di-enforce per kind.
-- deliveries (id PK, org_id, station_id, shift_id, do_number, tank, liters, created_by; FK komposit ke shifts) dan dip_readings (id PK, org_id, station_id, shift_id, tank, dip_liters, created_by; FK komposit ke shifts) — snapshot tables per report version: delivery_snapshots & dip_snapshots (shift_report_id FK, delivery_id/dip_id FK sumber, same-shift FK komposit). Carried-forward reading source FK: (org_id, station_id, shift_id, source_shift_report_id, source_reading_row_id) FK komposit + prosedur cek: source = predecessor locked report terakhir utk nozzle sama.
-- numeric types: meter numeric(10,1) dengan CHECK 0≤nilai≤meter_max; volume numeric(8,2) CHECK ≥0; uang numeric(14,0) — nilai maksimum 99.999.999.999.999 (≈ 99,9 triliun rupiah, cukup untuk MVP); harga master numeric(14,0) (bukan integer — konsisten dgn tipe uang); semua perhitungan numeric (bukan float); OVERFLOW: dicek SEBELUM rounding/casting di TIAP tahap (perkalian per reading, SUM agregasi, varian); hasil > max → RAISE → tx rollback → 22003 → 422; volume SUM juga dibatasi numeric(12,2); varian boleh negatif (dgn batas |varian| ≤ max); boundary tests: half-up .5, meter_max, overflow pengali, aggregate overflow, JSON/TS konversi (string di JSON, hindari float).
-- LOSS/amendment constraint canonical: SATU definisi per constraint (lihat §4.2); amendment FK procedural checks didokumentasikan eksplisit (target-in-snapshot, per-kind scope — polymorphic, tidak bisa jadi FK statis).
-- GATE BARU (CI/pilot wajib): canonical hashing (same-key/same-payload), heartbeat fencing, auto-abandoned transition, policy completeness+immutability, UTC alert bucket (cross-midnight), baseline cross-nozzle isolation, overflow 22003→422, tenant-FK catalog enforcement (pg_constraint).
-- dispenser↔nozzle: 1 dispenser boleh >1 nozzle; sales_declared per dispenser = AGREGAT klaim (bukan derived dari nozzle); varian Rupiah = expected (Σ nozzle) − declared (Σ dispenser); mapping dispenser↔nozzle disnapshot di shift_price_map_snapshot (utk printout & audit, bukan perhitungan varian).
-- alert_rules (id PK, org_id, station_id, rule_type, alert_key UNIQUE(org_id, station_id, alert_key), threshold, channel, enabled, created_by). occurrence lock = FOR UPDATE pada alert_rules row. Validasi fired/cleared di PROSEDUR. Dedup & re-alert = lihat alert_events constraint (subject bucket) — tidak ada rule period_start terpisah.
-- baseline: model REVISI + POINTER. nozzle_baseline_revisions (baseline_rev_id PK, org_id, station_id, nozzle_id, initial_meter_value, meter_max numeric(10,1) NOT NULL, created_by, created_at; parent UNIQUE(org_id, station_id, baseline_rev_id) + UNIQUE(org_id, station_id, nozzle_id, baseline_rev_id); INSERT-only) + nozzle_baseline_current (org_id, station_id, nozzle_id, current_baseline_rev_id; FK komposit (org_id, station_id, nozzle_id, current_baseline_rev_id) → revision parent key 4-kolom — pointer TIDAK BISA menunjuk revision nozzle lain; parent UNIQUE(org_id, station_id, nozzle_id); UPDATE hanya via prosedur owner-approval: buat revision baru → pindah pointer, SATU transaksi). CHECK initial_meter_value ∈ [0, meter_max snapshot]. Chaining generator: meter_end locked report terakhir > reset approved > baseline current. Backfill invariants: backfill_status='approved' ⇔ backfill_approver & backfill_approved_at & backfill_reason NOT NULL; carried-forward: is_carried_forward=true ⇔ source kolom NOT NULL (CHECK).
-- LOCK ORDER GLOBAL (total order, SEMUA resource diranked, TANPA "other"): 1) stations row → 2) shifts row → 3) shift_drafts → 4) submit_idempotency row → 5) shift_reports current → 6) policy_snapshot sets → items → 7) alert_rules row → 8) audit org chain lock row (tabel audit_chain_locks: org_id PK) → 9) resource lain — SETIAP tabel diberi rank eksplisit di DDL manifest (kolom lock_rank); multi-row ascending; deadlock tests.
-- Urutan submit: konsisten dgn rank: draft (3) → idempotency (4) → report (5) — prosedur submit ikut urutan ini.
-- ACK: ack_head table (report_id PK version_no, active_ack_id FK) — pointer aktif; alokasi ack_seq + update pointer dalam SATU transaksi dgn report-row lock (rank 5); supersession INSERT atomik dgn pointer move. Ini mencegah dua ack aktif concurrent.
-- Ack cardinality: tepat SATU ack aktif per (report version) — aktif = ack_seq max & tanpa supersession; ditegakkan prosedur + deferred trigger + concurrency test. Rejected juga satu aktif (decision menyimpan rejected sebagai state aktif sampai digantikan).
-- JWT sessions: sessions (jti PK, kid FK, issued_at, expires_at, revoked_at nullable; CHECK: expires_at − issued_at ≤ 15 menit; NumericDate strict); retire key previous saat expires_at max dari semua token yg diterbitkan dgn kid itu sudah lewat (kolom max_token_expiry di jwt_keys).
-- Reset chronology: reset selection = approved reset terbaru dengan effective_shift_id ≤ target shift (urutan by shift chronology/business_date); future-effective reset (effective_shift belum terjadi) dikecualikan; seleksi under station+nozzle lock. Baseline/reset FK tenant-bound (org,station,nozzle) → nozzles.
-- baseline: revisions juga FK komposit (org_id, station_id, nozzle_id) → nozzles (tenant-bound); pointer cross-nozzle test. JCS: payload schema didefinisi (field list tetap, defaults dinormalisasi server, decimal sebagai string, array terurut, unknown fields ditolak, hash_version field di payload); semua aritmetika intermediate pakai numeric penuh sebelum dibatasi ke kolom.
-- audit_log hash chain: kolom prev_hash, org_sequence bigint (per-org; di-alokasikan DI DALAM append lock per-org — resource lock = row di audit_chain_locks (org_id PK)), row_hash = sha256(RFC8785 canonical bytes = [hash_version, org_id, org_sequence, event_id, event_type, payload, created_at, prev_hash]); genesis: org_sequence=1 dgn prev_hash = 32 byte nol; UNIQUE(org_id, org_sequence); verifier: baca berurutan by org_sequence → recompute chain → 0 gap; tamper test. audit_denied TIDAK bagian chain. Business mutation + audit_outbox record = SATU transaksi (atomic commit).
-- Canonical payload schema per hash domain (VERSIONED): setiap domain (idempotency, stale_check, snapshot, audit) punya JSON Schema versioned (hash_version field); field list tetap; defaults server-normalized; decimal = string; bigint > 2^53 = string; null diperbolehkan hanya bila schema bilang; arrays terurut dgn sort key eksplisit; unknown fields ditolak. Fixtures di repo utk tiap domain.
-- active-shift lifecycle (SATU definisi otoritatif — definisi ganda dihapus): status enum = open|submitting|failed|abandoned|awaiting_confirmation|needs_correction|locked. Transisi: open → submitting; submitting → awaiting_confirmation | failed; failed → open (retry, via REOPEN jika belum ada report) | abandoned (auto > 24 jam, prosedur scheduler — BUKAN needs_correction; abandoned TIDAK mengunci SPBU, tidak masuk active-shift unique); awaiting_confirmation → locked (acked) | needs_correction (rejected); needs_correction → awaiting_confirmation (via amendment approved — HANYA jika ada report; guard). Active-shift partial unique: status IN (open, submitting, failed, awaiting_confirmation). needs_correction selalu berarti ada report (guard prosedur).
-- gate matrix tambahan (concurrency/integrity tests): stale idempotency takeover race (2 worker, 1 pemenang); ack supersession (lama non-aktif setelah amendment); pointer FK isolation (report dari shift lain ditolak); policy tombstone (aturan disabled → aturan tak berlaku); audit outage (fail-closed, request ditolak); reset baseline ordering (reset tanpa locked report & tanpa baseline = ditolak); alert source uniqueness (2 clear utk 1 fired = ditolak).
-- shift_transitions (org_id, station_id, shift_id, from_status, to_status, actor, at, reason) — riwayat status untuk alert starvation & audit
-- Actor identity: DIPUTUS (TUNGGAL) — signed session JWT. Klaim: iss (tetap), sub (user_id), jti (unik, untuk revoke), iat/exp (exp 15 menit, clock skew toleransi 60 detik), aud (tetap: "spbu-recon"), alg PINNED HS256 (menolak alg lain/no alg). VERIFIKASI URUTAN LENGKAP: (1) alg==HS256, (2) kid resolve di jwt_keys (status active|previous; iat ≤ exp; exp dgn skew; iat tidak di masa depan), (3) signature, (4) iss sama, (5) aud sama, (6) exp belum lewat (skew), (7) iat valid (skew), (8) jti: ada di sessions DAN belum revoked. Key rotation: prev dirilis setelah grace = max exp token yg diterbitkan dgn prev. Session: satu jti per login; logout = revoked_at. Identitas hanya dari token terverifikasi; klien tidak kirim actor_id. Raw JWT tidak disimpan di audit (hanya sub+jti).
-- audit_log (skema v4 + outcome_error; APPEND-ONLY: tabel dimiliki role khusus; role aplikasi TIDAK punya INSERT/UPDATE/DELETE/SELECT langsung — insert hanya via SECURITY DEFINER fn (search_path fixed); REVOKE semua DML+SELECT dari semua role aplikasi; failed-request ditulis ke audit_denied via transaksi/koneksi TERPISAH (durable, tidak ikut rollback); FAIL-CLOSED: denial response hanya dikirim SETELAH audit_denied commit sukses — jika path audit down, request GAGAL (fail closed). audit_denied payload minimum: request_id, actor/token identity, tenant, action, target, reason, server_timestamp, outcome. Outbox: audit_outbox (event_id UUID PK, event_type, payload jsonb, created_at; INSERT-only) + outbox_relay_state (mutable oleh relay: relay_status, attempt_count).
+The following tables exist:
 
-### 4.3 Kebijakan
-- threshold_policies / evidence_policies: model REVISI APPEND-ONLY. Setiap revisi = baris baru dengan valid_from (timestamptz) + supersedes_rev_id (menunjuk revisi LAMA yang digantikan — arah ke belakang, ditulis saat baris BARU dibuat; baris lama TIDAK pernah di-update). RESOLUSI as-of: pilih revisi TERBARU dengan valid_from ≤ resolution_time (TIDAK bergantung pada status superseded — revisi masa depan tidak menghapus keberlakuan revisi saat ini pada masa kini). Scope precedence: SPBU > org; UNIQUE(scope, valid_from); satu successor per revisi; tombstone = revisi baru dengan flag disabled. Baris terpilih disnapshot (policy_id + rev_id + hash) di laporan.
-- Resolusi: threshold saat submit; evidence saat submit; harga saat BUKA shift.
+- organizations(org_id PK, name, created_at).
+- stations(org_id, station_id, timezone, created_at, primary key(org_id, station_id)). A station row is the station lock row.
+- users(user_id PK, org_id, display_name, enabled, created_at).
+- user_station_roles(org_id, station_id, user_id, role, primary key(org_id, station_id, user_id, role)).
+- nozzles(org_id, station_id, nozzle_id, dispenser_id, meter_max numeric(10,1), primary key(org_id, station_id, nozzle_id)). meter_max >= 0.
+- dispensers(org_id, station_id, dispenser_id, primary key(org_id, station_id, dispenser_id)).
+- tanks(org_id, station_id, tank_id, primary key(org_id, station_id, tank_id)).
+- nozzle_tank_map(map_id PK, org_id, station_id, nozzle_id, tank_id, valid_period tstzrange). An exclusion constraint prevents overlapping periods for one nozzle.
+- dispenser_nozzle_map(map_id PK, org_id, station_id, dispenser_id, nozzle_id, valid_period tstzrange). Exclusion constraints prevent overlap per dispenser and per nozzle. One dispenser can have many nozzles; one nozzle has one active dispenser.
+- dispenser_prices(price_id PK, org_id, station_id, nozzle_id, price numeric(14,0), valid_period tstzrange, created_by). An exclusion constraint prevents overlapping periods for one nozzle.
 
-## 5. Aturan Detail
+All writes to prices, maps, nozzle master data, reset events, and baseline pointers first lock the station row. Price and mapping are resolved when a shift opens. The shift stores an immutable shift_price_map_snapshot JSON document and its SHA-256 hash. The document contains the price, dispenser, nozzle, meter maximum, modulus, and mapping IDs used by the shift. Its schema is validated by fn_open_shift; a trigger blocks changes after insert.
 
-### 5.1 Meter
-- meter decimal(10,1); meter_max = nilai tampilan maksimum (mis. 99999.9); MODULUS = meter_max + 0.1 (siklus penuh 99999.9 → 0.0, sehingga delta benar).
-- Rollover: jika meter_end < meter_start, delta = (meter_end − meter_start) + MODULUS; valid HANYA jika 0 ≤ meter_start, meter_end ≤ meter_max AND (MODULUS − meter_start) + meter_end ≤ rollover_threshold (default 20% MODULUS, configurable) — membatasi delta maksimum rollover, bukan hanya posisi start. Maks 1 rollover per reading; multi-rollover ditolak.
-- Reset: meter_reset_events menyimpan old/new value + effective_shift_id (shift pertama yang memakai new value); chaining: meter_start shift berikutnya = meter_end laporan locked sebelumnya ATAU new_value reset yang efektif.
-- Delta ≥ 0 selalu (setelah rumus rollover). UNIQUE(shift_report_id, nozzle_id). Chaining server-enforced.
-- Amendment TIDAK BOLEH menyentuh field meter pada laporan status APA PUN (submitted maupun locked) — sesuai keputusan produk; allowlist amendment mengecualikan meter path. Koreksi meter = shift baru atau reset event.
+### 4.2 Operational tables
 
-### 5.2 Harga & mapping
-- Server-resolve; resolusi saat buka shift; FOR UPDATE pada stations + exclusion constraints; jadwal harga ke depan boleh.
-- Snapshot harga + mapping + meter_max/modulus + ID master data ke shift saat BUKA shift (shift_price_map_snapshot jsonb; skema jsonb NOT NULL tervalidasi di prosedur open + hash sha256 disimpan; kolom IMMUTABLE via trigger). SEMUA mutasi harga/mapping MEMWAJIBKAN lock yang sama (SELECT FOR UPDATE stations) — satu aturan lock untuk semua penulis.
+- shifts(shift_id PK, org_id, station_id, station_seq bigint, supervisor_id, opened_at, closed_at, timezone_snapshot, business_date, original_event_date, shift_ke, backfilled, backfill_approver, backfill_approved_at, backfill_reason, status, current_report_id, shift_price_map_snapshot jsonb, shift_price_map_hash bytea, created_at). Unique keys are (org_id, station_id, shift_id), (org_id, station_id, station_seq), and the backfill partial key in §3.1. station_seq is immutable and allocated under the station lock.
+- shift_drafts(draft_id PK, org_id, station_id, shift_id, owned_by, claim_token uuid, claim_expires_at timestamptz(6), status, updated_by, updated_at, revision integer, recovery_count integer). Unique (org_id, station_id, shift_id) enforces one draft for the life of a shift. Unique (org_id, station_id, draft_id) is the parent key for every draft child. Status is editing|submitting|submitted|failed|recovering.
+- draft_readings(row_id PK, org_id, station_id, draft_id, nozzle_id, meter_start, meter_end, created_by, unique(org_id, station_id, draft_id, nozzle_id)).
+- draft_sales(row_id PK, org_id, station_id, draft_id, dispenser_id, cash_amount numeric(14,0), cashless_amount numeric(14,0), created_by, unique(org_id, station_id, draft_id, dispenser_id)).
+- draft_losses(row_id PK, org_id, station_id, draft_id, loss_id, direction, reason_code, liters numeric(8,2), cash_amount numeric(14,0), note, created_by). loss_id is the immutable logical loss identifier promoted to loss_identity.
+- draft_evidence_staging(row_id PK, org_id, station_id, draft_id, loss_row_id, evidence_type, object_key, content_hash, size_bytes, mime, status, uploaded_by), where status is uploaded|verified|finalized.
+- submit_idempotency(idem_id PK, org_id, station_id, shift_id, idempotency_key, request_hash, status, claim_token, attempt_count, lease_started_at, lease_expires_at, resulting_report_id, error_detail, created_at, updated_at). Status is in_progress|succeeded|failed; lease_expires_at is always absolute; unique (org_id, station_id, shift_id, idempotency_key).
+- shift_reports(report_id PK, org_id, station_id, shift_id, version_no, supersedes_report_id, status, submitted_by, submitted_at, policy_snapshot_set_id). Unique (org_id, station_id, report_id), (org_id, station_id, shift_id, report_id, version_no), and (org_id, station_id, shift_id, version_no). supersedes_report_id has a same-shift trigger. There is no is_current.
+- dispenser_readings(reading_id PK, org_id, station_id, shift_id, report_id, nozzle_id, meter_start, meter_end, price_used numeric(14,0), expected_sale_rupiah numeric(14,0), observed, is_carried_forward, source_shift_id, source_report_id, source_reading_id). Unique (org_id, station_id, shift_id, report_id, nozzle_id) and (org_id, station_id, shift_id, report_id, reading_id). is_carried_forward is true if and only if all source columns are non-null. The source has a composite FK to another reading and is checked by procedure to be the predecessor locked report for the same nozzle.
+- sales_declared(sales_id PK, org_id, station_id, shift_id, report_id, dispenser_id, cash_amount numeric(14,0) not null, cashless_amount numeric(14,0) not null default 0, created_by). Unique (org_id, station_id, shift_id, report_id, dispenser_id) and a report FK.
+- loss_identity(loss_id PK, org_id, station_id, created_by, created_at). Unique (org_id, station_id, loss_id) and insert-only.
+- loss_entries(row_id PK, org_id, station_id, shift_id, report_id, version_no, loss_id, nozzle_id, direction, reason_code, liters numeric(8,2), cash_amount numeric(14,0), note, created_by). Unique (org_id, station_id, shift_id, report_id, loss_id) and (org_id, station_id, shift_id, report_id, row_id). It has composite FKs to the exact report version and to loss_identity.
+- loss_exception(exception_id PK, org_id, station_id, shift_id, report_id, loss_id, reason, actor_user_id, created_at). Unique (org_id, station_id, shift_id, report_id, loss_id). It is insert-only and is forbidden when the report evidence mode is wajib.
+- deliveries(delivery_id PK, org_id, station_id, shift_id, do_number, tank_id, liters, created_by) and dip_readings(dip_id PK, org_id, station_id, shift_id, tank_id, dip_liters, created_by). Both have composite shift FKs. delivery_snapshots and dip_snapshots copy source IDs into each report version and have same-tenant, same-shift source FKs.
+- shift_transitions(transition_id PK, org_id, station_id, shift_id, from_status, to_status, actor_user_id, at, reason), insert-only.
+- amendments(amendment_id PK, org_id, station_id, shift_id, base_report_id, reason, status, requester_user_id, approver_user_id, requested_at, decided_at, rejection_reason, applied_report_id, stale_check_hash, is_break_glass, break_glass_reason). Unique (org_id,station_id,amendment_id) is the parent key for amendment items. Unique pending base report is enforced by a partial unique index on (org_id, station_id, base_report_id) where status = pending. Base and applied report FKs are same-tenant and same-shift.
+- amendment_items(item_id PK, amendment_id, org_id, station_id, shift_id, target_kind, target_logical_id, field, old_value jsonb, new_value jsonb). target_kind is sales_declared|loss_entry|delivery|dip_reading. A procedure checks target membership in the base snapshot and checks the field allowlist.
+- meter_reset_events(reset_id PK, org_id, station_id, nozzle_id, old_value, new_value, effective_shift_id, reason, actor_user_id, approver_user_id, approved_at, status). Status is pending|approved. Unique (org_id, station_id, nozzle_id, effective_shift_id) where status = approved. A procedure checks old_value against the latest eligible locked reading and checks actor != approver.
+- ack_supersessions(supersession_id PK, old_org_id, old_station_id, old_shift_id, old_report_id, old_version_no, superseded_ack_id, replacement_org_id, replacement_station_id, replacement_shift_id, replacement_report_id, replacement_version_no, reason, created_at). The old decision key is unique. A deferred trigger requires replacement_version_no = old_version_no + 1 and the replacement report to be current when the transaction commits.
 
-### 5.3 Lifecycle
-- Shift: open → awaiting_confirmation → (acked → locked | rejected → needs_correction). needs_correction → amendment approved → versi baru → awaiting_confirmation. Backfill = FLAG (backfilled=true), bukan status; mengikuti lifecycle sama (open→awaiting→locked); opened_at = waktu input nyata, original_event_date tersimpan terpisah dan dipakai sebagai business_date; idempotency key = (org_id, station_id, original_event_date, shift_ke) partial unique WHERE backfilled.
-- needs_correction tidak memblokir shift baru; partial unique: maks 1 shift open/awaiting_confirmation per SPBU.
-- Report invariant: sumber kebenaran tunggal = shifts.current_report_id (TIDAK ada is_current boolean); setiap perpindahan pointer = UPDATE shifts.current_report_id dalam prosedur dengan shift-row lock; ack selalu pada current report. Report hanya bisa diamend saat status submitted (belum locked); setelah locked hanya via amendment → versi baru (tanpa meter path).
-- Approval amendment transaksi atomik (lock + stale-check + create + link). Amendment rejected/superseded tidak mengubah data.
-- PROTEKSI DML (matrice grants eksplisit): REVOKE ALL (termasuk SELECT) dari PUBLIC & role aplikasi pada SEMUA tabel: shifts, shift_drafts (+children), shift_reports, dispenser_readings, sales_declared, loss_logical/loss_entries/loss_exception, evidence_event, amendments, amendment_items, ack_decisions, ack_supersessions, shift_transitions, alert_rules, alert_events, threshold/evidence policies, policy_snapshot_sets/items, submit_idempotency, meter_reset_events, nozzle_baseline, dispenser_prices, nozzle_tank_map, deliveries, dip_readings, delivery_snapshots, dip_snapshots, sessions, audit_log, audit_denied, audit_outbox, outbox_relay_state, organizations, stations, nozzles, dispensers, tanks, users, user_station_roles. SETIAP tabel baru wajib masuk matriks (CI cek katalog: tabel tanpa klasifikasi privilege = gagal build; termasuk cek views security_invoker + EXECUTE prosedur terbatas). View = security_invoker (RLS tetap aktif untuk pemanggil). Relay role: UPDATE outbox_relay_state ONLY.
-- current-pointer invariant: shifts.current_report_id NULL sebelum ada report; non-NULL & valid (submitted/locked, same tenant+shift) saat ada report; pointer FK komposit (org_id, station_id, shift_id, current_report_id) → parent key UNIQUE(org_id, station_id, shift_id, report_id) pada shift_reports. Deferred constraint trigger men-cek invariant di akhir transaksi.
-- amendment state machine (AUTHORITATIVE, satu definisi — definisi duplikat dihapus): pending → approved (→ report baru + applied_report_id) | rejected (dgn reason) | superseded (amendment baru untuk versi sama). approved tidak mengubah report lama; setiap state change ter-audit. ACK state machine (AUTHORITATIF): report tanpa ack → acked (→locked) atau rejected (→needs_correction); ack aktif = tanpa supersession row; amendment approved → INSERT supersession → report baru awaiting_confirmation.
-- loss_entries versi: fields lengkap (row_id PK, org_id, station_id, shift_report_id FK komposit (org_id, station_id, shift_id, report_id), version_no, loss_logical_id FK, nozzle_id nullable, direction, reason_code, liters, cash_amount, note, created_by; UNIQUE(shift_report_id, loss_logical_id)). loss_exception scoped PER REPORT VERSION: (org_id, station_id, shift_report_id, loss_logical_id). evidence_event: PK evidence_id; kolom (org_id, station_id, shift_report_id, loss_logical_id, loss_row_id FK, event_seq, event_type, object_key, content_hash, size, mime, actor, at); UNIQUE(loss_row_id, event_seq); legal transitions (uploaded→verified→finalized) di prosedur; snapshot per report version immutable; hanya append-procedure insert.
-- rollover config (rollover_threshold) ikut shift snapshot saat open.
-- Policy snapshot integrity: snapshot items IMMUTABLE setelah ada report menunjuk set (trigger blok UPDATE/DELETE pada items bila set dirujuk report); completeness deferred trigger dievaluasi saat submit (same shift, final status).
-- dispenser_nozzle_map master (AUTHORITATIVE): (id PK, org_id, station_id, dispenser_id, nozzle_id, tstretch tstzrange; EXCLUDE non-overlap per dispenser & per nozzle — satu nozzle hanya satu dispenser aktif; FK komposit). Disnapshot di shift_price_map_snapshot saat open.
-- policy_snapshot_set FK exact: parent UNIQUE(org_id, station_id, shift_id, set_id) pada policy_snapshot_sets — FK (org_id, station_id, shift_id, set_id) mengikat exact.
-- ack FK enforceable: FK komposit (org_id, station_id, shift_id, report_id, version_no) → shift_reports (parent UNIQUE(org_id, station_id, shift_id, report_id, version_no)); LOCK ORDER BAKU (satu urutan utk ack/amendment/pointer): lock shifts row → current shift_reports → target lain.
-- LIFECYCLE (AUTHORITATIVE — SEMUA teks lifecycle lain DIHAPUS): shift status enum = open|submitting|failed|abandoned|awaiting_confirmation|needs_correction|locked. TRANSISI: open → submitting; submitting → awaiting_confirmation | failed; failed → open (retry/REOPEN) | abandoned (auto >24 jam scheduler); awaiting_confirmation → locked (acked) | needs_correction (rejected); needs_correction → awaiting_confirmation (amendment approved dari base current SUBMITTED/LOCKED — transisi eksplisit locked → awaiting_confirmation). Active-shift unique: status IN (open, submitting, failed, awaiting_confirmation).
-- ack_head: full report key (org_id, station_id, shift_id, report_id, version_no) sebagai parent key + FK komposit → ack_decisions (org_id, station_id, ack_id); UNIQUE(org_id, station_id, shift_id, report_id, version_no, ack_seq) di ack_decisions; pointer invariant: active_ack_id selalu ack milik report version sama.
-- Lock manifest: SETIAP tabel mendapat lock_rank eksplisit di DDL (tanpa "other") — termasuk ack_head, audit_chain_locks, procedure_registry, jwt_keys, dispenser_nozzle_map, loss_identity, baseline tables. Tie-break: urutan PK ascending.
-- Chronology: shifts.station_seq (immutable, per-station monotonic, dialokasikan saat shift dibuat di bawah station lock) = kunci kronologi; predecessor report = report shift dgn station_seq < target & terbesar; reset selection & backfill validation memakai station_seq ini (bukan UUID).
-- Idempotency retry FINAL rule: key sama + payload sama + status failed → boleh retry dengan KEY BARU (payload hash sama diizinkan); payload BERUBAH dgn key sama = 409 selalu. (Definisi tunggal; teks lain dihapus.)
-- Audit chain atomicity: business mutation + audit_log chain row + audit_outbox row = SATU transaksi; relay TIDAK membuat chain rows; created_at timestamp precision = microseconds ISO 8601 UTC; audit_chain_locks rows permanent (satu per org, dibuat saat provisioning).
-- Privilege matrix: tambahkan ack_head, audit_chain_locks, procedure_registry, jwt_keys, dispenser_nozzle_map, loss_identity, nozzle_baseline_revisions, nozzle_baseline_current, audit_chain_locks — CI gagal bila tabel/view/function/sequence/role tanpa klasifikasi.
-- draft lease fencing: setiap mutasi child DAN submit wajib memverifikasi (claim_token match, claim_expires_at > now(), revision sama) dalam satu UPDATE ... WHERE — expired client ditolak. Recovery: submitting > 10 menit → recovering; CEK dulu submit_idempotency/report existence — jika report sudah ada → submitted (bukan editing); jika tidak → editing/failed. Recovery attempts dicatat (recovery_count).
-- price/mapping: price_used & expected_sale_rupiah = SERVER-COMPUTED dari shift_price_map_snapshot (tidak bisa di-input klien); validasi membership nozzle/dispenser terhadap snapshot saat submit; semua insert/update/delete harga/mapping memakai station lock. Rupiah rounding: expected_sale_rupiah = ROUND(meter_delta × harga, 0), pembulatan HALF-UP per reading di prosedur submit (satu tempat, deterministik); agregasi = SUM nilai yang sudah dibulatkan; loss/gain cash_amount = integer rupiah. Rupiah arithmetic WAJIB numeric (bukan float); uji: nilai setengah (.5), overflow meter.
+report_id and version_no are always used together with org_id, station_id, and shift_id. No table uses an unscoped report or shift foreign key.
 
-### 5.4 Rekonsiliasi dual-unit
-- Grain: per nozzle; agregasi shift.
-- Volume: metered_volume_shift = Σ nozzle delta_liter. Dua aturan TERPISAH: anomali_loss = Σ loss_liter > threshold loss_liter; anomali_gain = Σ gain_liter > threshold gain_liter (net loss−gain TIDAK dipakai agar gain besar tidak menutupi loss; policy net_liter opsional). loss_rupiah/gain_rupiah policy hanya dipakai utk klaim cash_amount pada loss_entries (sederhana: anomali jika Σ cash_amount klaim loss > threshold loss_rupiah). Klaim sales TIDAK dipakai dalam varian volume.
-- Uang: varian_rupiah = Σ nozzle expected_sale_rupiah − Σ (cash + cashless) declared; anomali jika |varian_rupiah| > threshold variance_rupiah (default 0). cash_amount REQUIRED; cashless REQUIRED default 0.
-- loss_rupiah rule: Σ cash_amount pada loss_entries (direction=loss) > threshold loss_rupiah. gain_rupiah rule: Σ cash_amount pada gain_entries (direction=gain) > threshold gain_rupiah. cash_amount nullable: baris tanpa cash_amount tidak ikut rule Rupiah (rule liter tetap berlaku) — BUKAN post-MVP.
-- CHECK: liters ≥ 0; cash/cashless ≥ 0; UNIQUE(dispenser_id, shift_report_id) di sales_declared.
-- loss_entries: liters wajib utk rule liter; cash_amount opsional (dipakai rule loss_rupiah/gain_rupiah; konversi penuh rekonsiliasi kas = post-MVP).
-- DO/dip = informatif di v1 (tidak masuk rumus varian).
+### 4.3 Complete tenant foreign-key catalog
 
-### 5.5 Evidence
-- Kardinalitas: jenis diterima + jumlah minimal per loss didefinisi di evidence_policies (disnapshot).
-- Mode `wajib`: loss_exception DILARANG — ditegakkan di prosedur submit + trigger (bukan row CHECK).
+Every foreign key below includes all available tenant columns. An organization-only parent uses org_id. A station-scoped parent uses org_id and station_id. CI queries pg_constraint and fails if a tenant-bearing FK is missing from this catalog or if a station-scoped FK omits either tenant column.
 
-### 5.6b Amendment & Backfill enforcement
-- Amendment: allowed-paths di-enforce oleh fungsi DB (bukan konvensi jsonb): hanya sales_declared (cash/cashless), loss_entries (liters/note/cash_amount), referensi DO/dip. Meter path ditolak. Requester ≠ pembuat data yang diubah (kecuali break-glass ber-alasan). Revalidasi aturan evidence saat amendment mengubah loss (pakai policy snapshot report): amendment approval meng-clone + relink evidence ke loss rows baru. stale_check_hash = sha256(payload kanonik report base + version_no); diverifikasi di transaksi approval.
-- Backfill: original_event_date + approval Owner (approver, backfill_approved_at, backfill_reason tersimpan di shifts); idempotency = partial UNIQUE(org_id, station_id, original_event_date, shift_ke) WHERE backfilled (1 SPBU boleh >1 shift per event date: pagi/sore). Out-of-order backfill DILARANG bila ada laporan locked berikutnya yang nozzle-nya ter-chain (cek juga draft aktif); hanya klaim non-meter (loss/sales) boleh di-backfill, meter diisi dari snapshot chaining (dispenser_readings.observed=false, is_carried_forward=true). Approval backfill memakai station lock yang sama.
-- Objek evidence content-addressed: object storage write-once (upload menolak hash yang sudah ada dengan isi beda); DB INSERT-only.
-- Mode `opsional` tanpa evidence: wajib loss_exception; direview saat ack (tidak butuh approval terpisah).
+| Child columns | Parent key |
+|---|---|
+| stations.org_id | organizations(org_id) |
+| users.org_id | organizations(org_id) |
+| audit_chain_locks.org_id and audit_log.org_id | organizations(org_id) |
+| user_station_roles.org_id,station_id | stations(org_id,station_id) |
+| user_station_roles.user_id | users(user_id) plus trigger for same org_id |
+| nozzles.org_id,station_id,dispenser_id | dispensers(org_id,station_id,dispenser_id) |
+| dispensers.org_id,station_id and tanks.org_id,station_id | stations(org_id,station_id) |
+| nozzle_tank_map.org_id,station_id,nozzle_id | nozzles(org_id,station_id,nozzle_id) |
+| nozzle_tank_map.org_id,station_id,tank_id | tanks(org_id,station_id,tank_id) |
+| dispenser_nozzle_map.org_id,station_id,dispenser_id | dispensers(org_id,station_id,dispenser_id) |
+| dispenser_nozzle_map.org_id,station_id,nozzle_id | nozzles(org_id,station_id,nozzle_id) |
+| dispenser_prices.org_id,station_id,nozzle_id | nozzles(org_id,station_id,nozzle_id) |
+| shifts.org_id,station_id | stations(org_id,station_id) |
+| shifts.supervisor_id | users(user_id) plus same-organization trigger |
+| Every created_by, requester_user_id, approver_user_id, actor_user_id, submitted_by, and updated_by column | users(user_id) plus a same-organization and, when applicable, same-station trigger |
+| shift_drafts.org_id,station_id,shift_id | shifts(org_id,station_id,shift_id) |
+| shift_drafts.org_id,station_id,draft_id | unique shift_drafts(org_id,station_id,draft_id) |
+| Every draft child org_id,station_id,draft_id | shift_drafts(org_id,station_id,draft_id) |
+| draft_readings.org_id,station_id,nozzle_id | nozzles(org_id,station_id,nozzle_id) |
+| draft_sales.org_id,station_id,dispenser_id | dispensers(org_id,station_id,dispenser_id) |
+| submit_idempotency.org_id,station_id,shift_id | shifts(org_id,station_id,shift_id) |
+| shift_reports.org_id,station_id,shift_id | shifts(org_id,station_id,shift_id) |
+| shifts.org_id,station_id,shift_id,current_report_id | shift_reports(org_id,station_id,shift_id,report_id) |
+| shift_reports.org_id,station_id,shift_id,supersedes_report_id | shift_reports(org_id,station_id,shift_id,report_id) |
+| dispenser_readings.org_id,station_id,shift_id,report_id | shift_reports(org_id,station_id,shift_id,report_id) |
+| dispenser_readings source columns | dispenser_readings(org_id,station_id,source_shift_id,source_report_id,source_reading_id) |
+| sales_declared.org_id,station_id,shift_id,report_id | shift_reports(org_id,station_id,shift_id,report_id) |
+| loss_entries.org_id,station_id,shift_id,report_id,version_no | shift_reports(org_id,station_id,shift_id,report_id,version_no) |
+| loss_entries.org_id,station_id,loss_id | loss_identity(org_id,station_id,loss_id) |
+| loss_exception.org_id,station_id,shift_id,report_id,loss_id | loss_entries(org_id,station_id,shift_id,report_id,loss_id) |
+| delivery_snapshots and dip_snapshots report columns | shift_reports(org_id,station_id,shift_id,report_id) |
+| delivery_snapshots.org_id,station_id,shift_id,delivery_id | deliveries(org_id,station_id,shift_id,delivery_id) |
+| dip_snapshots.org_id,station_id,shift_id,dip_id | dip_readings(org_id,station_id,shift_id,dip_id) |
+| ack_decisions report columns | shift_reports(org_id,station_id,shift_id,report_id,version_no) |
+| ack_head report columns | shift_reports(org_id,station_id,shift_id,report_id,version_no) |
+| ack_head active decision columns | ack_decisions(org_id,station_id,shift_id,report_id,version_no,ack_id) |
+| ack_supersessions old decision columns | ack_decisions(org_id,station_id,shift_id,report_id,version_no,ack_id) |
+| ack_supersessions replacement report columns | shift_reports(org_id,station_id,shift_id,report_id) |
+| policy_snapshot_sets.org_id,station_id,shift_id | shifts(org_id,station_id,shift_id) |
+| policy_snapshot_items set columns | policy_snapshot_sets(org_id,station_id,shift_id,set_id) |
+| policy_snapshot_items.org_id,rev_id | threshold_policy_revisions(org_id,rev_id) or evidence_policy_revisions(org_id,rev_id), selected by policy_kind |
+| shift_reports.org_id,station_id,shift_id,policy_snapshot_set_id | policy_snapshot_sets(org_id,station_id,shift_id,set_id) |
+| evidence_event report and loss-row columns | loss_entries(org_id,station_id,shift_id,report_id,row_id) |
+| threshold_policy_revisions.org_id,station_id | organizations(org_id) and stations(org_id,station_id) when station_id is not null |
+| evidence_policy_revisions.org_id,station_id | organizations(org_id) and stations(org_id,station_id) when station_id is not null |
+| evidence_policy_types.org_id,rev_id | evidence_policy_revisions(org_id,rev_id) |
+| policy revision supersedes_org_id,supersedes_rev_id | same policy revision parent, with trigger requiring an older valid_from |
+| amendments base report columns | shift_reports(org_id,station_id,shift_id,report_id) |
+| amendments.applied_report_id | shift_reports(org_id,station_id,shift_id,report_id) |
+| amendment_items.org_id,station_id,amendment_id | amendments(org_id,station_id,amendment_id) |
+| meter_reset_events nozzle and effective shift columns | nozzles(org_id,station_id,nozzle_id) and shifts(org_id,station_id,shift_id) |
+| nozzle_baseline_revisions.org_id,station_id,nozzle_id | nozzles(org_id,station_id,nozzle_id) |
+| nozzle_baseline_current.org_id,station_id,nozzle_id | nozzles(org_id,station_id,nozzle_id) |
+| nozzle_baseline_current revision columns | nozzle_baseline_revisions(org_id,station_id,nozzle_id,baseline_rev_id) |
+| sessions.kid | jwt_keys(kid) |
+| alert_rules.org_id,station_id | stations(org_id,station_id) |
+| alert_events.org_id,station_id | stations(org_id,station_id) |
+| alert_events.org_id,station_id,rule_id | alert_rules(org_id,station_id,rule_id) |
+| alert_events.related_fired_event_id | alert_events(org_id,station_id,event_id), checked by deferred trigger for fired type and same subject |
+| audit_outbox | audit_log(org_id,event_id) |
+| outbox_relay_state | audit_outbox(org_id,event_id) |
+| sessions.user_id | users(user_id) plus trigger for same org |
 
-### 5.6 Isolasi
-- RLS + authorization layer; FK komposit tenant-konsisten (lihat §4).
-- Superadmin/break-glass: satu-satunya bypass; wajib alasan; anomaly view = union(break-glass actions, superadmin actions, loss_exceptions, varian atas threshold).
-- Negative-test matrix: setiap permukaan (termasuk export/jobs).
+The old acknowledgement columns in ack_supersessions are named old_org_id, old_station_id, old_shift_id, old_report_id, old_version_no, superseded_ack_id. The table has the exact FK (old_org_id, old_station_id, old_shift_id, old_report_id, old_version_no, superseded_ack_id). This explicit name avoids an accidental duplicate or tenant omission.
 
-### 5.7 Audit & alert
-- audit_log: role pemilik terpisah; insert via SECURITY DEFINER (search_path FIXED); REVOKE semua DML+SELECT dari role aplikasi; failed-request → audit_denied via transaksi terpisah yang dilakukan oleh AUDIT-WRITER prosedur (SECURITY DEFINER, dipanggil aplikasi SEBELUM mengirim response denial — fail-closed; timeout 3 detik, jika gagal request ditolak tanpa response). audit_denied idempoten via request_id UNIQUE; payload: request_id, sub, jti, tenant, action, target, reason, server_timestamp, outcome (termasuk failed submit, bukan hanya authorization denial).
-- Enforcement evidence: kardinalitas diperiksa di PROSEDUR submit/amendment (bukan row CHECK) memakai policy snapshot milik report; loss_exception immutabel (INSERT-only).
-- Alert starvation WAJIB; alert varian opt-in.
+### 4.4 Policy revisions and immutable snapshots
 
-## 6. Layar
+threshold_policy_revisions and evidence_policy_revisions are append-only revision tables. Each has rev_id PK, policy_id, org_id, nullable station_id, valid_from, supersedes_org_id, supersedes_rev_id, disabled, created_by, and created_at, plus unique (org_id, rev_id). A partial unique index enforces one revision at one time for an organization scope and for a station scope. An insert trigger enforces one successor per revision and that supersedes_rev_id points backward. BEFORE UPDATE OR DELETE triggers always raise 23514. No old row is updated. A disabled revision is a tombstone.
 
-1. Login; 2. Dashboard Supervisor; 3. Form Input Shift (per nozzle, harga otomatis); 4. Input DO + Dip; 5. Amendment queue; 6. Ack queue (+ break-glass); 7. Daftar Anomali (termasuk break-glass/exception); 8. Laporan + printout; 9. Manajemen User + Dispenser/Nozzle/Harga/Reset; 10. Pengaturan kebijakan (versi); 11. Audit Trail (filter break-glass/superadmin).
+Threshold revisions have these concrete fields: loss_liter_threshold, gain_liter_threshold, loss_rupiah_threshold, gain_rupiah_threshold, variance_rupiah_threshold, and rollover_threshold. The default loss-liter value is 10.00.
 
-## 7. Acceptance Criteria (MVP)
+Evidence revisions have mode (opsional|wajib) with CHECK mode in (opsional,wajib), and child rows in evidence_policy_types(org_id, rev_id, evidence_type, minimum_count_per_loss, accepted_mime_types). The child has PRIMARY KEY (org_id,rev_id,evidence_type), minimum_count_per_loss >= 0, a non-empty type, and a non-empty MIME array. Each MIME value matches the server MIME grammar. The child row is the complete accepted-type definition. A trigger requires at least one accepted type; wajib requires at least one positive minimum.
 
-1. business_date benar: lintas tengah malam, submit terlambat, backfill; timezone disnapshot per shift; uji DST/timezone change.
-2. Lock hanya setelah ack pembuat-data-berbeda; break-glass wajib alasan + ter-audit + muncul di anomali.
-3. Dua threshold (liter & Rupiah) berjalan; varian volume & varian Rupiah = anomali berbeda; negative Rupiah variance terekam.
-4. Amendment: allowlist field (tanpa meter), requester ≠ approver, satu aktif per versi, stale-check atomik, applied_report_id same-shift, approved → versi baru + ack ulang.
-5. Harga server-resolved saat buka shift; exclusion constraint; snapshot.
-6. Chaining + rollover (modulus + threshold + maks 1 rollover) + reset (approver ≠ actor, effective_shift_id); delta negatif non-rollover ditolak.
-7. Isolasi: tenant FK komposit + RLS; negative tests semua permukaan lolos CI.
-8. Kebijakan immutable-versi + snapshot; tidak retroaktif; SPBU > org.
-9. UI Bahasa Indonesia penuh.
-10. Printout = layar.
-11. audit_log append-only (owner role terpisah + SECURITY DEFINER + REVOKE; failed-request audit tidak ikut rollback).
-12. Maks 1 shift open/awaiting per SPBU; needs_correction tidak memblokir; scheduler 24 jam dedup + clear + re-alert.
-13. Backfill: flag + original_event_date + Owner approval + idempotency (UNIQUE org+station+event_date+shift_ke); meter chaining aman.
-14. Submit atomik: lock draft (optimistic revision) → snapshot semua child → policy snapshot → status; idempotency key submit; concurrent submit ditolak.
+Resolution is as-of resolution_time: choose the newest valid_from <= resolution_time, with station scope before organization scope. Do not use a future revision to hide a current revision. Threshold and evidence policies resolve at submit. Price resolves at shift open.
 
-## 8. Teknologi
+policy_snapshot_sets(set_id PK, org_id, station_id, shift_id, created_at) has unique (org_id,station_id,shift_id,set_id). policy_snapshot_items(item_id PK, org_id, station_id, shift_id, set_id, policy_kind, policy_id, rev_id, scope, payload jsonb, payload_hash) has PRIMARY KEY item_id, unique (org_id,station_id,shift_id,set_id,policy_kind), and exactly one threshold and one evidence item per set. The threshold payload must contain exactly the six threshold keys and hash_version. The evidence payload must contain exactly mode, types, and hash_version; each type object must contain type, minimum_count_per_loss, and sorted accepted_mime_types. Unknown keys are rejected. The hash is SHA-256 of the versioned canonical JSON bytes.
 
-Next.js + TypeScript + Postgres (Drizzle). btree_gist exclusion constraints. Deploy: VPS/vercel + managed Postgres.
-Testing: TDD. Semua kode di git.
+A deferred constraint trigger requires both items before a report can reach awaiting_confirmation. After any report references a set, a trigger rejects UPDATE and DELETE of its set or items. The report stores the set ID and the full snapshot remains readable for printout and audit.
 
-## 9. Fase
+## 5. Submit, chronology, meter, and numeric rules
 
-- F1: skema penuh (FK komposit, exclusion, RLS, audit role) + auth + permission evaluator + negative test matrix.
-- F2: master data + harga/mapping + draft + lifecycle + chaining/rollover/reset + policy versioning + submit atomik idempoten.
-- F3: amendment state machine + re-ack + break-glass + audit trail.
-- F4: rekonsiliasi dual-unit + anomali + alert scheduler.
-- F5: ack queue + backfill + laporan + printout + pengaturan.
-- F6: pilot SPBU keluarga.
+### 5.1 Submit idempotency and draft fencing
 
-## 10. Runbook Pilot (gate F6)
+fn_submit_shift takes a canonical request payload and an idempotency key. The canonical hash is SHA-256 of RFC 8785 JSON without the idempotency key. Field order, decimal strings, null values, sorted arrays, and hash_version are fixed by the repository JSON Schema. Unknown fields are rejected.
 
-- failed shift recovery: status failed dengan TIDAK ADA report → jalur REOPEN (prosedur): failed → open (draft kembali editing, revision++); amendment flow HANYA untuk shift yang punya report. Shift needs_correction tanpa report = tidak mungkin (guard di prosedur).
-- gate matrix format (tiap baris: workflow, uji wajib, pass threshold, bukti test/artefak, rollback action):
-| Workflow | Uji wajib | Pass threshold | Rollback |
-|---|---|---|---|
-| Shift normal (open→ack→lock) | 12 shift penuh, 0 tanpa ack | 100% shift ter-lock dgn ack | kembali ke Excel |
-| Amend + re-ack | 1 siklus penuh | versi baru + ack ulang terekam | - |
-| Break-glass | 1 aksi ber-alasan, muncul di anomali | ter-audit + muncul | - |
-| Rollover/reset | 1 reset event ber-approval | chaining benar setelah reset | - |
-| Evidence wajib & opsional | 1 submit ditolak; 1 exception ter-audit | keduanya | - |
-| Harga/mapping berubah | 1 perubahan antar-shift, snapshot benar | expected sale konsisten | - |
-| Alert starvation | 1 shift > 24 jam → alert idempoten | 1 occurrence, retry tidak dobel | - |
-| Isolasi | negative-test matrix hijau di CI (repeat 3x) | 0 pelanggaran | block deploy |
-| Backfill | 1 backfill idempoten (retry 3x) | retry = 1 report | freeze-submit, replay manual |
-| Backup/restore | 1 restore sukses (RTO < 1 jam, RPO ≤ 5 menit via WAL) | data identik (checksum) | restore + replay WAL |
-| Konkurensi (baru) | takeover race, ack supersession, pointer isolation, policy tombstone, audit outage, reset baseline, alert clear (masing-masing ≥3 iterasi) | semua sesuai §4.2 gate | block deploy |
-| JWT rotasi (baru) | signature invalid, iss/aud/iat/exp/alg/kid/jti salah masing-masing 1 test + logout + retired key | 100% ditolak kecuali kasus grace | - |
-| Invalid transition (baru) | setiap transisi ilegal di state machine ditolak | 100% | - |
-| Audit replay (baru) | export audit trail + verifikasi hash berantai | 0 gap | - |
-- Metrik: varian dual-unit terekam 100%; waktu input/shift < 10 menit; baseline Excel 1 minggu pembanding.
-- Prosedur: backup harian; fallback kertas; rollback = kembali ke Excel (data aplikasi tetap).
-- Sign-off: Owner sebelum SPBU kedua.
+The one protocol is:
+
+1. Lock station, then shift, then draft, then the idempotency row in the global order. Insert the row with ON CONFLICT DO NOTHING; the insert winner owns the claim.
+2. A row with a different hash always returns 409.
+3. A succeeded row returns the stored report after a fresh authorization check.
+4. An unexpired in_progress row returns 409.
+5. An expired in_progress row is taken over by conditional UPDATE ... WHERE claim_token = old_token AND lease_expires_at < now() RETURNING. Zero rows returns 409.
+6. A failed row always returns 409; retry requires a new idempotency key, even when the payload is identical.
+7. The lease is 10 minutes. A worker heartbeat runs every 60 seconds and extends lease_expires_at only when its claim token still matches and the row is in_progress.
+8. Every draft-child mutation and submit checks claim_token, claim_expires_at > now(), and the expected revision in one conditional UPDATE. An expired client cannot write.
+9. Report creation and setting succeeded are one transaction. If final claim fencing updates zero rows, the whole report transaction rolls back. Setting failed is a separate claim-gated transaction after rollback.
+
+A recovery job moves submitting drafts older than 10 minutes to recovering, checks for a report and submit result, then moves the draft to submitted if a report exists, otherwise to editing or failed. It increments recovery_count and writes an audit event.
+
+### 5.2 Station chronology and baseline
+
+shifts.station_seq is allocated by locking the station and taking the next monotonic value. It is immutable. It is the only chronology key. UUID order and local time order are never used for predecessor selection.
+
+For one station and nozzle, the eligible meter source for a target shift is the chronologically latest of:
+
+- the locked report reading of the preceding shift;
+- an approved meter reset whose effective_shift_id has a lower station_seq than the target;
+- the current baseline revision.
+
+The latest eligible source by station_seq wins. A reset cannot be approved without either a preceding locked report for that nozzle or an explicit provisioning baseline. A reset stores old_value, new_value, effective_shift_id, reason, actor, approver, approved_at, and status. Actor and approver must differ. Approval uses the station lock and the station/nozzle lock.
+
+Baseline uses append-only nozzle_baseline_revisions(baseline_rev_id PK, org_id, station_id, nozzle_id, effective_station_seq bigint default 0, initial_meter_value, meter_max, created_by, created_at) and nozzle_baseline_current(org_id, station_id, nozzle_id, current_baseline_rev_id). The revision has unique (org_id,station_id,nozzle_id,baseline_rev_id). The pointer has a four-column FK to the revision, so it cannot point to another nozzle. Owner approval creates a new revision and moves the pointer in one transaction. A revision checks 0 <= initial_meter_value <= meter_max. Provisioning baseline has effective_station_seq = 0.
+
+Meter values are numeric(10,1). meter_max is the display maximum. modulus = meter_max + 0.1. For a rollover, delta = meter_end - meter_start + modulus; it is valid only when both values are in range, the delta is at most rollover_threshold (default 20% of modulus), and there is one rollover only. A non-rollover negative delta and a second rollover are rejected.
+
+Amendment never changes meter fields in a submitted or locked report. Meter correction uses a new shift or an approved reset.
+
+### 5.3 Reconciliation and numeric limits
+
+Volume is per nozzle and then summed by shift. Loss and gain are separate:
+
+- loss anomaly: sum of loss_entries.liters where direction = loss is greater than loss_liter_threshold;
+- gain anomaly: sum where direction = gain is greater than gain_liter_threshold.
+
+Gain does not offset loss. cash_amount is optional on a loss row. When present, loss and gain Rupiah claims use their own thresholds. DO and dip values are informative in v1.
+
+Money variance is:
+
+sum(nozzle expected_sale_rupiah) - sum(dispenser cash_amount + cashless_amount).
+
+expected_sale_rupiah = ROUND(meter_delta * price, 0) with deterministic half-up rounding per reading. The sum uses the rounded reading values. A negative variance is stored and compared by absolute value to variance_rupiah_threshold, whose default is zero.
+
+All volumes are numeric(8,2) with >= 0. Volume sums use numeric(12,2). Money and price use numeric(14,0). The maximum is 99,999,999,999,999. Before every cast, multiplication, sum, and variance operation, the procedure checks overflow. Overflow raises SQLSTATE 22003, rolls back the transaction, and maps to HTTP 422. JSON and TypeScript use decimal strings.
+
+### 5.4 Backfill
+
+Backfill uses the same shift lifecycle. It cannot be inserted out of order when a later locked report has a chained nozzle reading or when an active draft would be invalidated. Only non-meter claims can be entered. Meter readings use the predecessor snapshot with observed = false and is_carried_forward = true. Approval uses the station lock and stores all approval fields in shifts.
+
+## 6. Evidence and anomaly rules
+
+At submit and amendment approval, fn_validate_evidence reads the evidence policy snapshot of that report. It does not read a mutable live policy row. For every loss row it:
+
+1. rejects an evidence type not present in the snapshot types array;
+2. rejects a MIME type not listed for that type;
+3. counts distinct finalized evidence_id values per type and checks minimum_count_per_loss;
+4. rejects loss_exception when mode is wajib;
+5. requires exactly one exception when mode is opsional and the loss has no finalized evidence, and rejects an exception when finalized evidence exists.
+
+The same checks run in a deferred constraint trigger on loss_exception and report finalization. The trigger is a safety net; the procedures are the normal write path.
+
+evidence_event is append-only. Its columns are (evidence_event_id PK, evidence_id, org_id, station_id, shift_id, report_id, loss_row_id, event_seq, event_type, evidence_type, object_key, content_hash bytea, size_bytes bigint, mime, actor_user_id, at). CHECK constraints require event_seq >= 1, content_hash length = 32, size_bytes > 0, a non-empty object_key, and event_type in (uploaded,verified,finalized). A unique key (org_id,station_id,shift_id,report_id,loss_row_id,evidence_id,event_seq) prevents duplicate sequence numbers. The allowed event sequence is uploaded -> verified -> finalized; the procedure locks the loss row, checks the previous event, and inserts the next sequence. Direct insert, update, and delete are denied. Object storage is write-once: a hash collision with different bytes is rejected.
+
+alert_rule_type has values starvation|variance. alert_channel has value in_app. alert_subject_kind has values shift|report. alert_event_type has values fired|cleared. alert_source_kind has values shift_transition|report|scheduler|amendment. alert_rules contains (rule_id uuid PK, org_id uuid, station_id uuid, rule_type alert_rule_type, alert_key text, threshold numeric, enabled boolean, channel alert_channel, created_by uuid, created_at timestamptz(6)) with unique (org_id,station_id,rule_id) and unique (org_id,station_id,alert_key). CHECK constraints allow threshold >= 0 and enabled true|false. Alert starvation is mandatory. Variance alerts are opt-in. channel is in_app in the MVP; external notification is deferred.
+
+alert_events contains:
+
+    (event_id uuid PK, org_id uuid, station_id uuid, rule_id uuid,
+     subject_kind alert_subject_kind, subject_id uuid,
+     event_type alert_event_type, period_start timestamptz(6) NOT NULL,
+     period_bucket timestamptz(6) GENERATED ALWAYS AS
+       (date_bin(interval '1 hour', period_start,
+                 timestamptz '1970-01-01 00:00:00+00')) STORED,
+     related_fired_event_id uuid NULL, source_kind alert_source_kind,
+     source_id uuid, source_version_no integer NULL,
+     source_at timestamptz(6), created_by uuid NULL,
+     created_at timestamptz(6) NOT NULL)
+
+event_type is fired|cleared. period_bucket is the immutable UTC expression date_bin('1 hour', period_start, '1970-01-01 00:00:00+00'). CHECK constraints require event_type in (fired,cleared), source_kind in (shift_transition,report,scheduler,amendment), source_id non-null, and source_at non-null. A fired row has related_fired_event_id = event_id. A cleared row has a non-null related fired ID. A deferred trigger checks that the related event is a fired event for the same tenant, rule, subject, and period bucket. The same trigger checks that source_id exists in the table named by source_kind and has the event tenant. Unique constraints are:
+
+- (org_id,station_id,rule_id,subject_kind,subject_id,event_type,period_bucket) for one event of each type in a bucket;
+- (org_id,station_id,related_fired_event_id,event_type) for one clear per fired event.
+
+The source columns are mandatory for both event types. source_kind is shift_transition|report|scheduler|amendment; source_id identifies the source row, and source_version_no is required for report and amendment sources. The occurrence procedure locks the alert rule row before it inserts a fired or cleared event. Retries use the unique keys and do not create duplicates.
+
+alert_events has BEFORE UPDATE OR DELETE triggers that always raise 23514. A deferred trigger requires source_version_no to be null for scheduler and shift_transition sources and non-null for report and amendment sources. It also requires a fired row to self-reference its own event_id and a cleared row to reference a fired row.
+
+## 7. Authentication, RLS, and privileges
+
+The only actor identity is a verified signed session JWT. Required claims are iss, sub, jti, iat, exp, aud = spbu-recon, kid, and alg = HS256. The verifier rejects other algorithms, missing claims, invalid signature, wrong issuer or audience, future iat, expired exp outside 60 seconds skew, and a jti that is absent or revoked in sessions.
+
+sessions(jti PK, kid, issued_at, expires_at, revoked_at) checks expires_at - issued_at <= interval 15 minutes. jwt_keys(kid PK, secret_ref, status, activated_at, retired_at, max_token_expiry) uses active|previous|retired. A previous key is retired only when max_token_expiry <= now(). Logout sets revoked_at. Raw JWT text is never stored in audit.
+
+The API passes the raw JWT to fn_set_request_context. That SECURITY DEFINER function verifies it in the database, checks sessions, sets transaction-local values with set_config(..., true), and sets tenant, user, role, and break-glass context. A missing or invalid context fails closed.
+
+All tenant tables have RLS and FORCE ROW LEVEL SECURITY. Table owners and service roles are NOLOGIN NOBYPASSRLS. Policies allow rows only when org_id and, where applicable, station_id match the transaction-local context. The break-glass policy branch requires a verified Owner/Superadmin context and a non-empty reason.
+
+The app role has no SELECT, INSERT, UPDATE, DELETE, or TRUNCATE on any table, sequence, view, or materialized view. The app reads only through SECURITY DEFINER functions named read_*; each function verifies context and has a fixed search_path. Views are not exposed. Any internal view is security_invoker.
+
+The relay role is NOLOGIN and NOBYPASSRLS. A role-specific RLS policy permits it to read audit_outbox and read or update outbox_relay_state only through relay claims. The only relay grant is EXECUTE on fn_relay_claim_event and fn_relay_finish_event; both functions check the lease token. No relay function can insert or update audit_log or audit_outbox.
+
+Write functions are the only API surface. Every procedure is listed in procedure_registry(name PK, allowed_roles, action, lock_rank, enabled). CI compares this table with pg_proc and fails for an unclassified procedure, function, sequence, table, view, materialized view, or role. Grants are explicit and default privileges are revoked.
+
+## 8. Lock order and concurrency
+
+Every transaction that takes more than one row lock uses this total order. It never uses an unranked resource:
+
+| Rank | Resource tables |
+|---:|---|
+| 5 | organizations |
+| 10 | stations |
+| 20 | shifts |
+| 21 | shift_transitions |
+| 30 | shift_drafts, draft_readings, draft_sales, draft_losses, draft_evidence_staging |
+| 40 | submit_idempotency |
+| 45 | policy_snapshot_sets |
+| 46 | policy_snapshot_items |
+| 47 | threshold_policy_revisions, evidence_policy_revisions |
+| 48 | evidence_policy_types |
+| 49 | amendments, amendment_items |
+| 50 | shift_reports |
+| 51 | dispenser_readings, sales_declared, loss_entries, loss_exception, delivery_snapshots, dip_snapshots, evidence_event |
+| 52 | ack_head |
+| 53 | ack_decisions |
+| 54 | ack_supersessions |
+| 70 | alert_rules |
+| 71 | alert_events |
+| 80 | nozzles, dispensers, tanks, dispenser_prices, nozzle_tank_map, dispenser_nozzle_map, meter_reset_events, nozzle_baseline_revisions, nozzle_baseline_current, deliveries, dip_readings |
+| 90 | loss_identity |
+| 100 | audit_chain_locks, audit_log, audit_denied |
+| 110 | audit_outbox, outbox_relay_state, sessions, jwt_keys, procedure_registry |
+| 120 | users, user_station_roles |
+
+The DDL manifest stores one lock_rank for every listed table, including organizations, stations, all operational tables, policy tables, alert tables, master tables, audit tables, authentication tables, and user tables. For multiple rows at one rank, sort by table_name and primary_key ascending. A transaction never locks a lower rank after a higher rank. Submit is station -> shift -> draft -> idempotency -> policy snapshot -> report -> report children -> ack head. The station and shift locks are required for chronology and are taken before the draft lock. Acknowledgement is station -> shift -> current report -> ack head -> decision. Amendment is station -> shift -> amendment -> current report -> new report children -> old and new acknowledgement heads. Audit append is last. CI runs deadlock tests with at least three concurrent workers for submit takeover, acknowledgement, amendment, reset, policy snapshot, and alert clear.
+
+## 9. Audit chain and relay
+
+audit_log is owned by a dedicated audit_owner role. The app has no direct table privilege. fn_append_audit_event is SECURITY DEFINER, has a fixed search_path, and locks the permanent audit_chain_locks(org_id PK) row.
+
+The audit columns are (event_id UUID PK, org_id, org_sequence bigint, event_type, payload jsonb, outcome, outcome_error, created_at timestamptz(6), prev_hash bytea, row_hash bytea). The table has UNIQUE(org_id,event_id) and UNIQUE(org_id,org_sequence). The chain starts at org_sequence = 1 with 32 zero bytes as prev_hash.
+
+The exact hash bytes are UTF-8 bytes of RFC 8785 canonical JSON for this array, in this order:
+
+    [hash_version, org_id_text, org_sequence_decimal_text, event_id_lowercase_text,
+     event_type, payload, created_at_utc_text, prev_hash_lowercase_hex]
+
+created_at_utc_text is the database value formatted as YYYY-MM-DDTHH24:MI:SS.USZ in UTC, with exactly six fractional digits. The database assigns created_at once at append. UUIDs are lowercase text. org_sequence is decimal text. prev_hash is 32 bytes and its hash-input form is lowercase hexadecimal. payload uses the versioned canonical schema; decimals and big integers are strings, arrays have fixed sort keys, null is allowed only where specified, and unknown fields are rejected. row_hash = SHA-256(input_bytes).
+
+The business mutation, chain append, and one audit_outbox row are one database transaction. If the chain lock, sequence allocation, canonicalization, hash, or outbox insert fails, the transaction raises and all business writes roll back. A serialization failure retries the complete transaction, never the audit append alone. The relay never writes chain rows.
+
+audit_outbox(org_id,event_id, event_type, payload, created_at) has PRIMARY KEY (org_id,event_id) and a composite FK to audit_log(org_id,event_id). It has an insert-only trigger. outbox_relay_state(org_id,event_id, relay_status, attempt_count, lease_token, lease_expires_at, last_attempt_at, next_attempt_at, delivered_at, last_error) has a composite PK and FK to the same outbox event. This is the event-state correlation key.
+
+The relay role has SELECT on audit_outbox and SELECT, UPDATE only on outbox_relay_state. It has no insert, update, or delete privilege on audit_log or audit_outbox. A relay claim locks the state row, sets a five-minute lease, and sends the same event_id to the sink. Success is marked only by a matching lease token. Failure increments attempt_count, keeps the outbox row, and sets a bounded exponential next_attempt_at. A retry sends the same event ID and the sink must be idempotent on that ID. A relay crash leaves an expired lease for takeover; it never creates a second audit chain row.
+
+Denied or failed requests are durable in audit_denied, which is append-only and not part of the chain. The API calls the separate audit-writer connection before returning a denial or a failed-submit response. request_id is unique. The writer has a three-second timeout; if its commit fails, the API returns no success or denial response and the request remains failed closed. audit_denied contains request_id, sub, jti, tenant, action, target, reason, server timestamp, outcome, and error detail.
+
+## 10. UI and printout
+
+The screens are:
+
+1. Masuk
+2. Dasbor Supervisor
+3. Form Input Shift
+4. Input DO dan Dip
+5. Antrean Perubahan
+6. Antrean Konfirmasi
+7. Daftar Anomali
+8. Laporan dan Cetak
+9. Manajemen Pengguna, Dispenser, Nozzle, Harga, dan Atur Ulang Meter
+10. Pengaturan Kebijakan
+11. Jejak Audit
+
+All buttons, validation messages, empty states, and print labels are Bahasa Indonesia. Printout and report screen use the same immutable report snapshot.
+
+## 11. Acceptance criteria
+
+1. Cross-midnight, late submit, daylight-saving, timezone change, and backfill tests produce the correct business_date from the shift timezone snapshot.
+2. A report locks only after an active acknowledgement from a different data creator. Break-glass requires a reason, audit, and anomaly entry.
+3. Loss, gain, and Rupiah variance are separate anomalies. A negative Rupiah variance is retained.
+4. Report immutability is enforced by database triggers. Amendment uses only the allowlist, requester/approver separation, one pending amendment per version, atomic stale check, same-shift applied report, and re-acknowledgement.
+5. Price, mapping, meter maximum, and modulus are server-resolved at shift open and frozen in the snapshot.
+6. Chaining, rollover, reset approval, baseline revision, and cross-nozzle isolation pass concurrency tests.
+7. Every tenant FK is composite and catalogued. RLS and negative tests protect API, export, and jobs.
+8. Policy revisions are append-only, snapshots are complete and immutable, station scope overrides organization scope, and disabled revisions are tombstones.
+9. Evidence wajib rejects missing per-loss evidence and rejects exceptions. Evidence opsional requires an exception when evidence is absent.
+10. Audit hash verification reads the chain by org_sequence and finds no gap. A chain append failure rolls back the business mutation. Relay retries do not duplicate events.
+11. At most one active shift exists per station; needs_correction does not block a new shift; scheduler abandonment is idempotent.
+12. Failed submit recovery, idempotency takeover, same-key hash mismatch, and new-key retry rules pass.
+13. Numeric boundary, half-up rounding, overflow 22003 -> 422, and JSON decimal-string tests pass.
+14. UI copy is Bahasa Indonesia. Printout equals the report screen.
+
+## 12. Technology and delivery
+
+Technology: Next.js, TypeScript, PostgreSQL, Drizzle, and btree_gist exclusion constraints. Deployment can use VPS or Vercel with managed PostgreSQL. Use TDD and keep all code in git.
+
+Phases:
+
+- F1: schema, composite FKs, exclusion constraints, RLS, roles, JWT, procedure registry, and negative tests.
+- F2: master data, price and mapping snapshot, drafts, lifecycle, station chronology, meter, baseline, reset, policy versioning, and atomic idempotent submit.
+- F3: amendment, re-acknowledgement, break-glass, audit chain, and outbox relay.
+- F4: dual-unit reconciliation, anomalies, and alert scheduler.
+- F5: acknowledgement queue, backfill, reports, printout, and settings.
+- F6: family-station pilot.
+
+Pilot gates include 12 complete normal shifts, one amendment and re-ack cycle, one reasoned break-glass action, one reset, one required-evidence rejection, one optional-evidence exception, one price change between shifts, one starvation alert, three-iteration concurrency tests, JWT rotation tests, invalid transition tests, audit export verification, backup/restore with RTO under one hour and RPO at most five minutes, and a green tenant-isolation matrix. Rollback is return to Excel; application data remains available for later review.
