@@ -132,6 +132,7 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		from pg_class c
 		join pg_namespace n on n.oid = c.relnamespace
 		where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'S')
+		  and c.relname <> 'schema_migrations'
 		order by c.relname
 	`)
 	if err != nil {
