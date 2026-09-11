@@ -27,7 +27,13 @@ func TestB0FoundationMigrationUpAndDown(t *testing.T) {
 	root := repositoryRoot(t)
 	up := readMigration(t, root, "000001_b0_foundation.up.sql")
 	down := readMigration(t, root, "000001_b0_foundation.down.sql")
+	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {
+		t.Fatalf("reset migration metadata: %v", err)
+	}
 
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
+		t.Fatalf("reset request context: %v", err)
+	}
 	if _, err := conn.Exec(ctx, down); err != nil {
 		t.Fatalf("reset foundation with down migration: %v", err)
 	}
@@ -120,20 +126,31 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 	root := repositoryRoot(t)
 	up := readMigration(t, root, "000001_b0_foundation.up.sql")
 	down := readMigration(t, root, "000001_b0_foundation.down.sql")
+	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {
+		t.Fatalf("reset migration metadata: %v", err)
+	}
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
+		t.Fatalf("reset request context: %v", err)
+	}
 	if _, err := conn.Exec(ctx, down); err != nil {
 		t.Fatalf("reset foundation with down migration: %v", err)
 	}
 	if _, err := conn.Exec(ctx, up); err != nil {
 		t.Fatalf("apply foundation migration: %v", err)
 	}
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.up.sql")); err != nil {
+		t.Fatalf("apply request context migration: %v", err)
+	}
 
 	rows, err := conn.Query(ctx, `
 		select c.relname
 		from pg_class c
 		join pg_namespace n on n.oid = c.relnamespace
-		where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'S')
+		where n.nspname not in ('pg_catalog', 'information_schema')
+		  and n.nspname not like 'pg_toast%'
+		  and c.relkind in ('r', 'v', 'm', 'S')
 		  and c.relname <> 'schema_migrations'
-		order by c.relname
+		order by n.nspname, c.relname
 	`)
 	if err != nil {
 		t.Fatalf("query catalog relations: %v", err)
@@ -156,7 +173,16 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')'
 		from pg_proc p
 		join pg_namespace n on n.oid = p.pronamespace
-		where n.nspname = 'public'
+		where n.nspname not in ('pg_catalog', 'information_schema')
+		  and n.nspname not like 'pg_toast%'
+		  and not exists (
+			select 1
+			from pg_depend d
+			join pg_extension e on e.oid = d.refobjid
+			where d.classid = 'pg_proc'::regclass
+			  and d.objid = p.oid
+			  and d.deptype = 'e'
+		  )
 		order by 1
 	`)
 	if err != nil {
@@ -171,8 +197,9 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		functions = append(functions, name)
 	}
 	rows.Close()
-	if len(functions) != 0 {
-		t.Fatalf("unclassified public functions: %v", functions)
+	expectedFunctions := []string{"fn_set_request_context(p_raw_token text)"}
+	if fmt.Sprint(functions) != fmt.Sprint(expectedFunctions) {
+		t.Fatalf("unclassified or missing public functions: got %v, want %v", functions, expectedFunctions)
 	}
 
 	rows, err = conn.Query(ctx, `
@@ -197,6 +224,9 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		t.Fatalf("unclassified or missing roles: got %v, want %v", roles, expectedRoles)
 	}
 
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
+		t.Fatalf("reverse request context migration: %v", err)
+	}
 	if _, err := conn.Exec(ctx, down); err != nil {
 		t.Fatalf("reverse foundation migration: %v", err)
 	}

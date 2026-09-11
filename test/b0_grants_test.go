@@ -9,7 +9,7 @@ func TestB0ApplicationRoleHasNoTableDMLPrivileges(t *testing.T) {
 	ctx := context.Background()
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
-	resetB0Foundation(t, conn, false)
+	resetB0Foundation(t, conn, true)
 
 	rows, err := conn.Query(ctx, `
 		select n.nspname, c.relname, c.relkind::text,
@@ -43,6 +43,22 @@ func TestB0ApplicationRoleHasNoTableDMLPrivileges(t *testing.T) {
 		t.Fatalf("read table privilege matrix: %v", err)
 	}
 
+	var executeCount int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from pg_proc p
+		join pg_namespace n on n.oid = p.pronamespace
+		where n.nspname = 'public'
+		  and has_function_privilege('pomkita_app', p.oid, 'EXECUTE')
+	`).Scan(&executeCount); err != nil {
+		t.Fatalf("query procedure execute grants: %v", err)
+	}
+	if executeCount != 1 {
+		t.Fatalf("got %d executable public functions for app role, want only fn_set_request_context", executeCount)
+	}
+
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000002_b0_request_context.down.sql")); err != nil {
+		t.Fatalf("reverse request context: %v", err)
+	}
 	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000001_b0_foundation.down.sql")); err != nil {
 		t.Fatalf("reverse foundation: %v", err)
 	}
