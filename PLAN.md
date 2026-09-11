@@ -329,7 +329,7 @@ sum(nozzle expected_sale_rupiah) - sum(dispenser cash_amount + cashless_amount).
 
 expected_sale_rupiah = ROUND(meter_delta * price, 0) with deterministic half-up rounding per reading. The sum uses the rounded reading values. A negative variance is stored and compared by absolute value to variance_rupiah_threshold, whose default is zero.
 
-All volumes are numeric(8,2) with >= 0. Volume sums use numeric(12,2). Money and price use numeric(14,0). The maximum is 99,999,999,999,999. Before every cast, multiplication, sum, and variance operation, the procedure checks overflow. Overflow raises SQLSTATE 22003, rolls back the transaction, and maps to HTTP 422. JSON and TypeScript use decimal strings.
+All volumes are numeric(8,2) with >= 0. Volume sums use numeric(12,2). Money and price use numeric(14,0). The maximum is 99,999,999,999,999. Before every cast, multiplication, sum, and variance operation, the procedure checks overflow. Overflow raises SQLSTATE 22003, rolls back the transaction, and maps to HTTP 422. JSON and Go use decimal strings.
 
 ### 5.4 Backfill
 
@@ -479,7 +479,7 @@ All buttons, validation messages, empty states, and print labels are Bahasa Indo
 
 ## 12. Technology and delivery
 
-Technology: Next.js, TypeScript, PostgreSQL, Drizzle, and btree_gist exclusion constraints. Deployment can use VPS or Vercel with managed PostgreSQL. Use TDD and keep all code in git.
+Technology. Frontend: Next.js with TanStack Query, Base UI components, and Emotion (CSS-in-JS). Backend: Gin, Go, and PostgreSQL with btree_gist exclusion constraints. Deployment can use a VPS or a managed PostgreSQL service. Use TDD and keep all code in git.
 
 Phases:
 
