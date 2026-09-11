@@ -1,0 +1,19 @@
+# Binaries
+/bin/
+*.exe
+*.test
+*.out
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Coverage and tool caches
+coverage.out
+.golangci/
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
