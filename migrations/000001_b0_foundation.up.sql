@@ -165,11 +165,39 @@ alter default privileges revoke all on sequences from public, pomkita_app, repor
 alter default privileges revoke all on functions from public, pomkita_app, report_writer, audit_owner, relay;
 
 alter default privileges for role org_owner revoke all on tables from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role org_owner revoke all on sequences from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role org_owner revoke all on functions from public, pomkita_app, report_writer, audit_owner, relay;
 alter default privileges for role station_owner revoke all on tables from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role station_owner revoke all on sequences from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role station_owner revoke all on functions from public, pomkita_app, report_writer, audit_owner, relay;
 alter default privileges for role user_owner revoke all on tables from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role user_owner revoke all on sequences from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role user_owner revoke all on functions from public, pomkita_app, report_writer, audit_owner, relay;
 alter default privileges for role auth_owner revoke all on tables from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role auth_owner revoke all on sequences from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role auth_owner revoke all on functions from public, pomkita_app, report_writer, audit_owner, relay;
 alter default privileges for role registry_owner revoke all on tables from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role registry_owner revoke all on sequences from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role registry_owner revoke all on functions from public, pomkita_app, report_writer, audit_owner, relay;
 alter default privileges for role audit_lock_owner revoke all on tables from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role audit_lock_owner revoke all on sequences from public, pomkita_app, report_writer, audit_owner, relay;
+alter default privileges for role audit_lock_owner revoke all on functions from public, pomkita_app, report_writer, audit_owner, relay;
+
+do $$
+declare
+  v_owner name;
+begin
+  for v_owner in
+    select rolname from pg_roles
+    where rolname in ('pomkita', 'org_owner', 'station_owner', 'user_owner',
+                      'auth_owner', 'registry_owner', 'audit_lock_owner')
+  loop
+    execute format('alter default privileges for role %I revoke all on tables from %I', v_owner, v_owner);
+    execute format('alter default privileges for role %I revoke all on sequences from %I', v_owner, v_owner);
+    execute format('alter default privileges for role %I revoke all on functions from %I', v_owner, v_owner);
+  end loop;
+end
+$$;
 
 insert into public.procedure_registry (name, allowed_roles, action, lock_rank)
 values ('fn_set_request_context', array['pomkita_app'], 'set_request_context', 110);

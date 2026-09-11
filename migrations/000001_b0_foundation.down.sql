@@ -11,6 +11,8 @@ drop table if exists public.organizations;
 
 do $$
 declare
+  v_owner name;
+  v_grantee name;
   v_role name;
 begin
   if to_regclass('public.users') is not null
@@ -29,6 +31,29 @@ begin
   if to_regprocedure('app.hmac(text,text,text)') is not null then
     revoke execute on function app.hmac(text, text, text) from auth_owner;
   end if;
+  for v_owner in
+    select rolname from pg_roles
+    where rolname in ('pomkita', 'org_owner', 'station_owner', 'user_owner',
+                      'auth_owner', 'registry_owner', 'audit_lock_owner')
+  loop
+    execute format('alter default privileges for role %I revoke all on tables from public', v_owner);
+    execute format('alter default privileges for role %I revoke all on sequences from public', v_owner);
+    execute format('alter default privileges for role %I revoke all on functions from public', v_owner);
+    for v_grantee in
+      select rolname from pg_roles
+      where rolname in ('pomkita_app', 'report_writer', 'audit_owner', 'relay')
+    loop
+      execute format('alter default privileges for role %I revoke all on tables from %I', v_owner, v_grantee);
+      execute format('alter default privileges for role %I revoke all on sequences from %I', v_owner, v_grantee);
+      execute format('alter default privileges for role %I revoke all on functions from %I', v_owner, v_grantee);
+    end loop;
+    execute format('alter default privileges for role %I revoke all on tables from %I', v_owner, v_owner);
+    execute format('alter default privileges for role %I revoke all on sequences from %I', v_owner, v_owner);
+    execute format('alter default privileges for role %I revoke all on functions from %I', v_owner, v_owner);
+    if v_owner <> 'pomkita' then
+      execute format('drop owned by %I', v_owner);
+    end if;
+  end loop;
 end
 $$;
 

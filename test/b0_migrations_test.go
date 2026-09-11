@@ -132,8 +132,11 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		select c.relname
 		from pg_class c
 		join pg_namespace n on n.oid = c.relnamespace
-		where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'S')
-		order by c.relname
+		where n.nspname not in ('pg_catalog', 'information_schema')
+		  and n.nspname not like 'pg_toast%'
+		  and c.relkind in ('r', 'v', 'm', 'S')
+		  and c.relname <> 'schema_migrations'
+		order by n.nspname, c.relname
 	`)
 	if err != nil {
 		t.Fatalf("query catalog relations: %v", err)
@@ -156,7 +159,16 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')'
 		from pg_proc p
 		join pg_namespace n on n.oid = p.pronamespace
-		where n.nspname = 'public'
+		where n.nspname not in ('pg_catalog', 'information_schema')
+		  and n.nspname not like 'pg_toast%'
+		  and not exists (
+			select 1
+			from pg_depend d
+			join pg_extension e on e.oid = d.refobjid
+			where d.classid = 'pg_proc'::regclass
+			  and d.objid = p.oid
+			  and d.deptype = 'e'
+		  )
 		order by 1
 	`)
 	if err != nil {

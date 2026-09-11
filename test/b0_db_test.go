@@ -58,6 +58,23 @@ func TestB0DatabaseJWTStorePersistsAndRevokesSessions(t *testing.T) {
 	}
 	defer database.Close()
 	store := database.JWTStore(map[string]string{"JWT_SECRET_KEY_1": "test-secret"})
+	if err := database.Ping(ctx); err != nil {
+		t.Fatalf("ping database: %v", err)
+	}
+	current, err := database.MigrationsCurrent(ctx, 2)
+	if err != nil || !current {
+		t.Fatalf("migration state: current=%t error=%v", current, err)
+	}
+	transaction, err := database.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin context transaction: %v", err)
+	}
+	if err := database.SetRequestContext(ctx, transaction, ""); err == nil {
+		t.Fatal("empty token was accepted by database context call")
+	}
+	if err := transaction.Rollback(ctx); err != nil {
+		t.Fatalf("rollback context transaction: %v", err)
+	}
 	service := appjwt.NewService(store, appjwt.Config{Issuer: "pomkita", Audience: "spbu-recon"})
 	userID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
 	token, claims, err := service.Issue(ctx, userID)
