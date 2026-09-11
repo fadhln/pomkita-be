@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"time"
 
@@ -77,7 +78,11 @@ func AuthMiddleware(verifier TokenVerifier) gin.HandlerFunc {
 		}
 		claims, err := verifier.Verify(c.Request.Context(), rawToken)
 		if err != nil {
-			writeError(c, http.StatusUnauthorized, "invalid_session")
+			code := "invalid_session"
+			if errors.Is(err, appjwt.ErrSessionIdle) {
+				code = "session_idle"
+			}
+			writeError(c, http.StatusUnauthorized, code)
 			return
 		}
 		c.Set("jwt_claims", claims)
@@ -101,7 +106,12 @@ func ErrorMappingMiddleware() gin.HandlerFunc {
 			return
 		}
 		err := c.Errors.Last().Err
-		writeError(c, appdb.HTTPStatusForError(err), stableDatabaseCode(appdb.HTTPStatusForError(err)))
+		status := appdb.HTTPStatusForError(err)
+		code := appdb.StableCodeForError(err)
+		if code == "" {
+			code = stableDatabaseCode(status)
+		}
+		writeError(c, status, code)
 	}
 }
 
