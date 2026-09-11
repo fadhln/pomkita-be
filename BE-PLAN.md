@@ -5,7 +5,7 @@ Technical text uses ASD-STE100 Simplified Technical English.
 
 ## 0. Repository
 
-New repository: `spbu-recon-be` (Go module). The DB is the enforcement layer. The Go service is a thin authorized transport and orchestration layer: it owns HTTP, sessions, validation of request shapes, and calls to allowlisted DB procedures. It never holds table DML grants.
+New repository: `pomkita-be` (Go module). The DB is the enforcement layer. The Go service is a thin authorized transport and orchestration layer: it owns HTTP, sessions, validation of request shapes, and calls to allowlisted DB procedures. It never holds table DML grants.
 
 Layout:
 

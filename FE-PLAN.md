@@ -5,7 +5,7 @@ Technical text uses ASD-STE100 Simplified Technical English.
 
 ## 0. Repository
 
-New repository: `spbu-recon-fe`. Next.js (App Router), TypeScript, TanStack Query v5 for server state, Base UI for primitives, Emotion for styling. The FE is a pure client of the Gin API. It holds no business rules; it renders server state and posts canonical payloads.
+New repository: `pomkita-fe`. Next.js (App Router), TypeScript, TanStack Query v5 for server state, Base UI for primitives, Emotion for styling. The FE is a pure client of the Gin API. It holds no business rules; it renders server state and posts canonical payloads.
 
 Layout:
 
