@@ -29,19 +29,20 @@ Each phase ends with all its tests green, a migration that applies cleanly to a 
 
 Delivers:
 
-1. Migrations for master data tables only: organizations, stations, users, user_station_roles, sessions, jwt_keys, procedure_registry, audit_chain_locks. Composite tenant keys per PLAN.md §4.
+1. Migrations for master data tables only: organizations, stations, users, user_station_roles, sessions, jwt_keys, procedure_registry, audit_chain_locks. Composite tenant keys per PLAN.md §4. sessions carries last_active_at per PLAN.md §7.
 2. Role model: NOLOGIN app roles, table owner roles, audit_owner, relay role. Full grants matrix: REVOKE ALL from PUBLIC and app roles; EXECUTE grants to procedures only. Default privileges revoked. A CI check queries pg_catalog and fails on any unclassified table, view, function, sequence, or role.
-3. fn_set_request_context: JWT verification in the database (alg pinned, iss/aud/exp/iat/jti checks, session lookup), transaction-local set_config with true. Fail closed.
-4. JWT service in Go: HS256, kid rotation against jwt_keys, 15-minute expiry, jti issuance, logout sets revoked_at.
-5. HTTP middleware: verify token, attach request-id, map DB errors (23514, 23505, 22003, 40P01) to HTTP codes.
+3. fn_set_request_context: JWT verification in the database (alg pinned, iss/aud/exp/iat/jti checks, session lookup, 15-minute inactivity window on last_active_at, update of last_active_at inside the same transaction), transaction-local set_config with true. Fail closed. An idle session past the window is denied 28000 -> 401.
+4. JWT service in Go: HS256, kid rotation against jwt_keys, 15-minute expiry capped by key max_token_expiry, jti issuance, logout sets revoked_at. On each authenticated request the service accepts a reissued claim set derived from the fresh last_active_at (sliding window). There are no refresh tokens and no refresh endpoints.
+5. HTTP middleware: verify token, attach request-id, map DB errors (23514, 23505, 22003, 40P01, 28000 idle session) to HTTP codes.
 6. /health and /ready endpoints.
 
 Tests (watch red first, all against real Postgres):
 
 - valid token passes; each bad claim (alg, iss, aud, exp skew, future iat, revoked jti, unknown kid) fails with the exact error.
 - context fail-closed: no token, expired token, missing session row.
+- inactivity: last_active_at older than 15 minutes -> denial; fresh activity -> session continues; expires_at never passes the issuing key max_token_expiry.
 - grants: app role denied SELECT/INSERT/UPDATE/DELETE on every table (negative matrix, generated from pg_catalog).
-- rotation: previous key accepted until max_token_expiry, retired after.
+- rotation: previous key accepted until max_token_expiry, retired after; a sliding session never extends past that retirement.
 
 Gate: PLAN.md §11.2 partial (JWT row of pilot matrix: signature, claims, logout, retired key = 100% reject).
 

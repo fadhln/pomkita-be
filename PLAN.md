@@ -375,9 +375,11 @@ alert_events has BEFORE UPDATE OR DELETE triggers that always raise 23514. A def
 
 ## 7. Authentication, RLS, and privileges
 
-The only actor identity is a verified signed session JWT. Required claims are iss, sub, jti, iat, exp, aud = spbu-recon, kid, and alg = HS256. The verifier rejects other algorithms, missing claims, invalid signature, wrong issuer or audience, future iat, expired exp outside 60 seconds skew, and a jti that is absent or revoked in sessions.
+The only actor identity is a verified signed session JWT. Required claims are iss, sub, jti, iat, exp, aud = pomkita, kid, and alg = HS256. The verifier rejects other algorithms, missing claims, invalid signature, wrong issuer or audience, future iat, expired exp outside 60 seconds skew, and a jti that is absent or revoked in sessions.
 
-sessions(jti PK, kid, issued_at, expires_at, revoked_at) checks expires_at - issued_at <= interval 15 minutes. jwt_keys(kid PK, secret_ref, status, activated_at, retired_at, max_token_expiry) uses active|previous|retired. A previous key is retired only when max_token_expiry <= now(). Logout sets revoked_at. Raw JWT text is never stored in audit.
+sessions(jti PK, kid, issued_at, expires_at, revoked_at, last_active_at) checks expires_at - issued_at <= interval 15 minutes. jwt_keys(kid PK, secret_ref, status, activated_at, retired_at, max_token_expiry) uses active|previous|retired. A previous key is retired only when max_token_expiry <= now(). Logout sets revoked_at. Raw JWT text is never stored in audit.
+
+Session lifetime is inactivity based. A session stays valid only while now() - last_active_at <= 15 minutes. Every authenticated request updates last_active_at in the same transaction as its business mutation, through fn_set_request_context. An idle session past 15 minutes is rejected (401) and never revives; the user must log in again. A sliding session is not extended past the key max_token_expiry: the session expires_at never moves beyond the issuing key's max_token_expiry, so key rotation stays the hard ceiling. There are no refresh tokens and no refresh endpoints; sliding is achieved by reissuing the session row claims on activity, not by a separate refresh key. A final hard logout sets revoked_at.
 
 The API passes the raw JWT to fn_set_request_context. That SECURITY DEFINER function verifies it in the database, checks sessions, sets transaction-local values with set_config(..., true), and sets tenant, user, role, and break-glass context. A missing or invalid context fails closed.
 

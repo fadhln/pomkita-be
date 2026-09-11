@@ -51,7 +51,7 @@ Each phase ends with its tests green, a commit, and a status row vs this file. E
 Delivers:
 
 1. Next.js scaffold, Emotion theme, Base UI wrappers, layout with role-aware navigation.
-2. /login: email + password against the BE session endpoint; session cookie handling; 401 redirect to login; silent expiry handling (single in-flight refresh attempt, then logout).
+2. /login: email + password against the BE session endpoint; session cookie handling; 401 redirect to login; inactivity handling per PLAN.md §7: the session dies after 15 minutes without a request. The FE tracks last-activity time itself (pointer, keyboard, and network activity events); on the next request after the idle window it expects 401 and performs a logout redirect to Masuk. There are no refresh tokens: activity keeps the session alive server-side via last_active_at, so no FE refresh call exists.
 3. API client: typed endpoints, error mapping, request-id propagation, decimal-string passthrough.
 4. TanStack Query setup: query keys per domain, staleTime defaults, no global retry on mutations.
 5. i18n constants module; CI string check.
