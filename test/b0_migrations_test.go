@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,19 @@ func TestB0FoundationMigrationUpAndDown(t *testing.T) {
 	}
 	if tableCount != 8 {
 		t.Fatalf("expected 8 foundation tables, got %d", tableCount)
+	}
+	var jtiDefault string
+	if err := conn.QueryRow(ctx, `
+		select pg_get_expr(d.adbin, d.adrelid)
+		from pg_attrdef d
+		join pg_class c on c.oid = d.adrelid
+		join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
+		where c.relname = 'sessions' and a.attname = 'jti'
+	`).Scan(&jtiDefault); err != nil {
+		t.Fatalf("read session JTI default: %v", err)
+	}
+	if !strings.Contains(jtiDefault, "gen_random_uuid") {
+		t.Fatalf("session JTI is not database generated: %q", jtiDefault)
 	}
 
 	var roleCount int
