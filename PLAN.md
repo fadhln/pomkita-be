@@ -1,6 +1,6 @@
 # PLAN.md — SPBU Reconciliation Application (name TBD)
 
-Status: draft v19, build target.
+Status: SSOT — product and architecture requirements, final. Do not edit for implementation detail; use BE-PLAN.md and FE-PLAN.md for execution plans.
 UI language: All user-facing copy is Bahasa Indonesia. Technical text uses ASD-STE100 Simplified Technical English.
 
 ## 1. Product target
