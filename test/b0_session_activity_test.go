@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
+	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
 func TestB0SessionActivityMigrationUpAndDown(t *testing.T) {
@@ -133,6 +134,75 @@ func TestB0DatabaseJWTStoreReadsLastActiveAt(t *testing.T) {
 	}
 	if !session.LastActiveAt.Equal(activity) {
 		t.Fatalf("last_active_at: got %s, want %s", session.LastActiveAt, activity)
+	}
+}
+
+func TestB0SessionActivitySlidingExpiryNeverPassesKeyMaximum(t *testing.T) {
+	ctx := context.Background()
+	conn := openB0Connection(t)
+	defer conn.Close(ctx)
+	resetB0SessionActivity(t, conn)
+
+	const (
+		orgID     = "11111111-1111-4111-8111-111111111111"
+		stationID = "22222222-2222-4222-8222-222222222222"
+		userID    = "33333333-3333-4333-8333-333333333333"
+		jti       = "44444444-4444-4444-8444-444444444444"
+	)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	seedB0SessionActivity(t, conn, now, orgID, stationID, userID, jti, now.Add(5*time.Minute))
+	token := makeToken(t, "test-secret", map[string]any{
+		"alg": "HS256", "kid": "key_1",
+	}, map[string]any{
+		"iss": "pomkita", "sub": userID, "jti": jti,
+		"iat": now.Add(-time.Minute).Unix(), "exp": now.Add(10 * time.Minute).Unix(), "aud": "spbu-recon",
+	})
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin near-retirement request: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `set local role pomkita_app`); err != nil {
+		t.Fatalf("set application role: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `select fn_set_request_context($1)`, token); err != nil {
+		t.Fatalf("near-retirement session was denied: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit near-retirement request: %v", err)
+	}
+
+	var sessionExpiry, storedKeyExpiry time.Time
+	if err := conn.QueryRow(ctx, `
+		select s.expires_at, k.max_token_expiry
+		from sessions s
+		join jwt_keys k on k.kid = s.kid
+		where s.jti = $1
+	`, jti).Scan(&sessionExpiry, &storedKeyExpiry); err != nil {
+		t.Fatalf("read capped session expiry: %v", err)
+	}
+	if sessionExpiry.After(storedKeyExpiry) || !sessionExpiry.Equal(storedKeyExpiry) {
+		t.Fatalf("session expiry passed key maximum: session=%s key=%s", sessionExpiry, storedKeyExpiry)
+	}
+
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable"
+	}
+	database, err := appdb.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open database pool: %v", err)
+	}
+	defer database.Close()
+	service := appjwt.NewService(database.JWTStore(map[string]string{"app.jwt_secret.key_1": "test-secret"}), appjwt.Config{
+		Issuer: "pomkita", Audience: "spbu-recon", Now: func() time.Time { return now },
+	})
+	claims, err := service.Verify(ctx, token)
+	if err != nil {
+		t.Fatalf("verify capped session: %v", err)
+	}
+	if !claims.ExpiresAt.Equal(storedKeyExpiry) {
+		t.Fatalf("reissued expiry passed key maximum: got %s, want %s", claims.ExpiresAt, storedKeyExpiry)
 	}
 }
 
