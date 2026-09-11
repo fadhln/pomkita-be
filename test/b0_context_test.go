@@ -165,6 +165,9 @@ func resetB0Foundation(t *testing.T, conn *pgx.Conn, withContextFunction bool) {
 	t.Helper()
 	ctx := context.Background()
 	root := repositoryRoot(t)
+	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {
+		t.Fatalf("reset migration metadata: %v", err)
+	}
 	if withContextFunction {
 		if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
 			t.Fatalf("reset request context: %v", err)
