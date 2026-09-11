@@ -82,9 +82,7 @@ func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
 		c.Status(http.StatusNoContent)
 	})
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
-	request.Header.Set("Authorization", "Bearer token")
-	router.ServeHTTP(recorder, request)
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/protected", nil))
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("got %d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
