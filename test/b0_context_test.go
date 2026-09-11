@@ -159,6 +159,7 @@ func TestB0RequestContextValidAndInvalidClaims(t *testing.T) {
 	assertContextError(t, conn, missingSession, "jwt_session_not_found")
 	assertContextError(t, conn, "", "jwt_missing_token")
 	assertSetting(t, conn, "app.context_valid", "")
+	assertApplicationTableDenied(t, conn)
 }
 
 func resetB0Foundation(t *testing.T, conn *pgx.Conn, withContextFunction bool) {
@@ -236,6 +237,25 @@ func assertContextError(t *testing.T, conn *pgx.Conn, token, expected string) {
 	}
 	if pgErr.Message != expected {
 		t.Fatalf("got error %q, want %q", pgErr.Message, expected)
+	}
+}
+
+func assertApplicationTableDenied(t *testing.T, conn *pgx.Conn) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin privilege transaction: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `set local role pomkita_app`); err != nil {
+		t.Fatalf("set application role: %v", err)
+	}
+	if _, err := tx.Exec(ctx, `select count(*) from public.users`); err == nil {
+		_ = tx.Rollback(ctx)
+		t.Fatal("application role can query a table")
+	}
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback privilege transaction: %v", err)
 	}
 }
 

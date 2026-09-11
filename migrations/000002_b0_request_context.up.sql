@@ -85,7 +85,10 @@ begin
   if coalesce(v_claims->>'iss', '') <> 'pomkita' then
     raise exception using errcode = '28000', message = 'jwt_invalid_issuer';
   end if;
-  if coalesce(v_claims->>'aud', '') <> 'spbu-recon' then
+  if not (
+    (jsonb_typeof(v_claims->'aud') = 'string' and v_claims->>'aud' = 'spbu-recon')
+    or (jsonb_typeof(v_claims->'aud') = 'array' and v_claims->'aud' @> '["spbu-recon"]'::jsonb)
+  ) then
     raise exception using errcode = '28000', message = 'jwt_invalid_audience';
   end if;
   if not (v_claims ? 'exp') or coalesce(v_claims->>'exp', '') !~ '^[0-9]+(\.[0-9]+)?$' then

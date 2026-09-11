@@ -28,7 +28,7 @@ func Load() Config {
 func jwtSecrets() map[string]string {
 	secrets := make(map[string]string)
 	if value := os.Getenv("JWT_SECRET_KEY_1"); value != "" {
-		secrets["JWT_SECRET_KEY_1"] = value
+		secrets["app.jwt_secret.key_1"] = value
 	}
 	return secrets
 }
