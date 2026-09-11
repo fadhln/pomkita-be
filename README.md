@@ -27,3 +27,7 @@ make tidy      # update Go module metadata
 ```
 
 The implementation follows the phases in `../BE-PLAN.md`. API contract artifacts will be published from this repository and pinned by the frontend.
+
+## Development conventions
+
+Read `AGENTS.md` before you change code. Read `docs/CONVENTIONS.md` for architecture, API, database, security, test, Git, and handoff rules.

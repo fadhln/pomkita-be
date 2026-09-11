@@ -1,26 +1,49 @@
-# Agent development guide
+# Instructions for AI agents
 
-## Scope
+Use ASD-STE100 Simplified Technical English in code comments, documentation, commit messages, and handoff notes.
 
-This repository contains the PomKita backend. `../PLAN.md` is the product and security source of truth. `../BE-PLAN.md` is the backend delivery plan. Read both before changing behavior.
+## Read first
 
-## Boundaries
+Read these files before you change code:
 
-- Keep HTTP transport in `internal/httpapi`.
-- Keep database access in `internal/db`; handlers must not query tables directly.
-- Put schema, functions, triggers, roles, grants, and RLS in ordered migrations.
-- Treat PostgreSQL procedures as the enforcement layer. The Go service is transport and orchestration.
-- Never use floating point for money or volume.
-- Never log tokens, credentials, raw evidence, or personal data.
-- Every state-changing endpoint must carry a request ID and map database errors to the API error contract.
+1. `../PLAN.md` for product, security, and data rules.
+2. `../BE-PLAN.md` for backend phases and acceptance criteria.
+3. `docs/CONVENTIONS.md` for repository conventions.
 
-## Agent workflow
+If two instructions conflict, use this order:
 
-1. Read the relevant SSOT section and identify the acceptance criterion.
-2. State the contract and migration impact before editing.
-3. Make one focused change. Do not mix refactors with behavior changes.
-4. Write or update a failing test first when behavior is involved.
-5. Run `make check` before handoff. Report any unavailable external dependency.
-6. Keep commits small and named by slice, for example `B0: add session context`.
+1. The current user instruction.
+2. `../PLAN.md`.
+3. `../BE-PLAN.md`.
+4. `docs/CONVENTIONS.md`.
 
-Do not add tables, procedures, roles, grants, or API fields outside the SSOT without updating the SSOT first.
+## Mandatory rules
+
+- Keep the PostgreSQL database as the enforcement layer.
+- Keep HTTP code in `internal/httpapi`.
+- Keep database calls in `internal/db`.
+- Do not query a table from an HTTP handler.
+- Do not give table DML privileges to the application role.
+- Do not use `float32` or `float64` for money or volume.
+- Do not log secrets, raw tokens, evidence content, or personal data.
+- Do not change a lifecycle outside the rules in `../PLAN.md`.
+- Do not add a table, procedure, role, or grant outside the source plan.
+- Change the API contract only when planned behavior requires the change.
+- Preserve unrelated user changes.
+
+## Work sequence
+
+1. Check `git status`.
+2. Find the applicable plan section and acceptance criterion.
+3. State the API, migration, security, and test impact.
+4. Add or update a test before a behavior change.
+5. Make one focused change.
+6. Run `make check`.
+7. Review the diff for scope, secrets, generated files, and unsafe grants.
+8. Report changed files, checks, risks, and the next dependency.
+
+Use a small commit. Start the commit subject with the backend phase when applicable. Example: `B0: add session context validation`.
+
+## Completion gate
+
+Do not mark work complete when a required check fails. Do not hide a failed check. State the failure and its cause.
