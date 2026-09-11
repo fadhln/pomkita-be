@@ -77,7 +77,7 @@ func TestB0DatabaseJWTStorePersistsAndRevokesSessions(t *testing.T) {
 	if err := database.Ping(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
-	current, err := database.MigrationsCurrent(ctx, 2)
+	current, err := database.MigrationsCurrent(ctx, 3)
 	if err != nil || !current {
 		t.Fatalf("migration state: current=%t error=%v", current, err)
 	}

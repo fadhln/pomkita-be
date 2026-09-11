@@ -3,11 +3,14 @@ package test
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	appdb "github.com/pomkita/pomkita-be/internal/db"
 )
 
 func TestB0SessionActivityMigrationUpAndDown(t *testing.T) {
@@ -93,6 +96,43 @@ func TestB0SessionActivityFreshRequestUpdatesLastActiveInTransaction(t *testing.
 	}
 	if !lastActive.After(now.Add(-time.Second)) {
 		t.Fatalf("last_active_at was not updated: got %s, request started %s", lastActive, now)
+	}
+}
+
+func TestB0DatabaseJWTStoreReadsLastActiveAt(t *testing.T) {
+	ctx := context.Background()
+	conn := openB0Connection(t)
+	defer conn.Close(ctx)
+	resetB0SessionActivity(t, conn)
+
+	const (
+		orgID     = "11111111-1111-4111-8111-111111111111"
+		stationID = "22222222-2222-4222-8222-222222222222"
+		userID    = "33333333-3333-4333-8333-333333333333"
+		jti       = "44444444-4444-4444-8444-444444444444"
+	)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	activity := now.Add(-2 * time.Minute)
+	seedB0SessionActivity(t, conn, now, orgID, stationID, userID, jti, now.Add(20*time.Minute))
+	if _, err := conn.Exec(ctx, `update sessions set last_active_at = $2 where jti = $1`, jti, activity); err != nil {
+		t.Fatalf("set session activity: %v", err)
+	}
+
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable"
+	}
+	database, err := appdb.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("open database pool: %v", err)
+	}
+	defer database.Close()
+	session, err := database.JWTStore(map[string]string{"app.jwt_secret.key_1": "test-secret"}).Session(ctx, uuid.MustParse(jti))
+	if err != nil {
+		t.Fatalf("load session: %v", err)
+	}
+	if !session.LastActiveAt.Equal(activity) {
+		t.Fatalf("last_active_at: got %s, want %s", session.LastActiveAt, activity)
 	}
 }
 

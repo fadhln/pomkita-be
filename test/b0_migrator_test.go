@@ -50,8 +50,8 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if err := conn.QueryRow(context.Background(), `select version from schema_migrations`).Scan(&version); err != nil {
 		t.Fatalf("read migration version: %v", err)
 	}
-	if version != 2 {
-		t.Fatalf("got migration version %d, want 2", version)
+	if version != 3 {
+		t.Fatalf("got migration version %d, want 3", version)
 	}
 
 	if err := migrator.Down(context.Background()); err != nil {
