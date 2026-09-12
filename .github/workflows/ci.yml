@@ -1,8 +1,9 @@
 name: backend-ci
 
 on:
-  push:
   pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -10,6 +11,20 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pomkita
+          POSTGRES_PASSWORD: pomkita_dev
+          POSTGRES_DB: pomkita
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
