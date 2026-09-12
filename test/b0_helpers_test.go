@@ -90,13 +90,16 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 
 func openB0Connection(t *testing.T) *pgx.Conn {
 	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable"
-	}
-	conn, err := pgx.Connect(context.Background(), dsn)
+	conn, err := pgx.Connect(context.Background(), testDatabaseURL())
 	if err != nil {
 		t.Fatalf("connect to database: %v", err)
 	}
 	return conn
+}
+
+func testDatabaseURL() string {
+	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+		return dsn
+	}
+	return "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable"
 }

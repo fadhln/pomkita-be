@@ -7,7 +7,7 @@ import (
 )
 
 func TestHealthAndReady(t *testing.T) {
-	router := NewRouterWithDependencies("test", readyStub{current: true}, nil)
+	router := NewRouterWithDependencies("test", nil, readyStub{current: true}, nil)
 
 	for _, path := range []string{"/health", "/ready"} {
 		recorder := httptest.NewRecorder()

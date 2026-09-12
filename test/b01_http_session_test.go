@@ -21,7 +21,7 @@ func TestB01HTTPSessionEndpointsUseSessionCookieAndRevokeIt(t *testing.T) {
 	resetB01Database(t, conn)
 	seedB01User(t, conn, "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333")
 
-	database, err := appdb.New(ctx, "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable")
+	database, err := appdb.New(ctx, testDatabaseURL())
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestB01HTTPSessionEndpointsUseSessionCookieAndRevokeIt(t *testing.T) {
 		Issuer: "pomkita", Audience: "pomkita", Now: time.Now,
 	})
 	manager := appdb.NewSessionManager(database, tokens)
-	router := httpapi.NewRouterWithDependencies("test", database, tokens, manager)
+	router := httpapi.NewRouterWithDependencies("test", nil, database, tokens, manager)
 
 	loginResponse := httptest.NewRecorder()
 	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"correct-password"}`))

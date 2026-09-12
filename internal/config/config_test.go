@@ -18,3 +18,27 @@ func TestLoadUsesB0DatabaseAndJWTDefaults(t *testing.T) {
 		t.Fatalf("JWT defaults: issuer=%q audience=%q", cfg.JWTIssuer, cfg.JWTAudience)
 	}
 }
+
+func TestLoadParsesAllowedCORSOrigins(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", " http://localhost:3100, http://localhost:3101,,")
+
+	cfg := Load()
+
+	want := []string{"http://localhost:3100", "http://localhost:3101"}
+	if len(cfg.CorsAllowedOrigins) != len(want) {
+		t.Fatalf("allowed origins: got %#v, want %#v", cfg.CorsAllowedOrigins, want)
+	}
+	for i := range want {
+		if cfg.CorsAllowedOrigins[i] != want[i] {
+			t.Fatalf("allowed origins: got %#v, want %#v", cfg.CorsAllowedOrigins, want)
+		}
+	}
+}
+
+func TestLoadLeavesCORSDisabledWhenOriginsAreEmpty(t *testing.T) {
+	t.Setenv("CORS_ALLOWED_ORIGINS", "")
+
+	if origins := Load().CorsAllowedOrigins; len(origins) != 0 {
+		t.Fatalf("allowed origins: got %#v, want empty", origins)
+	}
+}
