@@ -60,6 +60,7 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 		name  string
 		check string
 	}{
+		{"000010_b2_ack.down.sql", `select to_regclass('public.ack_decisions') is not null`},
 		{"000009_b1_recovery.down.sql", `select to_regprocedure('public.fn_recover_submitting_shifts()') is not null`},
 		{"000008_b1_submit.down.sql", `select to_regprocedure('public.fn_submit_shift(uuid,uuid,uuid,integer,text,jsonb)') is not null`},
 		{"000007_b1_drafts.down.sql", `select to_regprocedure('public.fn_claim_draft(uuid)') is not null`},

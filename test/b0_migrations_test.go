@@ -224,6 +224,27 @@ func repositoryRoot(t *testing.T) string {
 	return filepath.Dir(filepath.Dir(file))
 }
 
+// migrationCount returns the number of up migrations in the repository.
+// Tests use this instead of a hardcoded version so a new migration cannot
+// break the suite.
+func migrationCount(t *testing.T) int {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(repositoryRoot(t), "migrations"))
+	if err != nil {
+		t.Fatalf("read migrations directory: %v", err)
+	}
+	count := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".up.sql") {
+			count++
+		}
+	}
+	if count == 0 {
+		t.Fatal("no up migrations found")
+	}
+	return count
+}
+
 func readMigration(t *testing.T, root, name string) string {
 	t.Helper()
 	path := filepath.Join(root, "migrations", name)
