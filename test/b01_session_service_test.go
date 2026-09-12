@@ -24,9 +24,10 @@ func TestB01SessionManagerUsesDatabaseProcedures(t *testing.T) {
 	}
 	defer database.Close()
 	database.SetJWTSecrets(map[string]string{"app.jwt_secret.key_1": "test-secret"})
+	database.SetJWTAudience("pomkita")
 	clock := time.Now().UTC().Truncate(time.Second)
 	tokens := appjwt.NewService(database.JWTStore(map[string]string{"app.jwt_secret.key_1": "test-secret"}), appjwt.Config{
-		Issuer: "pomkita", Audience: "spbu-recon", Now: func() time.Time { return clock },
+		Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return clock },
 	})
 	manager := appdb.NewSessionManager(database, tokens)
 

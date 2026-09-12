@@ -21,6 +21,7 @@ func main() {
 	}
 	defer database.Close()
 	database.SetJWTSecrets(cfg.JWTSecrets)
+	database.SetJWTAudience(cfg.JWTAudience)
 	migrator, err := appdb.NewMigrator(cfg.DatabaseURL, cfg.MigrationsDir)
 	if err != nil {
 		log.Printf("create migration runner: %v", err)
@@ -33,7 +34,8 @@ func main() {
 	jwtService := appjwt.NewService(database.JWTStore(cfg.JWTSecrets), appjwt.Config{
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
-	router := httpapi.NewRouterWithDependencies(cfg.Environment, database, jwtService)
+	sessionManager := appdb.NewSessionManager(database, jwtService)
+	router := httpapi.NewRouterWithDependencies(cfg.Environment, database, jwtService, sessionManager)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Printf("server stopped: %v", err)

@@ -17,9 +17,10 @@ import (
 
 // DB owns the PostgreSQL connection pool used by the service.
 type DB struct {
-	pool       *pgxpool.Pool
-	secretMu   sync.RWMutex
-	jwtSecrets map[string]string
+	pool        *pgxpool.Pool
+	secretMu    sync.RWMutex
+	jwtSecrets  map[string]string
+	jwtAudience string
 }
 
 // New opens a PostgreSQL pool and verifies that the database is reachable.
@@ -87,7 +88,13 @@ func (d *DB) SetRequestContext(ctx context.Context, tx pgx.Tx, rawToken string) 
 			return fmt.Errorf("set JWT verification key: %w", err)
 		}
 	}
+	audience := d.jwtAudience
 	d.secretMu.RUnlock()
+	if audience != "" {
+		if _, err := tx.Exec(ctx, `select set_config('app.jwt_audience', $1, true)`, audience); err != nil {
+			return fmt.Errorf("set JWT audience: %w", err)
+		}
+	}
 	if _, err := tx.Exec(ctx, `select public.fn_set_request_context($1)`, rawToken); err != nil {
 		return fmt.Errorf("set request context: %w", err)
 	}
@@ -102,6 +109,13 @@ func (d *DB) SetJWTSecrets(secrets map[string]string) {
 	for name, value := range secrets {
 		d.jwtSecrets[name] = value
 	}
+}
+
+// SetJWTAudience sets the database audience used by request-context validation.
+func (d *DB) SetJWTAudience(audience string) {
+	d.secretMu.Lock()
+	defer d.secretMu.Unlock()
+	d.jwtAudience = audience
 }
 
 // Begin starts a database transaction for a procedure call.
