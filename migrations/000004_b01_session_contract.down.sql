@@ -1,5 +1,17 @@
 -- PLAN.md sections 2 and 7; BE-PLAN.md Phase B0.1.
 
+-- Remove later grants before the foundation role is dropped.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'report_writer') then
+    revoke usage on schema public from report_writer;
+    if to_regnamespace('app') is not null then
+      revoke usage on schema app from report_writer;
+    end if;
+  end if;
+end
+$$;
+
 delete from public.procedure_registry
  where name in (
    'fn_login_user', 'fn_read_jwt_key', 'fn_read_active_jwt_key',

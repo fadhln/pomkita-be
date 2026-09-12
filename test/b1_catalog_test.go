@@ -50,7 +50,7 @@ func TestB1Catalog_ExclusionCompositeForeignKeyAndClassification(t *testing.T) {
 		{`insert into organizations (org_id, name) values ($1, 'Catalog Org')`, []any{orgID}},
 		{`insert into organizations (org_id, name) values ($1, 'Other Org')`, []any{otherOrgID}},
 		{`insert into stations (org_id, station_id, timezone) values ($1, $2, 'Asia/Jakarta')`, []any{orgID, stationID}},
-		{`insert into users (user_id, org_id, display_name) values ($1, $2, 'Catalog User')`, []any{userID, orgID}},
+		{`insert into users (user_id, org_id, email, display_name, password_hash) values ($1, $2, 'catalog@example.com', 'Catalog User', app.crypt('pw', app.gen_salt('bf')))`, []any{userID, orgID}},
 		{`insert into dispensers (org_id, station_id, dispenser_id) values ($1, $2, $3)`, []any{orgID, stationID, dispenserID}},
 		{`insert into nozzles (org_id, station_id, nozzle_id, dispenser_id, meter_max) values ($1, $2, $3, $4, 99999.9)`, []any{orgID, stationID, nozzleID, dispenserID}},
 	} {

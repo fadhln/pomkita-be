@@ -52,14 +52,9 @@ func TestB0ApplicationRoleHasNoTableDMLPrivileges(t *testing.T) {
 	`).Scan(&executeCount); err != nil {
 		t.Fatalf("query procedure execute grants: %v", err)
 	}
-	if executeCount != 1 {
-		t.Fatalf("got %d executable public functions for app role, want only fn_set_request_context", executeCount)
+	if executeCount != 8 {
+		t.Fatalf("got %d executable public functions for app role, want 8 allowlisted procedures", executeCount)
 	}
 
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000002_b0_request_context.down.sql")); err != nil {
-		t.Fatalf("reverse request context: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000001_b0_foundation.down.sql")); err != nil {
-		t.Fatalf("reverse foundation: %v", err)
-	}
+	resetMigrations(t, conn)
 }

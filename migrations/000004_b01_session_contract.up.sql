@@ -1,14 +1,18 @@
 -- PLAN.md sections 2 and 7; BE-PLAN.md Phase B0.1.
 
 alter table public.users
-  add column email text not null,
-  add column password_hash text not null;
+  add column if not exists email text not null,
+  add column if not exists password_hash text not null;
 
-create unique index users_email_unique_idx on public.users (email);
+create unique index if not exists users_email_unique_idx on public.users (email);
 
-alter table public.sessions
-  add constraint sessions_kid_fkey
-  foreign key (kid) references public.jwt_keys (kid);
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'sessions_kid_fkey') then
+    alter table public.sessions
+      add constraint sessions_kid_fkey
+      foreign key (kid) references public.jwt_keys (kid);
+  end if;
+end $$;
 
 create or replace function public.fn_login_user(p_email text, p_password text)
 returns table (user_id uuid)
@@ -214,4 +218,8 @@ values
   ('fn_create_session', array['pomkita_app'], 'create_session', 110),
   ('fn_read_session_record', array['pomkita_app'], 'read_session', 110),
   ('fn_revoke_session', array['pomkita_app'], 'revoke_session', 110),
-  ('fn_read_session', array['pomkita_app'], 'read_session', 110);
+  ('fn_read_session', array['pomkita_app'], 'read_session', 110)
+on conflict (name) do update
+  set allowed_roles = excluded.allowed_roles,
+      action = excluded.action,
+      lock_rank = excluded.lock_rank;

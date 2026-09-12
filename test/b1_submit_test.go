@@ -67,7 +67,7 @@ func TestB1Submit_RolloverAndReplay(t *testing.T) {
 	}{
 		{`insert into organizations(org_id,name) values($1,'Submit')`, []any{org}},
 		{`insert into stations(org_id,station_id,timezone) values($1,$2,'Asia/Jakarta')`, []any{org, station}},
-		{`insert into users(user_id,org_id,display_name) values($1,$2,'Supervisor')`, []any{user, org}},
+		{`insert into users(user_id,org_id,email,display_name,password_hash) values($1,$2,'submit@example.com','Supervisor',app.crypt('pw', app.gen_salt('bf')))`, []any{user, org}},
 		{`insert into user_station_roles(org_id,station_id,user_id,role) values($1,$2,$3,'Supervisor')`, []any{org, station, user}},
 		{`insert into dispensers(org_id,station_id,dispenser_id) values($1,$2,$3)`, []any{org, station, dispenser}},
 		{`insert into nozzles(org_id,station_id,nozzle_id,dispenser_id,meter_max) values($1,$2,$3,$4,99999.9)`, []any{org, station, nozzle, dispenser}},

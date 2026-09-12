@@ -24,30 +24,7 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect for migration reset: %v", err)
 	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
-		t.Fatalf("reset request context: %v", err)
-	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000009_b1_recovery.down.sql")); err != nil {
-		t.Fatalf("reset B1 recovery: %v", err)
-	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000008_b1_submit.down.sql")); err != nil {
-		t.Fatalf("reset B1 submit: %v", err)
-	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000007_b1_drafts.down.sql")); err != nil {
-		t.Fatalf("reset B1 drafts: %v", err)
-	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000006_b1_shifts.down.sql")); err != nil {
-		t.Fatalf("reset B1 shifts: %v", err)
-	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
-		t.Fatalf("reset B1 catalog: %v", err)
-	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000001_b0_foundation.down.sql")); err != nil {
-		t.Fatalf("reset foundation: %v", err)
-	}
-	if _, err := admin.Exec(context.Background(), `drop table if exists schema_migrations`); err != nil {
-		t.Fatalf("reset migration metadata: %v", err)
-	}
+	resetMigrations(t, admin)
 	admin.Close(context.Background())
 	if err := migrator.Down(context.Background()); err != nil {
 		t.Fatalf("reset migrations: %v", err)

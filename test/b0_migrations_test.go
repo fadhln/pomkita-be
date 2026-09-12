@@ -27,31 +27,7 @@ func TestB0FoundationMigrationUpAndDown(t *testing.T) {
 	root := repositoryRoot(t)
 	up := readMigration(t, root, "000001_b0_foundation.up.sql")
 	down := readMigration(t, root, "000001_b0_foundation.down.sql")
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000009_b1_recovery.down.sql")); err != nil {
-		t.Fatalf("reset B1 recovery: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000008_b1_submit.down.sql")); err != nil {
-		t.Fatalf("reset B1 submit: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000007_b1_drafts.down.sql")); err != nil {
-		t.Fatalf("reset B1 drafts: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000006_b1_shifts.down.sql")); err != nil {
-		t.Fatalf("reset B1 shifts: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
-		t.Fatalf("reset B1 catalog: %v", err)
-	}
-	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {
-		t.Fatalf("reset migration metadata: %v", err)
-	}
-
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
-		t.Fatalf("reset request context: %v", err)
-	}
-	if _, err := conn.Exec(ctx, down); err != nil {
-		t.Fatalf("reset foundation with down migration: %v", err)
-	}
+	resetMigrations(t, conn)
 	if _, err := conn.Exec(ctx, up); err != nil {
 		t.Fatalf("apply foundation migration: %v", err)
 	}
@@ -141,30 +117,7 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 	root := repositoryRoot(t)
 	up := readMigration(t, root, "000001_b0_foundation.up.sql")
 	down := readMigration(t, root, "000001_b0_foundation.down.sql")
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000009_b1_recovery.down.sql")); err != nil {
-		t.Fatalf("reset B1 recovery: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000008_b1_submit.down.sql")); err != nil {
-		t.Fatalf("reset B1 submit: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000007_b1_drafts.down.sql")); err != nil {
-		t.Fatalf("reset B1 drafts: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000006_b1_shifts.down.sql")); err != nil {
-		t.Fatalf("reset B1 shifts: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
-		t.Fatalf("reset B1 catalog: %v", err)
-	}
-	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {
-		t.Fatalf("reset migration metadata: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
-		t.Fatalf("reset request context: %v", err)
-	}
-	if _, err := conn.Exec(ctx, down); err != nil {
-		t.Fatalf("reset foundation with down migration: %v", err)
-	}
+	resetMigrations(t, conn)
 	if _, err := conn.Exec(ctx, up); err != nil {
 		t.Fatalf("apply foundation migration: %v", err)
 	}
