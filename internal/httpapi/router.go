@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
@@ -29,13 +28,7 @@ type TokenVerifier interface {
 }
 
 // SessionView is the verified identity and scope returned to the frontend.
-type SessionView struct {
-	UserID      uuid.UUID   `json:"user_id"`
-	DisplayName string      `json:"display_name"`
-	Roles       []string    `json:"roles"`
-	OrgID       uuid.UUID   `json:"org_id"`
-	StationIDs  []uuid.UUID `json:"station_ids"`
-}
+type SessionView = appjwt.SessionView
 
 // SessionService provides the database-backed session contract.
 type SessionService interface {
@@ -45,7 +38,7 @@ type SessionService interface {
 }
 
 // ErrInvalidCredentials indicates that login credentials do not match an enabled user.
-var ErrInvalidCredentials = errors.New("invalid_credentials")
+var ErrInvalidCredentials = appdb.ErrInvalidCredentials
 
 // NewRouter creates a router without a database readiness dependency.
 func NewRouter(environment string) *gin.Engine {
