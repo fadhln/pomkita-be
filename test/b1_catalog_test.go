@@ -11,15 +11,15 @@ func TestB1Catalog_ExclusionCompositeForeignKeyAndClassification(t *testing.T) {
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
 	defer func() {
-		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000004_b1_catalog.down.sql")); err != nil {
+		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_catalog.down.sql")); err != nil {
 			t.Errorf("clean up catalog migration: %v", err)
 		}
 	}()
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000004_b1_catalog.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset catalog: %v", err)
 	}
 	resetB0Foundation(t, conn, true)
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000004_b1_catalog.up.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_catalog.up.sql")); err != nil {
 		t.Fatalf("apply catalog migration: %v", err)
 	}
 
