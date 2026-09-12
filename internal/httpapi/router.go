@@ -4,11 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
@@ -24,13 +28,26 @@ type TokenVerifier interface {
 	Verify(context.Context, string) (appjwt.Claims, error)
 }
 
+// SessionView is the verified identity and scope returned to the frontend.
+type SessionView = appjwt.SessionView
+
+// SessionService provides the database-backed session contract.
+type SessionService interface {
+	Login(context.Context, string, string) (string, appjwt.Claims, error)
+	Logout(context.Context, uuid.UUID) error
+	ReadSession(context.Context, string) (SessionView, error)
+}
+
+// ErrInvalidCredentials indicates that login credentials do not match an enabled user.
+var ErrInvalidCredentials = appdb.ErrInvalidCredentials
+
 // NewRouter creates a router without a database readiness dependency.
 func NewRouter(environment string) *gin.Engine {
 	return NewRouterWithDependencies(environment, nil, nil)
 }
 
 // NewRouterWithDependencies creates a router with its readiness and token services.
-func NewRouterWithDependencies(environment string, readiness Readiness, verifier TokenVerifier) *gin.Engine {
+func NewRouterWithDependencies(environment string, readiness Readiness, verifier TokenVerifier, services ...SessionService) *gin.Engine {
 	if environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -39,6 +56,13 @@ func NewRouterWithDependencies(environment string, readiness Readiness, verifier
 	router.Use(gin.Recovery(), requestID(), ErrorMappingMiddleware())
 	router.GET("/health", health)
 	router.GET("/ready", readyHandler(readiness))
+	var sessions SessionService
+	if len(services) > 0 {
+		sessions = services[0]
+	}
+	router.POST("/login", requireCSRF, loginHandler(sessions, environment == "production"))
+	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(sessions, environment == "production"))
+	router.GET("/session", AuthMiddleware(verifier), sessionHandler(sessions))
 	return router
 }
 
@@ -70,7 +94,7 @@ func AuthMiddleware(verifier TokenVerifier) gin.HandlerFunc {
 		}
 		rawToken := bearerToken(c.GetHeader("Authorization"))
 		if rawToken == "" {
-			rawToken, _ = c.Cookie("session")
+			rawToken, _ = c.Cookie("pomkita_session")
 		}
 		if rawToken == "" {
 			writeError(c, http.StatusUnauthorized, "invalid_session")
@@ -86,6 +110,7 @@ func AuthMiddleware(verifier TokenVerifier) gin.HandlerFunc {
 			return
 		}
 		c.Set("jwt_claims", claims)
+		c.Set("raw_token", rawToken)
 		c.Next()
 	}
 }
@@ -129,16 +154,102 @@ func stableDatabaseCode(status int) string {
 func writeError(c *gin.Context, status int, code string) {
 	c.AbortWithStatusJSON(status, gin.H{
 		"code":       code,
-		"message":    safeMessage(status),
+		"message":    safeMessage(code, status),
 		"request_id": c.GetString("request_id"),
 	})
 }
 
-func safeMessage(status int) string {
+func safeMessage(code string, status int) string {
+	if code == "invalid_credentials" {
+		return "Invalid credentials"
+	}
+	if code == "csrf_required" {
+		return "CSRF header required"
+	}
 	if status == http.StatusUnauthorized {
 		return "Invalid session"
 	}
 	return "Request failed"
+}
+
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func loginHandler(service SessionService, secure bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		var input loginRequest
+		decoder := json.NewDecoder(c.Request.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(c, http.StatusBadRequest, "validation_error")
+			return
+		}
+		if err := ensureEndOfJSON(decoder); err != nil || strings.TrimSpace(input.Email) == "" || input.Password == "" {
+			writeError(c, http.StatusBadRequest, "validation_error")
+			return
+		}
+		token, _, err := service.Login(c.Request.Context(), input.Email, input.Password)
+		if err != nil {
+			if errors.Is(err, ErrInvalidCredentials) {
+				writeError(c, http.StatusUnauthorized, "invalid_credentials")
+				return
+			}
+			_ = c.Error(err)
+			return
+		}
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie("pomkita_session", token, 900, "/", "", secure, true)
+		c.Status(http.StatusOK)
+	}
+}
+
+func ensureEndOfJSON(decoder *json.Decoder) error {
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
+}
+
+func requireCSRF(c *gin.Context) {
+	if c.GetHeader("X-Requested-With") == "" {
+		writeError(c, http.StatusForbidden, "csrf_required")
+		return
+	}
+	c.Next()
+}
+
+func logoutHandler(service SessionService, secure bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims := c.MustGet("jwt_claims").(appjwt.Claims)
+		if err := service.Logout(c.Request.Context(), claims.JTI); err != nil {
+			_ = c.Error(err)
+			return
+		}
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie("pomkita_session", "", -1, "/", "", secure, true)
+		c.Status(http.StatusNoContent)
+	}
+}
+
+func sessionHandler(service SessionService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		view, err := service.ReadSession(c.Request.Context(), c.GetString("raw_token"))
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		c.JSON(http.StatusOK, view)
+	}
 }
 
 func requestID() gin.HandlerFunc {

@@ -31,6 +31,15 @@ func TestB0FoundationMigrationUpAndDown(t *testing.T) {
 		t.Fatalf("reset migration metadata: %v", err)
 	}
 
+	var sessionsTable *string
+	if err := conn.QueryRow(ctx, `select to_regclass('public.sessions')::text`).Scan(&sessionsTable); err != nil {
+		t.Fatalf("check sessions table: %v", err)
+	}
+	if sessionsTable != nil {
+		if _, err := conn.Exec(ctx, readMigration(t, root, "000004_b01_session_contract.down.sql")); err != nil {
+			t.Fatalf("reset session contract: %v", err)
+		}
+	}
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
 		t.Fatalf("reset request context: %v", err)
 	}
@@ -128,6 +137,15 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 	down := readMigration(t, root, "000001_b0_foundation.down.sql")
 	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {
 		t.Fatalf("reset migration metadata: %v", err)
+	}
+	var sessionsTable *string
+	if err := conn.QueryRow(ctx, `select to_regclass('public.sessions')::text`).Scan(&sessionsTable); err != nil {
+		t.Fatalf("check sessions table: %v", err)
+	}
+	if sessionsTable != nil {
+		if _, err := conn.Exec(ctx, readMigration(t, root, "000004_b01_session_contract.down.sql")); err != nil {
+			t.Fatalf("reset session contract: %v", err)
+		}
 	}
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
 		t.Fatalf("reset request context: %v", err)

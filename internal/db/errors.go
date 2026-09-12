@@ -6,6 +6,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// ErrInvalidCredentials means that login credentials do not match an enabled user.
+var ErrInvalidCredentials = errors.New("invalid_credentials")
+
 // HTTPStatusForError maps database errors to the backend status groups.
 func HTTPStatusForError(err error) int {
 	var pgErr *pgconn.PgError
@@ -32,6 +35,9 @@ func StableCodeForError(err error) string {
 	}
 	if pgErr.Code == "28000" && pgErr.Message == "session_idle" {
 		return "session_idle"
+	}
+	if pgErr.Code == "28000" && pgErr.Message == "invalid_credentials" {
+		return "invalid_credentials"
 	}
 	return ""
 }

@@ -17,9 +17,10 @@ import (
 
 // DB owns the PostgreSQL connection pool used by the service.
 type DB struct {
-	pool       *pgxpool.Pool
-	secretMu   sync.RWMutex
-	jwtSecrets map[string]string
+	pool        *pgxpool.Pool
+	secretMu    sync.RWMutex
+	jwtSecrets  map[string]string
+	jwtAudience string
 }
 
 // New opens a PostgreSQL pool and verifies that the database is reachable.
@@ -87,7 +88,13 @@ func (d *DB) SetRequestContext(ctx context.Context, tx pgx.Tx, rawToken string) 
 			return fmt.Errorf("set JWT verification key: %w", err)
 		}
 	}
+	audience := d.jwtAudience
 	d.secretMu.RUnlock()
+	if audience != "" {
+		if _, err := tx.Exec(ctx, `select set_config('app.jwt_audience', $1, true)`, audience); err != nil {
+			return fmt.Errorf("set JWT audience: %w", err)
+		}
+	}
 	if _, err := tx.Exec(ctx, `select public.fn_set_request_context($1)`, rawToken); err != nil {
 		return fmt.Errorf("set request context: %w", err)
 	}
@@ -102,6 +109,13 @@ func (d *DB) SetJWTSecrets(secrets map[string]string) {
 	for name, value := range secrets {
 		d.jwtSecrets[name] = value
 	}
+}
+
+// SetJWTAudience sets the database audience used by request-context validation.
+func (d *DB) SetJWTAudience(audience string) {
+	d.secretMu.Lock()
+	defer d.secretMu.Unlock()
+	d.jwtAudience = audience
 }
 
 // Begin starts a database transaction for a procedure call.
@@ -131,12 +145,12 @@ func (d *DB) JWTStore(secrets map[string]string) *JWTStore {
 
 // ActiveKey loads the active signing key.
 func (s *JWTStore) ActiveKey(ctx context.Context) (appjwt.Key, error) {
-	return s.loadKey(ctx, `where status = 'active' order by activated_at desc limit 1`, nil)
+	return s.loadKey(ctx, `select kid, secret_ref, status, activated_at, max_token_expiry from public.fn_read_active_jwt_key()`, nil)
 }
 
 // Key loads a key by key ID.
 func (s *JWTStore) Key(ctx context.Context, kid string) (appjwt.Key, error) {
-	return s.loadKey(ctx, `where kid = $1`, []any{kid})
+	return s.loadKey(ctx, `select kid, secret_ref, status, activated_at, max_token_expiry from public.fn_read_jwt_key($1)`, []any{kid})
 }
 
 func (s *JWTStore) loadKey(ctx context.Context, clause string, args []any) (appjwt.Key, error) {
@@ -144,7 +158,7 @@ func (s *JWTStore) loadKey(ctx context.Context, clause string, args []any) (appj
 	var secretRef string
 	var status string
 	var activatedAt, maxTokenExpiry time.Time
-	query := `select kid, secret_ref, status, activated_at, max_token_expiry from public.jwt_keys ` + clause
+	query := clause
 	if err := s.db.pool.QueryRow(ctx, query, args...).Scan(&key.KID, &secretRef, &status, &activatedAt, &maxTokenExpiry); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return appjwt.Key{}, appjwt.ErrUnknownKID
@@ -166,10 +180,7 @@ func (s *JWTStore) loadKey(ctx context.Context, clause string, args []any) (appj
 
 // CreateSession stores a newly issued token session.
 func (s *JWTStore) CreateSession(ctx context.Context, session appjwt.Session) error {
-	_, err := s.db.pool.Exec(ctx, `
-		insert into public.sessions (jti, kid, issued_at, expires_at, last_active_at)
-		values ($1, $2, $3, $4, $5)
-	`, session.JTI, session.KID, session.IssuedAt, session.ExpiresAt, session.LastActiveAt)
+	_, err := s.db.pool.Exec(ctx, `select public.fn_create_session($1, $2, $3, $4, $5)`, session.JTI, session.KID, session.IssuedAt, session.ExpiresAt, session.LastActiveAt)
 	if err != nil {
 		return fmt.Errorf("insert JWT session: %w", err)
 	}
@@ -180,10 +191,7 @@ func (s *JWTStore) CreateSession(ctx context.Context, session appjwt.Session) er
 func (s *JWTStore) Session(ctx context.Context, jti uuid.UUID) (appjwt.Session, error) {
 	var session appjwt.Session
 	var revokedAt *time.Time
-	err := s.db.pool.QueryRow(ctx, `
-		select jti, kid, issued_at, expires_at, last_active_at, revoked_at
-		from public.sessions where jti = $1
-	`, jti).Scan(&session.JTI, &session.KID, &session.IssuedAt, &session.ExpiresAt, &session.LastActiveAt, &revokedAt)
+	err := s.db.pool.QueryRow(ctx, `select jti, kid, issued_at, expires_at, last_active_at, revoked_at from public.fn_read_session_record($1)`, jti).Scan(&session.JTI, &session.KID, &session.IssuedAt, &session.ExpiresAt, &session.LastActiveAt, &revokedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return appjwt.Session{}, appjwt.ErrSessionNotFound
 	}
@@ -196,12 +204,13 @@ func (s *JWTStore) Session(ctx context.Context, jti uuid.UUID) (appjwt.Session, 
 
 // RevokeSession marks one token session as revoked.
 func (s *JWTStore) RevokeSession(ctx context.Context, jti uuid.UUID, at time.Time) error {
-	result, err := s.db.pool.Exec(ctx, `update public.sessions set revoked_at = $2 where jti = $1 and revoked_at is null`, jti, at)
+	_, err := s.db.pool.Exec(ctx, `select public.fn_revoke_session($1, $2)`, jti, at)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "28000" && pgErr.Message == "invalid_session" {
+			return appjwt.ErrSessionNotFound
+		}
 		return fmt.Errorf("revoke JWT session: %w", err)
-	}
-	if result.RowsAffected() == 0 {
-		return appjwt.ErrSessionNotFound
 	}
 	return nil
 }

@@ -70,6 +70,15 @@ type Claims struct {
 	KID       string
 }
 
+// SessionView is the verified user identity and station scope.
+type SessionView struct {
+	UserID      uuid.UUID   `json:"user_id"`
+	DisplayName string      `json:"display_name"`
+	Roles       []string    `json:"roles"`
+	OrgID       uuid.UUID   `json:"org_id"`
+	StationIDs  []uuid.UUID `json:"station_ids"`
+}
+
 // Service issues, verifies, and revokes session JWTs.
 type Service struct {
 	store    Store

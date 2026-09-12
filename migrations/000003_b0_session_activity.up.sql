@@ -38,6 +38,7 @@ declare
   v_enabled boolean;
   v_role text;
   v_roles text;
+  v_audience text := coalesce(nullif(current_setting('app.jwt_audience', true), ''), 'spbu-recon');
 begin
   perform set_config('app.context_valid', 'false', true);
   perform set_config('app.org_id', '', true);
@@ -92,8 +93,8 @@ begin
     raise exception using errcode = '28000', message = 'jwt_invalid_issuer';
   end if;
   if not (
-    (jsonb_typeof(v_claims->'aud') = 'string' and v_claims->>'aud' = 'spbu-recon')
-    or (jsonb_typeof(v_claims->'aud') = 'array' and v_claims->'aud' @> '["spbu-recon"]'::jsonb)
+    (jsonb_typeof(v_claims->'aud') = 'string' and v_claims->>'aud' = v_audience)
+    or (jsonb_typeof(v_claims->'aud') = 'array' and v_claims->'aud' @> to_jsonb(array[v_audience]))
   ) then
     raise exception using errcode = '28000', message = 'jwt_invalid_audience';
   end if;
