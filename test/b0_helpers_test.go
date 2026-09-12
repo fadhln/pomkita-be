@@ -60,6 +60,7 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 		name  string
 		check string
 	}{
+		{"000011_b2_amendment.down.sql", `select to_regclass('public.amendments') is not null`},
 		{"000010_b2_ack.down.sql", `select to_regclass('public.ack_decisions') is not null`},
 		{"000009_b1_recovery.down.sql", `select to_regprocedure('public.fn_recover_submitting_shifts()') is not null`},
 		{"000008_b1_submit.down.sql", `select to_regprocedure('public.fn_submit_shift(uuid,uuid,uuid,integer,text,jsonb)') is not null`},
@@ -80,6 +81,18 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 		if _, err := conn.Exec(ctx, readMigration(t, root, migration.name)); err != nil {
 			t.Fatalf("reset with %s: %v", migration.name, err)
 		}
+	}
+	if _, err := conn.Exec(ctx, `
+		do $$ declare r text; begin
+			foreach r in array array['pomkita_app','report_writer','audit_owner','relay','org_owner','station_owner','user_owner','auth_owner','registry_owner','audit_lock_owner'] loop
+				if exists (select 1 from pg_roles where rolname = r) then
+					execute format('revoke all on schema public from %I', r);
+					if to_regnamespace('app') is not null then execute format('revoke all on schema app from %I', r); end if;
+				end if;
+			end loop;
+		end $$;
+	`); err != nil {
+		t.Fatalf("revoke foundation schema grants: %v", err)
 	}
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000001_b0_foundation.down.sql")); err != nil {
 		t.Fatalf("reset foundation: %v", err)

@@ -42,7 +42,6 @@ create table public.ack_head (
     references public.shift_reports (org_id, station_id, shift_id, report_id, version_no),
   foreign key (org_id, station_id, shift_id, report_id, version_no, active_ack_id)
     references public.ack_decisions (org_id, station_id, shift_id, report_id, version_no, ack_id)
-    deferrable initially deferred
 );
 alter table public.ack_head owner to report_writer;
 
@@ -329,12 +328,13 @@ begin
     p_decision, v_actor, p_rejection_reason, v_role = 'Superadmin', p_is_break_glass,
     p_break_glass_reason
   );
-  update public.ack_head set active_ack_id = v_ack_id
-   where org_id = v_org_id and station_id = v_station_id and shift_id = p_shift_id
-     and report_id = p_report_id and version_no = p_version_no;
-  update public.shifts set status = case when p_decision = 'acked' then 'locked' else 'needs_correction' end,
+  update public.ack_head h set active_ack_id = v_ack_id
+   where h.org_id = v_org_id and h.station_id = v_station_id and h.shift_id = p_shift_id
+     and h.report_id = p_report_id and h.version_no = p_version_no;
+  update public.shifts set status = (case when p_decision = 'acked' then 'locked' else 'needs_correction' end)::public.shift_status,
        closed_at = case when p_decision = 'acked' then clock_timestamp() else closed_at end
    where org_id = v_org_id and station_id = v_station_id and shift_id = p_shift_id;
+  set constraints all immediate;
   ack_id := v_ack_id;
   report_id := p_report_id;
   version_no := p_version_no;
@@ -343,6 +343,40 @@ begin
 end;
 $$;
 alter function public.fn_ack_shift(uuid, uuid, integer, public.ack_decision, text, boolean, text) owner to report_writer;
+
+create or replace function public.trg_shift_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public, app
+as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception using errcode = '23514', message = 'shift_delete_forbidden';
+  end if;
+  if tg_table_name = 'shift_transitions' then
+    if current_setting('app.transition', true) not in ('shift_transition', 'submit_shift', 'recovery') then
+      raise exception using errcode = '23514', message = 'transition_insert_forbidden';
+    end if;
+    return new;
+  end if;
+  if new.station_seq <> old.station_seq
+     or new.shift_price_map_snapshot <> old.shift_price_map_snapshot
+     or new.shift_price_map_hash <> old.shift_price_map_hash then
+    raise exception using errcode = '23514', message = 'shift_immutable_fields';
+  end if;
+  if new.current_report_id is distinct from old.current_report_id
+     and current_setting('app.transition', true) not in ('submit_shift', 'approve_amendment') then
+    raise exception using errcode = '23514', message = 'current_report_pointer_forbidden';
+  end if;
+  if new.status <> old.status
+     and current_setting('app.transition', true) not in ('shift_transition', 'submit_shift', 'recovery', 'ack_shift') then
+    raise exception using errcode = '23514', message = 'shift_transition_required';
+  end if;
+  return new;
+end;
+$$;
+alter function public.trg_shift_guard() owner to station_owner;
 
 do $$
 declare v_table text;
@@ -372,6 +406,11 @@ with check (old_org_id::text = current_setting('app.org_id', true)
 revoke all on table public.ack_decisions, public.ack_head, public.ack_supersessions
   from public, pomkita_app, report_writer, audit_owner, relay;
 grant select, insert on public.ack_decisions to report_writer;
+grant references on public.ack_decisions to report_writer;
+grant select on public.ack_decisions to pomkita_app;
+grant select on public.ack_decisions to pomkita;
+grant references on public.ack_decisions to pomkita_app, pomkita;
+grant update on public.ack_decisions to report_writer, pomkita_app, pomkita;
 grant select, insert, update on public.ack_head to report_writer;
 grant select, insert on public.ack_supersessions to report_writer;
 grant execute on function public.fn_ack_shift(uuid, uuid, integer, public.ack_decision, text, boolean, text) to pomkita_app;
