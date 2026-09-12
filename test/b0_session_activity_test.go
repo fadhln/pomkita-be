@@ -128,13 +128,12 @@ func TestB0DatabaseJWTStoreReadsLastActiveAt(t *testing.T) {
 		t.Fatalf("open database pool: %v", err)
 	}
 	defer database.Close()
-	var sessionLastActive time.Time
-	err = conn.QueryRow(ctx, `select last_active_at from sessions where jti = $1`, uuid.MustParse(jti)).Scan(&sessionLastActive)
+	session, err := database.JWTStore(map[string]string{"app.jwt_secret.key_1": "test-secret"}).Session(ctx, uuid.MustParse(jti))
 	if err != nil {
 		t.Fatalf("load session: %v", err)
 	}
-	if !sessionLastActive.Equal(activity) {
-		t.Fatalf("last_active_at: got %s, want %s", sessionLastActive, activity)
+	if !session.LastActiveAt.Equal(activity) {
+		t.Fatalf("last_active_at: got %s, want %s", session.LastActiveAt, activity)
 	}
 }
 
@@ -142,7 +141,7 @@ func TestB0SessionActivitySlidingExpiryNeverPassesKeyMaximum(t *testing.T) {
 	ctx := context.Background()
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
-	resetB0SessionActivity(t, conn, true)
+	resetB0SessionActivity(t, conn)
 
 	const (
 		orgID     = "11111111-1111-4111-8111-111111111111"
@@ -151,7 +150,7 @@ func TestB0SessionActivitySlidingExpiryNeverPassesKeyMaximum(t *testing.T) {
 		jti       = "44444444-4444-4444-8444-444444444444"
 	)
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	seedB0SessionActivity(t, conn, now, orgID, stationID, userID, jti, now.Add(5*time.Minute), true)
+	seedB0SessionActivity(t, conn, now, orgID, stationID, userID, jti, now.Add(5*time.Minute))
 	token := makeToken(t, "test-secret", map[string]any{
 		"alg": "HS256", "kid": "key_1",
 	}, map[string]any{
@@ -263,7 +262,7 @@ func TestB0SessionActivityIdleSessionReturns28000AndNeverRevives(t *testing.T) {
 	}
 }
 
-func resetB0SessionActivity(t *testing.T, conn *pgx.Conn, withSessionContract ...bool) {
+func resetB0SessionActivity(t *testing.T, conn *pgx.Conn) {
 	t.Helper()
 	ctx := context.Background()
 	root := repositoryRoot(t)
@@ -274,9 +273,9 @@ func resetB0SessionActivity(t *testing.T, conn *pgx.Conn, withSessionContract ..
 	if err := conn.QueryRow(ctx, `select to_regclass('public.sessions')::text`).Scan(&sessionsTable); err != nil {
 		t.Fatalf("check existing sessions table: %v", err)
 	}
-	resetMigrations := []string{"000002_b0_request_context.down.sql", "000005_b1_catalog.down.sql", "000001_b0_foundation.down.sql"}
+	resetMigrations := []string{"000002_b0_request_context.down.sql", "000009_b1_recovery.down.sql", "000008_b1_submit.down.sql", "000007_b1_drafts.down.sql", "000006_b1_shifts.down.sql", "000005_b1_catalog.down.sql", "000001_b0_foundation.down.sql"}
 	if sessionsTable != nil {
-		resetMigrations = append([]string{"000004_b01_session_contract.down.sql", "000003_b0_session_activity.down.sql"}, resetMigrations...)
+		resetMigrations = append([]string{"000003_b0_session_activity.down.sql"}, resetMigrations...)
 	}
 	for _, name := range resetMigrations {
 		if _, err := conn.Exec(ctx, readMigration(t, root, name)); err != nil {
@@ -292,33 +291,18 @@ func resetB0SessionActivity(t *testing.T, conn *pgx.Conn, withSessionContract ..
 			t.Fatalf("apply %s: %v", name, err)
 		}
 	}
-	if len(withSessionContract) > 0 && withSessionContract[0] {
-		if _, err := conn.Exec(ctx, readMigration(t, root, "000004_b01_session_contract.up.sql")); err != nil {
-			t.Fatalf("apply 000004_b01_session_contract.up.sql: %v", err)
-		}
-	}
 }
 
-func seedB0SessionActivity(t *testing.T, conn *pgx.Conn, now time.Time, orgID, stationID, userID, jti string, keyExpiry time.Time, withSessionContract ...bool) {
+func seedB0SessionActivity(t *testing.T, conn *pgx.Conn, now time.Time, orgID, stationID, userID, jti string, keyExpiry time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	userInsert := struct {
-		query string
-		args  []any
-	}{query: `insert into users (user_id, org_id, display_name) values ($1, $2, 'Test User')`, args: []any{userID, orgID}}
-	if len(withSessionContract) > 0 && withSessionContract[0] {
-		userInsert = struct {
-			query string
-			args  []any
-		}{query: `insert into users (user_id, org_id, email, display_name, password_hash) values ($1, $2, 'user@example.com', 'Test User', app.crypt('correct-password', app.gen_salt('bf')))`, args: []any{userID, orgID}}
-	}
 	for _, statement := range []struct {
 		query string
 		args  []any
 	}{
 		{`insert into organizations (org_id, name) values ($1, 'Test Org')`, []any{orgID}},
 		{`insert into stations (org_id, station_id, timezone) values ($1, $2, 'Asia/Jakarta')`, []any{orgID, stationID}},
-		userInsert,
+		{`insert into users (user_id, org_id, display_name) values ($1, $2, 'Test User')`, []any{userID, orgID}},
 		{`insert into user_station_roles (org_id, station_id, user_id, role) values ($1, $2, $3, 'Owner')`, []any{orgID, stationID, userID}},
 		{`insert into jwt_keys (kid, secret_ref, status, activated_at, max_token_expiry) values ('key_1', 'app.jwt_secret.key_1', 'active', $1, $2)`, []any{now.Add(-time.Hour), keyExpiry}},
 		{`insert into sessions (jti, kid, issued_at, expires_at, last_active_at) values ($1, 'key_1', $2, $3, $2)`, []any{jti, now.Add(-time.Minute), now.Add(10 * time.Minute)}},

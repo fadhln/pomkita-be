@@ -24,17 +24,20 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect for migration reset: %v", err)
 	}
-	var sessionsTable *string
-	if err := admin.QueryRow(context.Background(), `select to_regclass('public.sessions')::text`).Scan(&sessionsTable); err != nil {
-		t.Fatalf("check sessions table: %v", err)
-	}
-	if sessionsTable != nil {
-		if _, err := admin.Exec(context.Background(), readMigration(t, root, "000004_b01_session_contract.down.sql")); err != nil {
-			t.Fatalf("reset session contract: %v", err)
-		}
-	}
 	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
 		t.Fatalf("reset request context: %v", err)
+	}
+	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000009_b1_recovery.down.sql")); err != nil {
+		t.Fatalf("reset B1 recovery: %v", err)
+	}
+	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000008_b1_submit.down.sql")); err != nil {
+		t.Fatalf("reset B1 submit: %v", err)
+	}
+	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000007_b1_drafts.down.sql")); err != nil {
+		t.Fatalf("reset B1 drafts: %v", err)
+	}
+	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000006_b1_shifts.down.sql")); err != nil {
+		t.Fatalf("reset B1 shifts: %v", err)
 	}
 	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset B1 catalog: %v", err)
@@ -62,8 +65,8 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if err := conn.QueryRow(context.Background(), `select version from schema_migrations`).Scan(&version); err != nil {
 		t.Fatalf("read migration version: %v", err)
 	}
-	if version != 5 {
-		t.Fatalf("got migration version %d, want 5", version)
+	if version != 9 {
+		t.Fatalf("got migration version %d, want 8", version)
 	}
 
 	if err := migrator.Down(context.Background()); err != nil {
