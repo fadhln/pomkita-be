@@ -156,7 +156,7 @@ The following tables exist:
 
 - organizations(org_id PK, name, created_at).
 - stations(org_id, station_id, timezone, created_at, primary key(org_id, station_id)). A station row is the station lock row.
-- users(user_id PK, org_id, display_name, enabled, created_at).
+- users(user_id PK, org_id, email, password_hash, display_name, enabled, created_at). Email is unique per organization and carries the login identity. password_hash is a bcrypt hash produced by the database pgcrypto extension. Raw passwords are never stored or logged.
 - user_station_roles(org_id, station_id, user_id, role, primary key(org_id, station_id, user_id, role)).
 - nozzles(org_id, station_id, nozzle_id, dispenser_id, meter_max numeric(10,1), primary key(org_id, station_id, nozzle_id)). meter_max >= 0.
 - dispensers(org_id, station_id, dispenser_id, primary key(org_id, station_id, dispenser_id)).
