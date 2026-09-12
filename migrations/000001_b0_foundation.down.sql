@@ -30,7 +30,8 @@ begin
       execute format('revoke usage on schema app from %I', v_role);
     end if;
   end loop;
-  if to_regprocedure('app.hmac(text,text,text)') is not null then
+  if to_regprocedure('app.hmac(text,text,text)') is not null
+     and exists (select 1 from pg_roles where rolname = 'auth_owner') then
     revoke execute on function app.hmac(text, text, text) from auth_owner;
   end if;
   for v_owner in
@@ -53,7 +54,7 @@ begin
     execute format('alter default privileges for role %I revoke all on sequences from %I', v_owner, v_owner);
     execute format('alter default privileges for role %I revoke all on functions from %I', v_owner, v_owner);
     if v_owner <> 'pomkita' then
-      execute format('drop owned by %I', v_owner);
+      execute format('drop owned by %I cascade', v_owner);
     end if;
   end loop;
 end
