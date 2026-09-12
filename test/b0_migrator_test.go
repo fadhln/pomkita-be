@@ -27,6 +27,9 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
 		t.Fatalf("reset request context: %v", err)
 	}
+	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
+		t.Fatalf("reset B1 shifts: %v", err)
+	}
 	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000004_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset B1 catalog: %v", err)
 	}
@@ -53,8 +56,8 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if err := conn.QueryRow(context.Background(), `select version from schema_migrations`).Scan(&version); err != nil {
 		t.Fatalf("read migration version: %v", err)
 	}
-	if version != 4 {
-		t.Fatalf("got migration version %d, want 4", version)
+	if version != 5 {
+		t.Fatalf("got migration version %d, want 5", version)
 	}
 
 	if err := migrator.Down(context.Background()); err != nil {
