@@ -42,18 +42,18 @@ type SessionService interface {
 var ErrInvalidCredentials = appdb.ErrInvalidCredentials
 
 // NewRouter creates a router without a database readiness dependency.
-func NewRouter(environment string) *gin.Engine {
-	return NewRouterWithDependencies(environment, nil, nil)
+func NewRouter(environment string, allowedOrigins []string) *gin.Engine {
+	return NewRouterWithDependencies(environment, allowedOrigins, nil, nil)
 }
 
 // NewRouterWithDependencies creates a router with its readiness and token services.
-func NewRouterWithDependencies(environment string, readiness Readiness, verifier TokenVerifier, services ...SessionService) *gin.Engine {
+func NewRouterWithDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, services ...SessionService) *gin.Engine {
 	if environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	router := gin.New()
-	router.Use(gin.Recovery(), requestID(), ErrorMappingMiddleware())
+	router.Use(gin.Recovery(), corsMiddleware(allowedOrigins), requestID(), ErrorMappingMiddleware())
 	router.GET("/health", health)
 	router.GET("/ready", readyHandler(readiness))
 	var sessions SessionService
@@ -160,6 +160,9 @@ func writeError(c *gin.Context, status int, code string) {
 }
 
 func safeMessage(code string, status int) string {
+	if code == "forbidden" {
+		return "Origin not allowed"
+	}
 	if code == "invalid_credentials" {
 		return "Invalid credentials"
 	}
@@ -254,12 +257,53 @@ func sessionHandler(service SessionService) gin.HandlerFunc {
 
 func requestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		requestID := c.GetHeader("X-Request-ID")
-		if requestID == "" {
-			requestID = newRequestID()
+		setRequestID(c)
+		c.Next()
+	}
+}
+
+func setRequestID(c *gin.Context) {
+	requestID := c.GetHeader("X-Request-ID")
+	if requestID == "" {
+		requestID = newRequestID()
+	}
+	c.Header("X-Request-ID", requestID)
+	c.Set("request_id", requestID)
+}
+
+func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		allowed[origin] = struct{}{}
+	}
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == "" || len(allowed) == 0 {
+			c.Next()
+			return
 		}
-		c.Header("X-Request-ID", requestID)
-		c.Set("request_id", requestID)
+		if _, ok := allowed[origin]; !ok {
+			if c.Request.Method == http.MethodOptions {
+				setRequestID(c)
+				writeError(c, http.StatusForbidden, "forbidden")
+				return
+			}
+			c.Next()
+			return
+		}
+
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Allow-Credentials", "true")
+		if c.Request.Method == http.MethodOptions {
+			setRequestID(c)
+			c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Content-Type, X-Requested-With, X-Request-ID")
+			c.Header("Access-Control-Max-Age", "600")
+			c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Header("Vary", "Origin")
 		c.Next()
 	}
 }

@@ -32,7 +32,7 @@ func TestB01HTTPSessionEndpointsUseSessionCookieAndRevokeIt(t *testing.T) {
 		Issuer: "pomkita", Audience: "pomkita", Now: time.Now,
 	})
 	manager := appdb.NewSessionManager(database, tokens)
-	router := httpapi.NewRouterWithDependencies("test", database, tokens, manager)
+	router := httpapi.NewRouterWithDependencies("test", nil, database, tokens, manager)
 
 	loginResponse := httptest.NewRecorder()
 	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"correct-password"}`))

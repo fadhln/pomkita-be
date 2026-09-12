@@ -25,7 +25,7 @@ func (r readyStub) Ping(context.Context) error { return r.pingErr }
 
 func TestReadyChecksLatestB1Migration(t *testing.T) {
 	latest := 0
-	router := NewRouterWithDependencies("test", readyStub{current: true, latest: &latest}, nil)
+	router := NewRouterWithDependencies("test", nil, readyStub{current: true, latest: &latest}, nil)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
 	if recorder.Code != http.StatusOK || latest != 8 {
@@ -60,7 +60,7 @@ func TestReadyReturnsUnavailableWhenDatabaseIsNotReady(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			router := NewRouterWithDependencies("test", tc.ready, nil)
+			router := NewRouterWithDependencies("test", nil, tc.ready, nil)
 			recorder := httptest.NewRecorder()
 			router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
 			if recorder.Code != http.StatusServiceUnavailable {
@@ -72,7 +72,7 @@ func TestReadyReturnsUnavailableWhenDatabaseIsNotReady(t *testing.T) {
 
 func TestAuthMiddlewareVerifiesTokenAndAttachesClaims(t *testing.T) {
 	claims := appjwt.Claims{Subject: uuid.MustParse("33333333-3333-4333-8333-333333333333")}
-	router := NewRouterWithDependencies("test", readyStub{}, verifierStub{claims: claims})
+	router := NewRouterWithDependencies("test", nil, readyStub{}, verifierStub{claims: claims})
 	router.GET("/protected", AuthMiddleware(verifierStub{claims: claims}), func(c *gin.Context) {
 		value, exists := c.Get("jwt_claims")
 		if !exists || value.(appjwt.Claims).Subject != claims.Subject {
@@ -91,7 +91,7 @@ func TestAuthMiddlewareVerifiesTokenAndAttachesClaims(t *testing.T) {
 }
 
 func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
-	router := NewRouterWithDependencies("test", readyStub{}, nil)
+	router := NewRouterWithDependencies("test", nil, readyStub{}, nil)
 	router.GET("/protected", AuthMiddleware(verifierStub{err: appjwt.ErrExpired}), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
@@ -106,7 +106,7 @@ func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
 }
 
 func TestAuthMiddlewareRejectsIdleSessionWithDistinctCode(t *testing.T) {
-	router := NewRouterWithDependencies("test", readyStub{}, nil)
+	router := NewRouterWithDependencies("test", nil, readyStub{}, nil)
 	router.GET("/protected", AuthMiddleware(verifierStub{err: appjwt.ErrSessionIdle}), func(c *gin.Context) {
 		c.Status(http.StatusNoContent)
 	})
@@ -123,7 +123,7 @@ func TestAuthMiddlewareRejectsIdleSessionWithDistinctCode(t *testing.T) {
 }
 
 func TestErrorMappingMiddlewareMapsSQLState(t *testing.T) {
-	router := NewRouterWithDependencies("test", readyStub{}, nil)
+	router := NewRouterWithDependencies("test", nil, readyStub{}, nil)
 	router.GET("/conflict", func(c *gin.Context) {
 		_ = c.Error(&pgconn.PgError{Code: "23505"})
 	})
@@ -138,7 +138,7 @@ func TestErrorMappingMiddlewareMapsSQLState(t *testing.T) {
 }
 
 func TestErrorMappingMiddlewareMapsIdleSQLState(t *testing.T) {
-	router := NewRouterWithDependencies("test", readyStub{}, nil)
+	router := NewRouterWithDependencies("test", nil, readyStub{}, nil)
 	router.GET("/idle", func(c *gin.Context) {
 		_ = c.Error(&pgconn.PgError{Code: "28000", Message: "session_idle"})
 	})
