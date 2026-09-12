@@ -9,6 +9,7 @@ func TestB2SchedulerMigration_ProvidesAbandonmentAndGovernanceAnomalyRead(t *tes
 	ctx := context.Background()
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
+	resetMigrations(t, conn)
 	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000001_b0_foundation.up.sql")); err != nil {
 		t.Fatalf("apply foundation: %v", err)
 	}
