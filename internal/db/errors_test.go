@@ -15,6 +15,7 @@ func TestHTTPStatusForError_MapsRequiredSQLStates(t *testing.T) {
 		{state: "23505", status: 409},
 		{state: "22003", status: 422},
 		{state: "40P01", status: 409},
+		{state: "28000", status: 401},
 		{state: "XX000", status: 500},
 	}
 	for _, tc := range cases {
@@ -24,5 +25,12 @@ func TestHTTPStatusForError_MapsRequiredSQLStates(t *testing.T) {
 				t.Fatalf("got %d, want %d", got, tc.status)
 			}
 		})
+	}
+}
+
+func TestStableCodeForErrorDistinguishesIdleSession(t *testing.T) {
+	err := &pgconn.PgError{Code: "28000", Message: "session_idle"}
+	if got := StableCodeForError(err); got != "session_idle" {
+		t.Fatalf("got %q, want session_idle", got)
 	}
 }

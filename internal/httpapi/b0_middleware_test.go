@@ -91,6 +91,23 @@ func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {
 	}
 }
 
+func TestAuthMiddlewareRejectsIdleSessionWithDistinctCode(t *testing.T) {
+	router := NewRouterWithDependencies("test", readyStub{}, nil)
+	router.GET("/protected", AuthMiddleware(verifierStub{err: appjwt.ErrSessionIdle}), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"session_idle"`) {
+		t.Fatalf("response has no idle-session error: %s", recorder.Body.String())
+	}
+}
+
 func TestErrorMappingMiddlewareMapsSQLState(t *testing.T) {
 	router := NewRouterWithDependencies("test", readyStub{}, nil)
 	router.GET("/conflict", func(c *gin.Context) {
@@ -103,5 +120,20 @@ func TestErrorMappingMiddlewareMapsSQLState(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"code":"conflict"`) {
 		t.Fatalf("response has no stable conflict error: %s", recorder.Body.String())
+	}
+}
+
+func TestErrorMappingMiddlewareMapsIdleSQLState(t *testing.T) {
+	router := NewRouterWithDependencies("test", readyStub{}, nil)
+	router.GET("/idle", func(c *gin.Context) {
+		_ = c.Error(&pgconn.PgError{Code: "28000", Message: "session_idle"})
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/idle", nil))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"session_idle"`) {
+		t.Fatalf("response has no idle-session error: %s", recorder.Body.String())
 	}
 }

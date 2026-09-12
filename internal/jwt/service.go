@@ -35,11 +35,12 @@ type Key struct {
 
 // Session is a database session record for one issued token.
 type Session struct {
-	JTI       uuid.UUID
-	KID       string
-	IssuedAt  time.Time
-	ExpiresAt time.Time
-	RevokedAt *time.Time
+	JTI          uuid.UUID
+	KID          string
+	IssuedAt     time.Time
+	ExpiresAt    time.Time
+	LastActiveAt time.Time
+	RevokedAt    *time.Time
 }
 
 // Store provides key and session persistence to the JWT service.
@@ -100,6 +101,8 @@ var (
 	ErrSessionNotFound = errors.New("jwt_session_not_found")
 	// ErrSessionExpired means that the database session expired.
 	ErrSessionExpired = errors.New("jwt_session_expired")
+	// ErrSessionIdle means that the session was inactive for more than fifteen minutes.
+	ErrSessionIdle = errors.New("session_idle")
 )
 
 // NewService creates a JWT service with a deterministic clock when provided.
@@ -159,7 +162,7 @@ func (s *Service) Issue(ctx context.Context, subject uuid.UUID) (string, Claims,
 	if err != nil {
 		return "", Claims{}, fmt.Errorf("sign JWT: %w", err)
 	}
-	if err := s.store.CreateSession(ctx, Session{JTI: jti, KID: key.KID, IssuedAt: now, ExpiresAt: expires}); err != nil {
+	if err := s.store.CreateSession(ctx, Session{JTI: jti, KID: key.KID, IssuedAt: now, ExpiresAt: expires, LastActiveAt: now}); err != nil {
 		return "", Claims{}, fmt.Errorf("create JWT session: %w", err)
 	}
 	return signed, claims, nil
@@ -236,10 +239,17 @@ func (s *Service) Verify(ctx context.Context, raw string) (Claims, error) {
 	if session.KID != kid {
 		return Claims{}, ErrSessionNotFound
 	}
-	if now.After(session.ExpiresAt.Add(60 * time.Second)) {
-		return Claims{}, ErrSessionExpired
+	if session.LastActiveAt.IsZero() || now.After(session.LastActiveAt.Add(15*time.Minute)) {
+		return Claims{}, ErrSessionIdle
 	}
-	return Claims{Issuer: wire.Issuer, Audience: wire.Audience[0], Subject: subject, JTI: jti, IssuedAt: issuedAt, ExpiresAt: expiresAt, KID: kid}, nil
+	reissuedExpiresAt := session.LastActiveAt.Add(15 * time.Minute)
+	if key.MaxTokenExpiry.Before(reissuedExpiresAt) {
+		reissuedExpiresAt = key.MaxTokenExpiry.UTC()
+	}
+	if !reissuedExpiresAt.After(now) {
+		return Claims{}, ErrRetiredKey
+	}
+	return Claims{Issuer: wire.Issuer, Audience: wire.Audience[0], Subject: subject, JTI: jti, IssuedAt: issuedAt, ExpiresAt: reissuedExpiresAt, KID: kid}, nil
 }
 
 func verifyHMAC(method jwtv5.SigningMethod, signingInput, raw, secret string) bool {

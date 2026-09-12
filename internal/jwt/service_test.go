@@ -64,7 +64,7 @@ func TestService_VerifyRejectsInvalidClaimsWithDistinctErrors(t *testing.T) {
 	userID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
 	jti := uuid.MustParse("44444444-4444-4444-8444-444444444444")
 	store := &memoryStore{keys: map[string]Key{"key_1": key}, sessions: map[uuid.UUID]Session{
-		jti: {JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(10 * time.Minute)},
+		jti: {JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(10 * time.Minute), LastActiveAt: now.Add(-time.Minute)},
 	}}
 	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return now }})
 
@@ -89,7 +89,7 @@ func TestService_VerifyRejectsInvalidClaimsWithDistinctErrors(t *testing.T) {
 		})
 	}
 
-	store.sessions[jti] = Session{JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(10 * time.Minute), RevokedAt: timePtr(now)}
+	store.sessions[jti] = Session{JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(10 * time.Minute), LastActiveAt: now.Add(-time.Minute), RevokedAt: timePtr(now)}
 	_, err := service.Verify(context.Background(), signedToken(t, "secret", "key_1", nil, userID, jti, now))
 	if !errors.Is(err, ErrRevokedJTI) {
 		t.Fatalf("got %v, want %v", err, ErrRevokedJTI)
@@ -131,7 +131,7 @@ func TestService_PreviousKeyAcceptedUntilMaximumTokenExpiry(t *testing.T) {
 	userID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
 	jti := uuid.MustParse("44444444-4444-4444-8444-444444444444")
 	store := &memoryStore{keys: map[string]Key{"old_key": key}, sessions: map[uuid.UUID]Session{
-		jti: {JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: previousExpiry},
+		jti: {JTI: jti, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: previousExpiry, LastActiveAt: now.Add(-time.Minute)},
 	}}
 	clock := now
 	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return clock }})
@@ -142,6 +142,41 @@ func TestService_PreviousKeyAcceptedUntilMaximumTokenExpiry(t *testing.T) {
 	clock = previousExpiry.Add(time.Nanosecond)
 	if _, err := service.Verify(context.Background(), token); !errors.Is(err, ErrRetiredKey) {
 		t.Fatalf("got %v, want %v", err, ErrRetiredKey)
+	}
+}
+
+func TestService_VerifyReissuesExpiryFromActivityAndCapsAtKeyExpiry(t *testing.T) {
+	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	key := Key{KID: "key_1", Secret: "secret", Status: KeyActive, MaxTokenExpiry: now.Add(20 * time.Minute)}
+	userID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
+	jti := uuid.MustParse("44444444-4444-4444-8444-444444444444")
+	store := &memoryStore{keys: map[string]Key{"key_1": key}, sessions: map[uuid.UUID]Session{
+		jti: {JTI: jti, KID: key.KID, IssuedAt: now.Add(-10 * time.Minute), ExpiresAt: now.Add(5 * time.Minute), LastActiveAt: now.Add(-2 * time.Minute)},
+	}}
+	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return now }})
+
+	claims, err := service.Verify(context.Background(), signedToken(t, key.Secret, key.KID, nil, userID, jti, now.Add(-time.Minute)))
+	if err != nil {
+		t.Fatalf("verify active session: %v", err)
+	}
+	if claims.JTI != jti {
+		t.Fatalf("reissued claims changed JTI: got %s, want %s", claims.JTI, jti)
+	}
+	if !claims.ExpiresAt.Equal(now.Add(13 * time.Minute)) {
+		t.Fatalf("reissued expiry: got %s, want %s", claims.ExpiresAt, now.Add(13*time.Minute))
+	}
+
+	store.sessions[jti] = Session{
+		JTI: jti, KID: key.KID, IssuedAt: now.Add(-10 * time.Minute), ExpiresAt: now.Add(5 * time.Minute),
+		LastActiveAt: now.Add(-time.Minute),
+	}
+	store.keys[key.KID] = Key{KID: key.KID, Secret: key.Secret, Status: key.Status, MaxTokenExpiry: now.Add(5 * time.Minute)}
+	claims, err = service.Verify(context.Background(), signedToken(t, key.Secret, key.KID, nil, userID, jti, now.Add(-time.Minute)))
+	if err != nil {
+		t.Fatalf("verify near-retirement session: %v", err)
+	}
+	if !claims.ExpiresAt.Equal(now.Add(5 * time.Minute)) {
+		t.Fatalf("reissued expiry passed key maximum: got %s, want %s", claims.ExpiresAt, now.Add(5*time.Minute))
 	}
 }
 

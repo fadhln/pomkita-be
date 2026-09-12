@@ -30,6 +30,9 @@ func resetB0Foundation(t *testing.T, conn *pgx.Conn, withContextFunction bool) {
 		if _, err := conn.Exec(ctx, readMigration(t, root, "000002_b0_request_context.up.sql")); err != nil {
 			t.Fatalf("apply request context: %v", err)
 		}
+		if _, err := conn.Exec(ctx, readMigration(t, root, "000003_b0_session_activity.up.sql")); err != nil {
+			t.Fatalf("apply session activity: %v", err)
+		}
 	}
 }
 

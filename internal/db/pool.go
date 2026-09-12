@@ -167,9 +167,9 @@ func (s *JWTStore) loadKey(ctx context.Context, clause string, args []any) (appj
 // CreateSession stores a newly issued token session.
 func (s *JWTStore) CreateSession(ctx context.Context, session appjwt.Session) error {
 	_, err := s.db.pool.Exec(ctx, `
-		insert into public.sessions (jti, kid, issued_at, expires_at)
-		values ($1, $2, $3, $4)
-	`, session.JTI, session.KID, session.IssuedAt, session.ExpiresAt)
+		insert into public.sessions (jti, kid, issued_at, expires_at, last_active_at)
+		values ($1, $2, $3, $4, $5)
+	`, session.JTI, session.KID, session.IssuedAt, session.ExpiresAt, session.LastActiveAt)
 	if err != nil {
 		return fmt.Errorf("insert JWT session: %w", err)
 	}
@@ -181,9 +181,9 @@ func (s *JWTStore) Session(ctx context.Context, jti uuid.UUID) (appjwt.Session, 
 	var session appjwt.Session
 	var revokedAt *time.Time
 	err := s.db.pool.QueryRow(ctx, `
-		select jti, kid, issued_at, expires_at, revoked_at
+		select jti, kid, issued_at, expires_at, last_active_at, revoked_at
 		from public.sessions where jti = $1
-	`, jti).Scan(&session.JTI, &session.KID, &session.IssuedAt, &session.ExpiresAt, &revokedAt)
+	`, jti).Scan(&session.JTI, &session.KID, &session.IssuedAt, &session.ExpiresAt, &session.LastActiveAt, &revokedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return appjwt.Session{}, appjwt.ErrSessionNotFound
 	}

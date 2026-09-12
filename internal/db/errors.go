@@ -17,7 +17,21 @@ func HTTPStatusForError(err error) int {
 		return 422
 	case "23505", "40P01":
 		return 409
+	case "28000":
+		return 401
 	default:
 		return 500
 	}
+}
+
+// StableCodeForError returns a safe machine code for a database error.
+func StableCodeForError(err error) string {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return ""
+	}
+	if pgErr.Code == "28000" && pgErr.Message == "session_idle" {
+		return "session_idle"
+	}
+	return ""
 }
