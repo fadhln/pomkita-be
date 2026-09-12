@@ -32,7 +32,7 @@ func TestB0RequestContextValidAndInvalidClaims(t *testing.T) {
 	}{
 		{`insert into organizations (org_id, name) values ($1, 'Test Org')`, []any{orgID}},
 		{`insert into stations (org_id, station_id, timezone) values ($1, $2, 'Asia/Jakarta')`, []any{orgID, stationID}},
-		{`insert into users (user_id, org_id, display_name) values ($1, $2, 'Test User')`, []any{userID, orgID}},
+		{`insert into users (user_id, org_id, email, display_name, password_hash) values ($1, $2, 'user@example.com', 'Test User', app.crypt('correct-password', app.gen_salt('bf')))`, []any{userID, orgID}},
 		{`insert into user_station_roles (org_id, station_id, user_id, role) values ($1, $2, $3, 'Owner')`, []any{orgID, stationID, userID}},
 		{`insert into jwt_keys (kid, secret_ref, status, activated_at, max_token_expiry) values ('key_1', 'app.jwt_secret.key_1', 'active', $1::timestamptz, $1::timestamptz + interval '15 minutes')`, []any{now}},
 		{`insert into sessions (jti, kid, issued_at, expires_at) values ($1, 'key_1', $2::timestamptz, $2::timestamptz + interval '15 minutes')`, []any{validJTI, now}},

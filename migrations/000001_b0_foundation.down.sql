@@ -23,10 +23,12 @@ begin
   for v_role in
     select rolname from pg_roles
     where rolname in ('pomkita_app', 'org_owner', 'station_owner', 'user_owner',
-                      'auth_owner', 'registry_owner', 'audit_lock_owner')
+                      'auth_owner', 'registry_owner', 'audit_lock_owner', 'report_writer')
   loop
     execute format('revoke usage on schema public from %I', v_role);
-    execute format('revoke usage on schema app from %I', v_role);
+    if to_regnamespace('app') is not null then
+      execute format('revoke usage on schema app from %I', v_role);
+    end if;
   end loop;
   if to_regprocedure('app.hmac(text,text,text)') is not null then
     revoke execute on function app.hmac(text, text, text) from auth_owner;

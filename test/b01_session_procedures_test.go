@@ -59,21 +59,7 @@ func TestB01LoginProcedureAuthenticatesWithAppRole(t *testing.T) {
 
 func resetB01Database(t *testing.T, conn *pgx.Conn) {
 	t.Helper()
-	ctx := context.Background()
-	root := repositoryRoot(t)
-	var sessionsTable *string
-	if err := conn.QueryRow(ctx, `select to_regclass('public.sessions')::text`).Scan(&sessionsTable); err != nil {
-		t.Fatalf("check existing sessions table: %v", err)
-	}
-	if sessionsTable != nil {
-		if _, err := conn.Exec(ctx, readMigration(t, root, "000004_b01_session_contract.down.sql")); err != nil {
-			t.Fatalf("reverse session contract: %v", err)
-		}
-	}
 	resetB0Foundation(t, conn, true)
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000004_b01_session_contract.up.sql")); err != nil {
-		t.Fatalf("apply session contract: %v", err)
-	}
 }
 
 func seedB01User(t *testing.T, conn *pgx.Conn, orgID, stationID, userID string) {
