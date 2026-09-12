@@ -30,7 +30,7 @@ func TestB0FoundationMigrationUpAndDown(t *testing.T) {
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset B1 shifts: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000004_b1_catalog.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset B1 catalog: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {
@@ -135,7 +135,7 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset B1 shifts: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000004_b1_catalog.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset B1 catalog: %v", err)
 	}
 	if _, err := conn.Exec(ctx, `drop table if exists schema_migrations`); err != nil {

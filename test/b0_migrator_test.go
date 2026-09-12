@@ -30,7 +30,7 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset B1 shifts: %v", err)
 	}
-	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000004_b1_catalog.down.sql")); err != nil {
+	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset B1 catalog: %v", err)
 	}
 	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000001_b0_foundation.down.sql")); err != nil {

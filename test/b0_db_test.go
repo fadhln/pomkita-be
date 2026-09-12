@@ -28,7 +28,7 @@ func TestB0DatabaseJWTStorePersistsAndRevokesSessions(t *testing.T) {
 	if _, err := admin.Exec(ctx, readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset B1 shifts: %v", err)
 	}
-	if _, err := admin.Exec(ctx, readMigration(t, root, "000004_b1_catalog.down.sql")); err != nil {
+	if _, err := admin.Exec(ctx, readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset B1 catalog: %v", err)
 	}
 	if _, err := admin.Exec(ctx, readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {

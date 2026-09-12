@@ -18,11 +18,11 @@ func TestB1Shifts_OpenAllocatesSequenceSnapshotAndTransitions(t *testing.T) {
 	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset shifts: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000004_b1_catalog.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset catalog: %v", err)
 	}
 	resetB0Foundation(t, conn, true)
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000004_b1_catalog.up.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_catalog.up.sql")); err != nil {
 		t.Fatalf("apply catalog: %v", err)
 	}
 	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_shifts.up.sql")); err != nil {
