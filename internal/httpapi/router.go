@@ -76,7 +76,7 @@ func readyHandler(readiness Readiness) gin.HandlerFunc {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return
 		}
-		current, err := readiness.MigrationsCurrent(c.Request.Context(), 3)
+		current, err := readiness.MigrationsCurrent(c.Request.Context(), 7)
 		if err != nil || !current {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return

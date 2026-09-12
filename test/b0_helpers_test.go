@@ -12,6 +12,9 @@ func resetB0Foundation(t *testing.T, conn *pgx.Conn, withContextFunction bool) {
 	t.Helper()
 	ctx := context.Background()
 	root := repositoryRoot(t)
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000007_b1_submit.down.sql")); err != nil {
+		t.Fatalf("reset B1 submit: %v", err)
+	}
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000006_b1_drafts.down.sql")); err != nil {
 		t.Fatalf("reset B1 drafts: %v", err)
 	}
