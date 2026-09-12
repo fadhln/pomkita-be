@@ -18,11 +18,25 @@ type readyStub struct {
 	pingErr  error
 	current  bool
 	stateErr error
+	latest   *int
 }
 
 func (r readyStub) Ping(context.Context) error { return r.pingErr }
 
-func (r readyStub) MigrationsCurrent(context.Context, int) (bool, error) {
+func TestReadyChecksLatestB1Migration(t *testing.T) {
+	latest := 0
+	router := NewRouterWithDependencies("test", readyStub{current: true, latest: &latest}, nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	if recorder.Code != http.StatusOK || latest != 7 {
+		t.Fatalf("ready migration check: status=%d latest=%d, want 200 and 7", recorder.Code, latest)
+	}
+}
+
+func (r readyStub) MigrationsCurrent(_ context.Context, latest int) (bool, error) {
+	if r.latest != nil {
+		*r.latest = latest
+	}
 	return r.current, r.stateErr
 }
 
