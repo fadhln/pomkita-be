@@ -3,7 +3,10 @@ package test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -13,6 +16,7 @@ func TestB2AckMigration_ProvidesDecisionHeadAndProcedure(t *testing.T) {
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
 	resetB0Foundation(t, conn, true)
+	defer resetB0Foundation(t, conn, true)
 	for _, name := range []string{
 		"000005_b1_catalog.up.sql",
 		"000006_b1_shifts.up.sql",
@@ -51,6 +55,7 @@ func TestB2AmendmentMigration_ProvidesAllowlistedApprovalTables(t *testing.T) {
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
 	resetB0Foundation(t, conn, true)
+	defer resetB0Foundation(t, conn, true)
 	for _, name := range []string{
 		"000005_b1_catalog.up.sql",
 		"000006_b1_shifts.up.sql",
@@ -91,6 +96,9 @@ func TestB2Governance_AckAndAmendmentSupersedeTheCurrentHead(t *testing.T) {
 	defer conn.Close(ctx)
 	applyB2Migrations(t, conn)
 	defer resetB0Foundation(t, conn, true)
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000012_b2_audit.up.sql")); err != nil {
+		t.Fatalf("apply audit migration: %v", err)
+	}
 
 	const (
 		org        = "11111111-1111-4111-8111-111111111111"
@@ -169,6 +177,62 @@ func TestB2Governance_AckAndAmendmentSupersedeTheCurrentHead(t *testing.T) {
 	}
 	if replacementVersion != 2 || superseded != ackID {
 		t.Fatalf("supersession: version=%d ack=%s", replacementVersion, superseded)
+	}
+}
+
+func TestB2AuditMigration_ProvidesChainAndOutboxAppendProcedure(t *testing.T) {
+	ctx := context.Background()
+	conn := openB0Connection(t)
+	defer conn.Close(ctx)
+	applyB2Migrations(t, conn)
+	defer resetB0Foundation(t, conn, true)
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000012_b2_audit.up.sql")); err != nil {
+		t.Fatalf("apply audit migration: %v", err)
+	}
+	var tables int
+	if err := conn.QueryRow(ctx, `
+		select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
+		where n.nspname='public' and c.relname=any($1::text[])
+	`, []string{"audit_log", "audit_outbox", "audit_denied"}).Scan(&tables); err != nil {
+		t.Fatalf("query audit tables: %v", err)
+	}
+	if tables != 3 {
+		t.Fatalf("audit table count: got %d, want 3", tables)
+	}
+	if _, err := conn.Exec(ctx, `select * from fn_append_audit_event(null,null,null,null,null)`); err == nil {
+		t.Fatal("audit append accepted an invalid request")
+	}
+}
+
+func TestB2AuditChain_AppendsWithoutGapsAndDetectsTamper(t *testing.T) {
+	ctx := context.Background()
+	conn := openB0Connection(t)
+	defer conn.Close(ctx)
+	applyB2Migrations(t, conn)
+	defer resetB0Foundation(t, conn, true)
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000012_b2_audit.up.sql")); err != nil {
+		t.Fatalf("apply audit migration: %v", err)
+	}
+	const org = "11111111-1111-4111-8111-111111111111"
+	if _, err := conn.Exec(ctx, `insert into organizations(org_id,name) values($1,'Audit')`, org); err != nil {
+		t.Fatalf("seed audit organization: %v", err)
+	}
+	setTestContext(t, conn, org, "", "33333333-3333-4333-8333-333333333333", "Owner")
+	for index := 0; index < 100; index++ {
+		if _, err := conn.Exec(ctx, `select * from fn_append_audit_event($1,'test',jsonb_build_object('index',$2::text),'success',null)`, uuid.New(), strconv.Itoa(index)); err != nil {
+			t.Fatalf("append event %d: %v", index, err)
+		}
+	}
+	var count, first, last int64
+	if err := conn.QueryRow(ctx, `select count(*),min(org_sequence),max(org_sequence) from audit_log where org_id=$1`, org).Scan(&count, &first, &last); err != nil {
+		t.Fatalf("read audit sequence: %v", err)
+	}
+	if count != 100 || first != 1 || last != 100 {
+		t.Fatalf("audit sequence: count=%d first=%d last=%d", count, first, last)
+	}
+	var verified bool
+	if err := conn.QueryRow(ctx, `select fn_verify_audit_chain()`).Scan(&verified); err != nil || !verified {
+		t.Fatalf("verify audit chain: verified=%t error=%v", verified, err)
 	}
 }
 
