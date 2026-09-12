@@ -25,6 +25,9 @@ func TestB0DatabaseJWTStorePersistsAndRevokesSessions(t *testing.T) {
 	}
 	defer admin.Close(ctx)
 	root := repositoryRoot(t)
+	if _, err := admin.Exec(ctx, readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
+		t.Fatalf("reset B1 shifts: %v", err)
+	}
 	if _, err := admin.Exec(ctx, readMigration(t, root, "000004_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset B1 catalog: %v", err)
 	}
@@ -80,7 +83,7 @@ func TestB0DatabaseJWTStorePersistsAndRevokesSessions(t *testing.T) {
 	if err := database.Ping(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
-	current, err := database.MigrationsCurrent(ctx, 4)
+	current, err := database.MigrationsCurrent(ctx, 5)
 	if err != nil || !current {
 		t.Fatalf("migration state: current=%t error=%v", current, err)
 	}

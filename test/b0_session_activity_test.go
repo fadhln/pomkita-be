@@ -273,7 +273,7 @@ func resetB0SessionActivity(t *testing.T, conn *pgx.Conn) {
 	if err := conn.QueryRow(ctx, `select to_regclass('public.sessions')::text`).Scan(&sessionsTable); err != nil {
 		t.Fatalf("check existing sessions table: %v", err)
 	}
-	resetMigrations := []string{"000002_b0_request_context.down.sql", "000004_b1_catalog.down.sql", "000001_b0_foundation.down.sql"}
+	resetMigrations := []string{"000002_b0_request_context.down.sql", "000005_b1_shifts.down.sql", "000004_b1_catalog.down.sql", "000001_b0_foundation.down.sql"}
 	if sessionsTable != nil {
 		resetMigrations = append([]string{"000003_b0_session_activity.down.sql"}, resetMigrations...)
 	}
