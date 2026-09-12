@@ -27,16 +27,16 @@ func TestB0FoundationMigrationUpAndDown(t *testing.T) {
 	root := repositoryRoot(t)
 	up := readMigration(t, root, "000001_b0_foundation.up.sql")
 	down := readMigration(t, root, "000001_b0_foundation.down.sql")
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000008_b1_recovery.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000009_b1_recovery.down.sql")); err != nil {
 		t.Fatalf("reset B1 recovery: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000007_b1_submit.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000008_b1_submit.down.sql")); err != nil {
 		t.Fatalf("reset B1 submit: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000006_b1_drafts.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000007_b1_drafts.down.sql")); err != nil {
 		t.Fatalf("reset B1 drafts: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000006_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset B1 shifts: %v", err)
 	}
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {
@@ -141,16 +141,16 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 	root := repositoryRoot(t)
 	up := readMigration(t, root, "000001_b0_foundation.up.sql")
 	down := readMigration(t, root, "000001_b0_foundation.down.sql")
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000008_b1_recovery.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000009_b1_recovery.down.sql")); err != nil {
 		t.Fatalf("reset B1 recovery: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000007_b1_submit.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000008_b1_submit.down.sql")); err != nil {
 		t.Fatalf("reset B1 submit: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000006_b1_drafts.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000007_b1_drafts.down.sql")); err != nil {
 		t.Fatalf("reset B1 drafts: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_shifts.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, root, "000006_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset B1 shifts: %v", err)
 	}
 	if _, err := conn.Exec(ctx, readMigration(t, root, "000005_b1_catalog.down.sql")); err != nil {

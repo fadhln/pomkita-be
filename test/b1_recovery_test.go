@@ -10,25 +10,25 @@ func TestB1Recovery_ProcedureAndReadSurfaceExist(t *testing.T) {
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
 	defer func() {
-		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000008_b1_recovery.down.sql")); err != nil {
+		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000009_b1_recovery.down.sql")); err != nil {
 			t.Errorf("clean up recovery: %v", err)
 		}
-		for _, name := range []string{"000007_b1_submit.down.sql", "000006_b1_drafts.down.sql", "000005_b1_shifts.down.sql", "000004_b1_catalog.down.sql"} {
+		for _, name := range []string{"000008_b1_submit.down.sql", "000007_b1_drafts.down.sql", "000006_b1_shifts.down.sql", "000005_b1_catalog.down.sql"} {
 			if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), name)); err != nil {
 				t.Errorf("clean up %s: %v", name, err)
 			}
 		}
 	}()
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000008_b1_recovery.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000009_b1_recovery.down.sql")); err != nil {
 		t.Fatalf("reset recovery: %v", err)
 	}
 	resetB0Foundation(t, conn, true)
-	for _, name := range []string{"000004_b1_catalog.up.sql", "000005_b1_shifts.up.sql", "000006_b1_drafts.up.sql", "000007_b1_submit.up.sql"} {
+	for _, name := range []string{"000005_b1_catalog.up.sql", "000006_b1_shifts.up.sql", "000007_b1_drafts.up.sql", "000008_b1_submit.up.sql"} {
 		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), name)); err != nil {
 			t.Fatalf("apply %s: %v", name, err)
 		}
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000008_b1_recovery.up.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000009_b1_recovery.up.sql")); err != nil {
 		t.Fatalf("apply recovery: %v", err)
 	}
 	var recoveryProcedure, shiftList, shiftDetail, reportView string

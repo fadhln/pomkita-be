@@ -11,18 +11,18 @@ func TestB1Drafts_ExpiredClaimCannotWriteAndTakeoverFencesRevision(t *testing.T)
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
 	defer func() {
-		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000006_b1_drafts.down.sql")); err != nil {
+		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000007_b1_drafts.down.sql")); err != nil {
 			t.Errorf("clean up drafts: %v", err)
 		}
 	}()
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_shifts.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000006_b1_shifts.down.sql")); err != nil {
 		t.Fatalf("reset shifts: %v", err)
 	}
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000004_b1_catalog.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000005_b1_catalog.down.sql")); err != nil {
 		t.Fatalf("reset catalog: %v", err)
 	}
 	resetB0Foundation(t, conn, true)
-	for _, name := range []string{"000004_b1_catalog.up.sql", "000005_b1_shifts.up.sql", "000006_b1_drafts.up.sql"} {
+	for _, name := range []string{"000005_b1_catalog.up.sql", "000006_b1_shifts.up.sql", "000007_b1_drafts.up.sql"} {
 		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), name)); err != nil {
 			t.Fatalf("apply %s: %v", name, err)
 		}

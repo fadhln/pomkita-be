@@ -10,16 +10,16 @@ func TestB1Submit_ReportAndPolicyObjectsExist(t *testing.T) {
 	ctx := context.Background()
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000007_b1_submit.down.sql")); err != nil {
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000008_b1_submit.down.sql")); err != nil {
 		t.Fatalf("reset submit: %v", err)
 	}
 	defer func() {
-		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000007_b1_submit.down.sql")); err != nil {
+		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000008_b1_submit.down.sql")); err != nil {
 			t.Errorf("clean up submit: %v", err)
 		}
 	}()
 	resetB0Foundation(t, conn, true)
-	for _, name := range []string{"000004_b1_catalog.up.sql", "000005_b1_shifts.up.sql", "000006_b1_drafts.up.sql", "000007_b1_submit.up.sql"} {
+	for _, name := range []string{"000005_b1_catalog.up.sql", "000006_b1_shifts.up.sql", "000007_b1_drafts.up.sql", "000008_b1_submit.up.sql"} {
 		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), name)); err != nil {
 			t.Fatalf("apply %s: %v", name, err)
 		}
@@ -37,19 +37,19 @@ func TestB1Submit_RolloverAndReplay(t *testing.T) {
 	ctx := context.Background()
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
-	for _, name := range []string{"000007_b1_submit.down.sql", "000006_b1_drafts.down.sql", "000005_b1_shifts.down.sql", "000004_b1_catalog.down.sql"} {
+	for _, name := range []string{"000008_b1_submit.down.sql", "000007_b1_drafts.down.sql", "000006_b1_shifts.down.sql", "000005_b1_catalog.down.sql"} {
 		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), name)); err != nil {
 			t.Fatalf("reset %s: %v", name, err)
 		}
 	}
 	resetB0Foundation(t, conn, true)
-	for _, name := range []string{"000004_b1_catalog.up.sql", "000005_b1_shifts.up.sql", "000006_b1_drafts.up.sql", "000007_b1_submit.up.sql"} {
+	for _, name := range []string{"000005_b1_catalog.up.sql", "000006_b1_shifts.up.sql", "000007_b1_drafts.up.sql", "000008_b1_submit.up.sql"} {
 		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), name)); err != nil {
 			t.Fatalf("apply %s: %v", name, err)
 		}
 	}
 	defer func() {
-		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000007_b1_submit.down.sql")); err != nil {
+		if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000008_b1_submit.down.sql")); err != nil {
 			t.Errorf("clean up submit: %v", err)
 		}
 	}()

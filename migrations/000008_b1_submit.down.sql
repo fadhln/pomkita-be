@@ -1,6 +1,6 @@
 -- PLAN.md sections 4.2-4.4, 5, 7, and 8; BE-PLAN.md Phase B1.
 do $$ begin if to_regclass('public.procedure_registry') is not null then delete from public.procedure_registry where name in('fn_submit_shift','trg_report_guard');end if;end $$;
-do $$ begin if exists(select 1 from pg_roles where rolname='report_writer') then revoke all on all tables in schema public from report_writer; revoke all on all functions in schema public from report_writer; revoke usage on schema public,app from report_writer; end if; end $$;
+do $$ begin if exists(select 1 from pg_roles where rolname='report_writer') then revoke all on all tables in schema public from report_writer; revoke all on all functions in schema public from report_writer; if to_regnamespace('app') is not null then revoke usage on schema app from report_writer; end if; end if; end $$;
 do $$ declare t text;begin foreach t in array array['dispenser_readings','sales_declared','loss_identity','loss_entries','deliveries','dip_readings'] loop execute format('drop trigger if exists %I_guard on public.%I',t,t);end loop;end $$;
 drop trigger if exists shift_reports_guard on public.shift_reports; drop function if exists public.trg_report_guard(); drop function if exists public.fn_submit_shift(uuid,uuid,uuid,integer,text,jsonb);
 alter table if exists public.shifts drop constraint if exists shifts_current_report_fk;
