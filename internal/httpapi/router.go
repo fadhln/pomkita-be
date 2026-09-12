@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
@@ -59,7 +60,7 @@ func NewRouterWithDependencies(environment string, readiness Readiness, verifier
 	if len(services) > 0 {
 		sessions = services[0]
 	}
-	router.POST("/login", loginHandler(sessions, environment == "production"))
+	router.POST("/login", requireCSRF, loginHandler(sessions, environment == "production"))
 	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(sessions, environment == "production"))
 	router.GET("/session", AuthMiddleware(verifier), sessionHandler(sessions))
 	return router

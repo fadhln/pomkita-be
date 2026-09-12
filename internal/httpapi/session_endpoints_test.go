@@ -39,6 +39,7 @@ func TestLoginSetsSessionCookieWithContractFlags(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
 	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Requested-With", "XMLHttpRequest")
 	router.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
@@ -56,6 +57,17 @@ func TestLoginSetsSessionCookieWithContractFlags(t *testing.T) {
 	}
 }
 
+func TestLoginRequiresCSRFHeader(t *testing.T) {
+	router := NewRouterWithDependencies("test", readyStub{}, nil, &sessionServiceStub{loginToken: "jwt-token"})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"code":"csrf_required"`) {
+		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestLoginReturnsSameInvalidCredentialsErrorForBadPasswordAndUnknownEmail(t *testing.T) {
 	for _, name := range []string{"bad password", "unknown email"} {
 		t.Run(name, func(t *testing.T) {
@@ -64,6 +76,7 @@ func TestLoginReturnsSameInvalidCredentialsErrorForBadPasswordAndUnknownEmail(t 
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"wrong"}`))
 			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("X-Requested-With", "XMLHttpRequest")
 			router.ServeHTTP(recorder, request)
 			if recorder.Code != http.StatusUnauthorized || !strings.Contains(recorder.Body.String(), `"code":"invalid_credentials"`) {
 				t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())

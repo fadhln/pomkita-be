@@ -37,6 +37,7 @@ func TestB01HTTPSessionEndpointsUseSessionCookieAndRevokeIt(t *testing.T) {
 	loginResponse := httptest.NewRecorder()
 	loginRequest := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"correct-password"}`))
 	loginRequest.Header.Set("Content-Type", "application/json")
+	loginRequest.Header.Set("X-Requested-With", "XMLHttpRequest")
 	router.ServeHTTP(loginResponse, loginRequest)
 	if loginResponse.Code != http.StatusOK {
 		t.Fatalf("login status: got %d body=%s", loginResponse.Code, loginResponse.Body.String())

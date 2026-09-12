@@ -24,6 +24,15 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect for migration reset: %v", err)
 	}
+	var sessionsTable *string
+	if err := admin.QueryRow(context.Background(), `select to_regclass('public.sessions')::text`).Scan(&sessionsTable); err != nil {
+		t.Fatalf("check sessions table: %v", err)
+	}
+	if sessionsTable != nil {
+		if _, err := admin.Exec(context.Background(), readMigration(t, root, "000004_b01_session_contract.down.sql")); err != nil {
+			t.Fatalf("reset session contract: %v", err)
+		}
+	}
 	if _, err := admin.Exec(context.Background(), readMigration(t, root, "000002_b0_request_context.down.sql")); err != nil {
 		t.Fatalf("reset request context: %v", err)
 	}
@@ -50,8 +59,8 @@ func TestB0MigratorAppliesAndReversesAllMigrations(t *testing.T) {
 	if err := conn.QueryRow(context.Background(), `select version from schema_migrations`).Scan(&version); err != nil {
 		t.Fatalf("read migration version: %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("got migration version %d, want 3", version)
+	if version != 4 {
+		t.Fatalf("got migration version %d, want 4", version)
 	}
 
 	if err := migrator.Down(context.Background()); err != nil {
