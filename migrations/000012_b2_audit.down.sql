@@ -19,3 +19,6 @@ drop function if exists public.trg_governance_audit();
 drop table if exists public.audit_denied;
 drop table if exists public.audit_outbox;
 drop table if exists public.audit_log;
+revoke usage on schema public, app from audit_owner;
+revoke all on all tables in schema public from audit_owner;
+revoke all on all functions in schema public from audit_owner;
