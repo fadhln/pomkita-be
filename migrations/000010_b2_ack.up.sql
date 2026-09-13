@@ -42,6 +42,7 @@ create table public.ack_head (
     references public.shift_reports (org_id, station_id, shift_id, report_id, version_no),
   foreign key (org_id, station_id, shift_id, report_id, version_no, active_ack_id)
     references public.ack_decisions (org_id, station_id, shift_id, report_id, version_no, ack_id)
+    deferrable initially deferred
 );
 alter table public.ack_head owner to report_writer;
 
