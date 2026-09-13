@@ -67,6 +67,10 @@ func TestB2HTTP_GovernanceEndpointsCallRegisteredProcedures(t *testing.T) {
 
 	setTestContext(t, conn, org, station, supervisor, "Supervisor")
 	breakGlassShift, breakGlassReport := submitGovernanceReport(t, conn, station, supervisor, "99999999-9999-4999-8999-999999999998")
+	missingReason := governanceCall(router, ownerToken, http.MethodPost, "/shift/ack", `{"shift_id":"`+breakGlassShift+`","report_id":"`+breakGlassReport+`","version_no":1,"decision":"acked","is_break_glass":true}`, true)
+	if missingReason.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("missing break-glass reason: status=%d body=%s", missingReason.Code, missingReason.Body)
+	}
 	breakGlass := governanceCall(router, ownerToken, http.MethodPost, "/shift/ack", `{"shift_id":"`+breakGlassShift+`","report_id":"`+breakGlassReport+`","version_no":1,"decision":"acked","is_break_glass":true,"break_glass_reason":"incident review"}`, true)
 	if breakGlass.Code != http.StatusOK {
 		t.Fatalf("break-glass ack: status=%d body=%s", breakGlass.Code, breakGlass.Body)
@@ -89,11 +93,38 @@ func TestB2HTTP_GovernanceEndpointsCallRegisteredProcedures(t *testing.T) {
 	if err := conn.QueryRow(ctx, `select current_report_id from shifts where shift_id=$1`, shift).Scan(&currentReport); err != nil {
 		t.Fatalf("current report: %v", err)
 	}
+	if reack := governanceCall(router, ownerToken, http.MethodPost, "/shift/ack", `{"shift_id":"`+shift+`","report_id":"`+currentReport.String()+`","version_no":2,"decision":"acked"}`, true); reack.Code != http.StatusOK {
+		t.Fatalf("re-ack amended report: status=%d body=%s", reack.Code, reack.Body)
+	}
 	staleAmendmentID := "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
 	insertGovernanceAmendment(t, conn, org, station, shift, currentReport.String(), staleAmendmentID, requester, make([]byte, 32), saleID, "cash_amount")
 	stale := governanceCall(router, adminToken, http.MethodPost, "/amendment/approve", `{"amendment_id":"`+staleAmendmentID+`","stale_check_hash":"`+strings.Repeat("00", 32)+`"}`, true)
 	if stale.Code != http.StatusConflict {
 		t.Fatalf("stale approval: status=%d body=%s", stale.Code, stale.Body)
+	}
+
+	setTestContext(t, conn, org, station, supervisor, "Supervisor")
+	correctionShift, correctionReport := submitGovernanceReport(t, conn, station, supervisor, "99999999-9999-4999-8999-999999999997")
+	rejected := governanceCall(router, adminToken, http.MethodPost, "/shift/ack", `{"shift_id":"`+correctionShift+`","report_id":"`+correctionReport+`","version_no":1,"decision":"rejected","rejection_reason":"meter image is unclear"}`, true)
+	if rejected.Code != http.StatusOK || !strings.Contains(rejected.Body.String(), `"decision":"rejected"`) {
+		t.Fatalf("rejection: status=%d body=%s", rejected.Code, rejected.Body)
+	}
+	var correctionStatus string
+	if err := conn.QueryRow(ctx, `select status::text from shifts where shift_id=$1`, correctionShift).Scan(&correctionStatus); err != nil || correctionStatus != "needs_correction" {
+		t.Fatalf("rejection state: status=%q error=%v", correctionStatus, err)
+	}
+
+	setTestContext(t, conn, org, station, supervisor, "Supervisor")
+	meterShift, meterReport := submitGovernanceReport(t, conn, station, supervisor, "99999999-9999-4999-8999-999999999996")
+	if ackMeter := governanceCall(router, adminToken, http.MethodPost, "/shift/ack", `{"shift_id":"`+meterShift+`","report_id":"`+meterReport+`","version_no":1,"decision":"acked"}`, true); ackMeter.Code != http.StatusOK {
+		t.Fatalf("meter fixture ack: status=%d body=%s", ackMeter.Code, ackMeter.Body)
+	}
+	meterHash := governanceBaseHash(t, conn, org, station, meterShift, meterReport, 1)
+	meterAmendmentID := "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	insertGovernanceAmendment(t, conn, org, station, meterShift, meterReport, meterAmendmentID, requester, meterHash, governanceSaleID(t, conn, meterReport), "meter_end")
+	meter := governanceCall(router, adminToken, http.MethodPost, "/amendment/approve", `{"amendment_id":"`+meterAmendmentID+`","stale_check_hash":"`+hex.EncodeToString(meterHash)+`"}`, true)
+	if meter.Code != http.StatusUnprocessableEntity || !strings.Contains(meter.Body.String(), `"code":"amendment_field_forbidden"`) {
+		t.Fatalf("meter amendment: status=%d body=%s", meter.Code, meter.Body)
 	}
 }
 
