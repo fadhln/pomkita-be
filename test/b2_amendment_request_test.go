@@ -15,33 +15,9 @@ func TestB2AmendmentRequest_CreatesPendingAmendmentWithItems(t *testing.T) {
 	ctx := context.Background()
 	conn := openB0Connection(t)
 	defer conn.Close(ctx)
-	applyB2Migrations(t, conn)
+	applyAmendmentRequestMigrations(t, conn)
 	defer resetB0Foundation(t, conn, true)
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000012_b2_audit.up.sql")); err != nil {
-		t.Fatalf("apply audit migration: %v", err)
-	}
-	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000019_b2_amendment_request.up.sql")); err != nil {
-		t.Fatalf("apply amendment request migration: %v", err)
-	}
-
-	const (
-		org        = "11111111-1111-4111-8111-111111111111"
-		station    = "22222222-2222-4222-8222-222222222222"
-		supervisor = "33333333-3333-4333-8333-333333333333"
-		admin      = "44444444-4444-4444-8444-444444444444"
-		requester  = "55555555-5555-4555-8555-555555555555"
-		dispenser  = "66666666-6666-4666-8666-666666666666"
-		nozzle     = "77777777-7777-4777-8777-777777777777"
-		tank       = "88888888-8888-4888-8888-888888888888"
-		lossID     = "99999999-9999-4999-8999-999999999999"
-		policy     = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-		threshold  = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
-		evidence   = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
-	)
-	seedGovernanceData(t, conn, org, station, supervisor, admin, requester, dispenser, nozzle, tank, policy, threshold, evidence)
-	setTestContext(t, conn, org, station, supervisor, "Supervisor")
-	shift, report := submitGovernanceReport(t, conn, station, supervisor, lossID)
-	saleID := governanceSaleID(t, conn, report)
+	_, _, _, _, _, shift, report, saleID := amendmentRequestFixture(t, conn)
 	items := `[{"target_kind":"sales_declared","target_logical_id":"` + saleID + `","field":"cash_amount","old_value":"2000","new_value":"2500"}]`
 
 	var amendmentID, status string
