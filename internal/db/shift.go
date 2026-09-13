@@ -63,13 +63,17 @@ func (s *ShiftManager) procedure(ctx context.Context, rawToken string, call func
 // OpenShift calls fn_open_shift for the verified actor.
 func (s *ShiftManager) OpenShift(ctx context.Context, rawToken string, actor, station uuid.UUID, openedAt time.Time, backfilled bool, eventDate, reason *string, shiftKE *int) (OpenShiftResult, error) {
 	var result OpenShiftResult
+	var approver *uuid.UUID
+	if backfilled {
+		approver = &actor
+	}
 	err := s.procedure(ctx, rawToken, func(tx pgx.Tx) error {
 		var snapshot, hash []byte
 		err := tx.QueryRow(ctx, `
 			select shift_id, station_seq::text, business_date::text,
 			       shift_price_map_snapshot, encode(shift_price_map_hash, 'hex')
-			from public.fn_open_shift($1::uuid,$2::uuid,$3::timestamptz,$4::boolean,$5::date,$6::integer,$2::uuid,$7::text)
-		`, station, actor, openedAt, backfilled, eventDate, shiftKE, reason).Scan(
+			from public.fn_open_shift($1::uuid,$2::uuid,$3::timestamptz,$4::boolean,$5::date,$6::integer,$7::uuid,$8::text)
+		`, station, actor, openedAt, backfilled, eventDate, shiftKE, approver, reason).Scan(
 			&result.ShiftID, &result.StationSeq, &result.BusinessDate, &snapshot, &hash,
 		)
 		if err == nil {
@@ -140,7 +144,7 @@ func (s *ShiftManager) WriteDraftSales(ctx context.Context, rawToken string, dra
 func (s *ShiftManager) WriteDraftLoss(ctx context.Context, rawToken string, draft, claim, loss uuid.UUID, revision int, direction, reason, liters, cash, note string) (int, error) {
 	var next int
 	err := s.procedure(ctx, rawToken, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `select public.fn_write_draft_loss($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::text,$6::text,$7::numeric,$8::numeric,$9::text)`, draft, claim, revision, loss, direction, reason, liters, cash, note).Scan(&next)
+		return tx.QueryRow(ctx, `select public.fn_write_draft_loss($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::text,$6::text,$7::numeric,nullif($8::text,'')::numeric,$9::text)`, draft, claim, revision, loss, direction, reason, liters, cash, note).Scan(&next)
 	})
 	if err != nil {
 		return 0, fmt.Errorf("write draft loss: %w", err)

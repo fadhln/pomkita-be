@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
 )
 
@@ -165,6 +166,45 @@ func TestShiftAPI_RequiresCSRFOnEveryMutation(t *testing.T) {
 				t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
 		})
+	}
+}
+
+type submitErrorShiftService struct {
+	shiftServiceStub
+	err error
+}
+
+func (s submitErrorShiftService) SubmitShift(context.Context, string, uuid.UUID, uuid.UUID, uuid.UUID, int, string, json.RawMessage) (appdb.SubmitShiftResult, error) {
+	return appdb.SubmitShiftResult{}, s.err
+}
+
+func TestShiftAPI_MapsRolloverValidationToAFieldError(t *testing.T) {
+	router := NewRouterWithAllDependencies("test", nil, readyStub{}, verifierStub{}, nil, submitErrorShiftService{err: &pgconn.PgError{Code: "23514", Message: "rollover_over_threshold"}})
+	request := httptest.NewRequest(http.MethodPost, "/shift/submit", strings.NewReader(`{"shift_id":"`+testUUID+`","draft_id":"`+testUUID+`","claim_token":"22222222-2222-4222-8222-222222222222","revision":1,"hash_version":1,"readings":[],"sales":[],"losses":[]}`))
+	request.Header.Set("Authorization", "Bearer token")
+	request.Header.Set("X-Requested-With", "XMLHttpRequest")
+	request.Header.Set("Idempotency-Key", "rollover-test")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnprocessableEntity || !strings.Contains(recorder.Body.String(), `"field_errors"`) {
+		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+type emptyShiftListService struct{ shiftServiceStub }
+
+func (emptyShiftListService) ReadShiftList(context.Context, string, *uuid.UUID) ([]json.RawMessage, error) {
+	return nil, nil
+}
+
+func TestShiftAPI_EmptyShiftListIsAnArray(t *testing.T) {
+	router := NewRouterWithAllDependencies("test", nil, readyStub{}, verifierStub{}, nil, emptyShiftListService{})
+	request := httptest.NewRequest(http.MethodGet, "/shifts", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || strings.TrimSpace(recorder.Body.String()) != "[]" {
+		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 
