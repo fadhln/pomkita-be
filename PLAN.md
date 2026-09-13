@@ -91,9 +91,13 @@ If a report insert, immutable trigger, policy check, anomaly calculation, audit 
 
 amendments.status is pending | approved | rejected | superseded.
 
+- The requester (Supervisor of the shift's station) creates an amendment with fn_request_amendment against the current report: one amendment_items row per allowed-field change, each item carrying target_kind, target_logical_id, field, old_value (must equal the base snapshot value), and new_value. The request captures stale_check_hash at request time. One pending amendment per base report (partial unique); a second request on the same base supersedes the first pending one.
 - pending -> approved creates exactly one new report and sets applied_report_id.
-- pending -> rejected requires rejection_reason.
+- pending -> rejected requires rejection_reason. fn_reject_amendment allows the approver (Station Admin/Owner) to reject a pending amendment with a reason; the requester cannot reject their own amendment.
 - pending -> superseded is used when a new amendment replaces a pending amendment for the same base version.
+- read_amendment_queue lists pending amendments scoped to the approver's stations with base report identity, requester, reason, and item diffs.
+
+Request, approval, and rejection all use the global lock order in §8 and write one audit event in the same transaction.
 
 Approval locks the station, shift, amendment, and current report in the global order in §8. The base report must be the current report and must have status submitted or locked. It checks that base_report_id = shifts.current_report_id, checks stale_check_hash, checks requester/approver separation, clones all report rows, applies the allowlist, re-evaluates anomaly and evidence rules, and moves the current pointer. A stale base returns 409 and stays pending until the requester submits a new amendment.
 
