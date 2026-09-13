@@ -97,6 +97,9 @@ begin
   if current_setting('app.context_valid', true) <> 'true' or v_org_id is null or v_actor is null then
     raise exception using errcode = '28000', message = 'request_context_required';
   end if;
+  if p_supersedes_rev_id is not null and p_supersedes_org_id is null then
+    p_supersedes_org_id := v_org_id;
+  end if;
   if v_role not in ('Owner', 'Superadmin')
      or not exists (
        select 1 from public.user_station_roles r

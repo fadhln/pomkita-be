@@ -92,6 +92,41 @@ func TestB5PolicyRevisionWrite_EnforcesOrderingSupersessionScopeAndTombstone(t *
 	}
 }
 
+func TestB5PolicyRevisionWrite_TombstoneIsExcludedFromSubmitResolution(t *testing.T) {
+	ctx := context.Background()
+	conn := openB0Connection(t)
+	defer conn.Close(ctx)
+	resetMigrations(t, conn)
+	applyB3Migrations(t, conn)
+	seedDemoPolicyContext(t, conn, "Owner")
+
+	newest := createThresholdRevision(t, conn, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "2026-01-02T00:00:00Z", "organization", "99999999-9999-4999-8999-999999999999")
+	if _, err := conn.Exec(ctx, `select public.fn_tombstone_policy_revision('threshold',$1::uuid,'replaced')`, newest); err != nil {
+		t.Fatalf("tombstone newest policy: %v", err)
+	}
+	setTestContext(t, conn, "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "66666666-6666-4666-8666-666666666666", "Supervisor")
+	var shift, draft, claim string
+	var revision int
+	if err := conn.QueryRow(ctx, `select shift_id::text from public.fn_open_shift($1,$2,'2026-01-03 12:00+00',false,null,null,null,null)`, "22222222-2222-4222-8222-222222222222", "66666666-6666-4666-8666-666666666666").Scan(&shift); err != nil {
+		t.Fatalf("open shift for resolution: %v", err)
+	}
+	if err := conn.QueryRow(ctx, `select draft_id::text, claim_token::text, revision from public.fn_claim_draft($1)`, shift).Scan(&draft, &claim, &revision); err != nil {
+		t.Fatalf("claim draft for resolution: %v", err)
+	}
+	request := `{"hash_version":1,"readings":[],"sales":[],"losses":[]}`
+	var report string
+	if err := conn.QueryRow(ctx, `select report_id::text from public.fn_submit_shift($1,$2,$3,$4,'tombstone-resolution',$5::jsonb)`, shift, draft, claim, revision, request).Scan(&report); err != nil {
+		t.Fatalf("submit after tombstone: %v", err)
+	}
+	var threshold string
+	if err := conn.QueryRow(ctx, `select i.payload->>'loss_liter_threshold' from public.policy_snapshot_items i join public.shift_reports r on r.org_id=i.org_id and r.station_id=i.station_id and r.shift_id=i.shift_id and r.policy_snapshot_set_id=i.set_id where r.report_id=$1 and i.policy_kind='threshold'`, report).Scan(&threshold); err != nil {
+		t.Fatalf("read resolved policy: %v", err)
+	}
+	if threshold != "10.00" {
+		t.Fatalf("resolved tombstoned threshold: got %q, want old active value 10.00", threshold)
+	}
+}
+
 func seedDemoPolicyContext(t *testing.T, conn *pgx.Conn, role string) {
 	t.Helper()
 	ctx := context.Background()
