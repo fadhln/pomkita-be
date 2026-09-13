@@ -389,7 +389,7 @@ func normalizeTimestampValue(value any) {
 	switch current := value.(type) {
 	case map[string]any:
 		for key, child := range current {
-			if strings.HasSuffix(key, "_at") {
+			if strings.HasSuffix(key, "_at") || key == "at" {
 				if timestamp, ok := child.(string); ok {
 					if parsed, err := time.Parse(time.RFC3339Nano, timestamp); err == nil {
 						current[key] = parsed.UTC().Format("2006-01-02T15:04:05.000000Z")

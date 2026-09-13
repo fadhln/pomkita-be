@@ -90,6 +90,15 @@ func readGovernanceAnomaliesHandler(service GovernanceService) gin.HandlerFunc {
 		if result == nil {
 			result = []json.RawMessage{}
 		}
-		c.JSON(http.StatusOK, result)
+		payload, marshalErr := json.Marshal(result)
+		if marshalErr != nil {
+			_ = c.Error(marshalErr)
+			return
+		}
+		if normalized, normalizeErr := normalizeTimestamps(payload); normalizeErr == nil {
+			c.Data(http.StatusOK, "application/json; charset=utf-8", normalized)
+			return
+		}
+		c.Data(http.StatusOK, "application/json; charset=utf-8", payload)
 	}
 }

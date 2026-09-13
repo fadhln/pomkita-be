@@ -24,7 +24,7 @@ func (governanceServiceStub) ApproveAmendment(context.Context, string, uuid.UUID
 }
 
 func (governanceServiceStub) ReadGovernanceAnomalies(context.Context, string) ([]json.RawMessage, error) {
-	return []json.RawMessage{json.RawMessage(`{"source":"ack_decision","is_break_glass":true}`)}, nil
+	return []json.RawMessage{json.RawMessage(`{"source":"ack_decision","is_break_glass":true,"at":"2026-01-01T00:00:00Z"}`)}, nil
 }
 
 func TestGovernanceAPI_RequiresAuthenticationOnEveryEndpoint(t *testing.T) {
@@ -66,7 +66,7 @@ func TestGovernanceAPI_ReturnsProcedureResponseShapes(t *testing.T) {
 		t.Fatalf("approve: status=%d body=%s", approve.Code, approve.Body)
 	}
 	anomalies := request(http.MethodGet, "/anomalies", "")
-	if anomalies.Code != http.StatusOK || !strings.Contains(anomalies.Body.String(), `"source":"ack_decision"`) {
+	if anomalies.Code != http.StatusOK || !strings.Contains(anomalies.Body.String(), `"source":"ack_decision"`) || !strings.Contains(anomalies.Body.String(), `"at":"2026-01-01T00:00:00.000000Z"`) {
 		t.Fatalf("anomalies: status=%d body=%s", anomalies.Code, anomalies.Body)
 	}
 }
