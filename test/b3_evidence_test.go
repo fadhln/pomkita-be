@@ -54,6 +54,47 @@ func TestB3EvidenceOpsional_RequiresExceptionAndRejectsExceptionWithEvidence(t *
 	}
 }
 
+func TestB3Submit_UsesEvidenceValidator(t *testing.T) {
+	ctx := context.Background()
+	conn := openB0Connection(t)
+	defer conn.Close(ctx)
+	resetMigrations(t, conn)
+	applyB3Migrations(t, conn)
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`insert into organizations(org_id,name) values($1,'Submit Evidence')`, []any{evidenceOrg}},
+		{`insert into stations(org_id,station_id,timezone) values($1,$2,'UTC')`, []any{evidenceOrg, evidenceStation}},
+		{`insert into users(user_id,org_id,email,display_name,password_hash) values($1,$2,'submit-evidence@example.com','Supervisor','hash')`, []any{evidenceUser, evidenceOrg}},
+		{`insert into user_station_roles(org_id,station_id,user_id,role) values($1,$2,$3,'Supervisor')`, []any{evidenceOrg, evidenceStation, evidenceUser}},
+		{`insert into dispensers(org_id,station_id,dispenser_id) values($1,$2,$3)`, []any{evidenceOrg, evidenceStation, submitDispenser}},
+		{`insert into nozzles(org_id,station_id,nozzle_id,dispenser_id,meter_max) values($1,$2,$3,$4,99999.9)`, []any{evidenceOrg, evidenceStation, submitNozzle, submitDispenser}},
+		{`insert into dispenser_nozzle_map(org_id,station_id,dispenser_id,nozzle_id,valid_period) values($1,$2,$3,$4,tstzrange('2020-01-01','2030-01-01','[)'))`, []any{evidenceOrg, evidenceStation, submitDispenser, submitNozzle}},
+		{`insert into dispenser_prices(org_id,station_id,nozzle_id,price,valid_period,created_by) values($1,$2,$3,10000,tstzrange('2020-01-01','2030-01-01','[)'),$4)`, []any{evidenceOrg, evidenceStation, submitNozzle, evidenceUser}},
+		{`insert into threshold_policy_revisions(rev_id,policy_id,org_id,valid_from,created_by) values($1,$2,$3,'2020-01-01',$4)`, []any{submitThreshold, submitPolicy, evidenceOrg, evidenceUser}},
+		{`insert into evidence_policy_revisions(rev_id,policy_id,org_id,valid_from,mode,created_by) values($1,$2,$3,'2020-01-01','wajib',$4)`, []any{submitEvidencePolicy, submitPolicy, evidenceOrg, evidenceUser}},
+		{`insert into evidence_policy_types(org_id,rev_id,evidence_type,minimum_count_per_loss,accepted_mime_types) values($1,$2,'photo',1,array['image/jpeg'])`, []any{evidenceOrg, submitEvidencePolicy}},
+	} {
+		if _, err := conn.Exec(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("seed submit evidence: %v", err)
+		}
+	}
+	setEvidenceContext(t, conn)
+	var shift, draft, claim string
+	var revision int
+	if err := conn.QueryRow(ctx, `select shift_id::text from fn_open_shift($1,$2,'2026-01-01 12:00+00',false,null,null,null,null)`, evidenceStation, evidenceUser).Scan(&shift); err != nil {
+		t.Fatalf("open evidence shift: %v", err)
+	}
+	if err := conn.QueryRow(ctx, `select draft_id::text,claim_token::text,revision from fn_claim_draft($1)`, shift).Scan(&draft, &claim, &revision); err != nil {
+		t.Fatalf("claim evidence shift: %v", err)
+	}
+	request := `{"hash_version":1,"readings":[{"nozzle_id":"` + submitNozzle + `","meter_start":"0.0","meter_end":"1.0"}],"losses":[{"loss_id":"` + evidenceLoss + `","direction":"loss","reason_code":"test","liters":"1.00"}]}`
+	if _, err := conn.Exec(ctx, `select * from fn_submit_shift($1,$2,$3,$4,'submit-evidence',$5::jsonb)`, shift, draft, claim, revision, request); err == nil {
+		t.Fatal("submit accepted missing wajib evidence")
+	}
+}
+
 func setEvidenceContext(t *testing.T, conn *pgx.Conn) {
 	t.Helper()
 	if _, err := conn.Exec(context.Background(), `select set_config('app.context_valid','true',false), set_config('app.org_id',$1,false), set_config('app.station_id',$2,false), set_config('app.user_id',$3,false), set_config('app.role','Supervisor',false)`, evidenceOrg, evidenceStation, evidenceUser); err != nil {
@@ -75,6 +116,11 @@ const (
 	evidenceEvent                 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 	evidenceID                    = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 	evidenceExceptionWithEvidence = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+	submitDispenser               = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+	submitNozzle                  = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	submitThreshold               = "12121212-1212-4121-8121-121212121212"
+	submitEvidencePolicy          = "13131313-1313-4131-8131-131313131313"
+	submitPolicy                  = "14141414-1414-4141-8141-141414141414"
 )
 
 func seedEvidenceReport(t *testing.T, conn *pgx.Conn, mode string) {

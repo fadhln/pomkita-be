@@ -56,10 +56,15 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 	t.Helper()
 	ctx := context.Background()
 	root := repositoryRoot(t)
+	if _, err := conn.Exec(ctx, `drop policy if exists alert_shifts_scheduler on public.shifts`); err != nil {
+		t.Fatalf("drop B3 scheduler policy: %v", err)
+	}
 	for _, migration := range []struct {
 		name  string
 		check string
 	}{
+		{"000018_b3_reads_variance.down.sql", `select to_regprocedure('public.read_anomalies()') is not null`},
+		{"000017_b3_submit_backfill.down.sql", `select to_regprocedure('public.fn_submit_shift(uuid,uuid,uuid,integer,text,jsonb)') is not null`},
 		{"000016_b3_evidence.down.sql", `select to_regclass('public.evidence_event') is not null`},
 		{"000015_b3_alerts.down.sql", `select to_regclass('public.alert_rules') is not null`},
 		{"000014_b2_scheduler.down.sql", `select to_regprocedure('public.fn_abandon_failed_shifts()') is not null`},
@@ -68,7 +73,7 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 		{"000011_b2_amendment.down.sql", `select to_regclass('public.amendments') is not null`},
 		{"000010_b2_ack.down.sql", `select to_regclass('public.ack_decisions') is not null`},
 		{"000009_b1_recovery.down.sql", `select to_regprocedure('public.fn_recover_submitting_shifts()') is not null`},
-		{"000008_b1_submit.down.sql", `select to_regprocedure('public.fn_submit_shift(uuid,uuid,uuid,integer,text,jsonb)') is not null`},
+		{"000008_b1_submit.down.sql", `select to_regclass('public.policy_snapshot_sets') is not null`},
 		{"000007_b1_drafts.down.sql", `select to_regprocedure('public.fn_claim_draft(uuid)') is not null`},
 		{"000006_b1_shifts.down.sql", `select to_regclass('public.shifts') is not null`},
 		{"000005_b1_catalog.down.sql", `select to_regclass('public.dispensers') is not null`},
