@@ -57,9 +57,22 @@ func NewRouterWithDependencies(environment string, allowedOrigins []string, read
 }
 
 // NewRouterWithAllDependencies creates a router with session and shift services.
-func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts ShiftService, governance ...GovernanceService) *gin.Engine {
+func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts ShiftService, dependencies ...any) *gin.Engine {
 	if environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
+	}
+	var governance GovernanceService
+	var reporting ReportingService
+	for _, dependency := range dependencies {
+		if dependency == nil {
+			continue
+		}
+		if candidate, ok := dependency.(GovernanceService); ok {
+			governance = candidate
+		}
+		if candidate, ok := dependency.(ReportingService); ok {
+			reporting = candidate
+		}
 	}
 
 	router := gin.New()
@@ -70,15 +83,9 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(sessions, environment == "production"))
 	router.GET("/session", AuthMiddleware(verifier), sessionHandler(sessions))
 	registerShiftRoutes(router, verifier, shifts)
-	registerGovernanceRoutes(router, verifier, firstGovernanceService(governance))
+	registerGovernanceRoutes(router, verifier, governance)
+	registerReportingRoutes(router, verifier, reporting)
 	return router
-}
-
-func firstGovernanceService(services []GovernanceService) GovernanceService {
-	if len(services) == 0 {
-		return nil
-	}
-	return services[0]
 }
 
 func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service ShiftService) {
@@ -119,7 +126,7 @@ func readyHandler(readiness Readiness) gin.HandlerFunc {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return
 		}
-		current, err := readiness.MigrationsCurrent(c.Request.Context(), 19)
+		current, err := readiness.MigrationsCurrent(c.Request.Context(), 20)
 		if err != nil || !current {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return

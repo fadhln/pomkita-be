@@ -23,13 +23,13 @@ type readyStub struct {
 
 func (r readyStub) Ping(context.Context) error { return r.pingErr }
 
-func TestReadyChecksLatestB1Migration(t *testing.T) {
+func TestReadyChecksLatestB4Migration(t *testing.T) {
 	latest := 0
 	router := NewRouterWithDependencies("test", nil, readyStub{current: true, latest: &latest}, nil)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
-	if recorder.Code != http.StatusOK || latest != 19 {
-		t.Fatalf("ready migration check: status=%d latest=%d, want 200 and 19", recorder.Code, latest)
+	if recorder.Code != http.StatusOK || latest != 20 {
+		t.Fatalf("ready migration check: status=%d latest=%d, want 200 and 20", recorder.Code, latest)
 	}
 }
 
