@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
@@ -48,6 +49,15 @@ func NewRouter(environment string, allowedOrigins []string) *gin.Engine {
 
 // NewRouterWithDependencies creates a router with its readiness and token services.
 func NewRouterWithDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, services ...SessionService) *gin.Engine {
+	var sessions SessionService
+	if len(services) > 0 {
+		sessions = services[0]
+	}
+	return NewRouterWithAllDependencies(environment, allowedOrigins, readiness, verifier, sessions, nil)
+}
+
+// NewRouterWithAllDependencies creates a router with session and shift services.
+func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts ShiftService) *gin.Engine {
 	if environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -56,14 +66,28 @@ func NewRouterWithDependencies(environment string, allowedOrigins []string, read
 	router.Use(gin.Recovery(), corsMiddleware(allowedOrigins), requestID(), ErrorMappingMiddleware())
 	router.GET("/health", health)
 	router.GET("/ready", readyHandler(readiness))
-	var sessions SessionService
-	if len(services) > 0 {
-		sessions = services[0]
-	}
 	router.POST("/login", requireCSRF, loginHandler(sessions, environment == "production"))
 	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(sessions, environment == "production"))
 	router.GET("/session", AuthMiddleware(verifier), sessionHandler(sessions))
+	registerShiftRoutes(router, verifier, shifts)
 	return router
+}
+
+func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service ShiftService) {
+	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
+	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
+	router.POST("/shift/open", append(protectedWrite, openShiftHandler(service))...)
+	router.POST("/draft/claim", append(protectedWrite, claimDraftHandler(service))...)
+	router.POST("/draft/heartbeat", append(protectedWrite, heartbeatDraftHandler(service))...)
+	router.POST("/draft/reading", append(protectedWrite, writeDraftReadingHandler(service))...)
+	router.POST("/draft/sales", append(protectedWrite, writeDraftSalesHandler(service))...)
+	router.POST("/draft/loss", append(protectedWrite, writeDraftLossHandler(service))...)
+	router.POST("/draft/evidence", append(protectedWrite, stageDraftEvidenceHandler(service))...)
+	router.GET("/draft", append(protectedRead, readDraftHandler(service))...)
+	router.POST("/shift/submit", append(protectedWrite, submitShiftHandler(service))...)
+	router.GET("/shifts", append(protectedRead, readShiftListHandler(service))...)
+	router.GET("/shifts/:id", append(protectedRead, readShiftDetailHandler(service))...)
+	router.GET("/report/:id", append(protectedRead, readReportHandler(service))...)
 }
 
 func health(c *gin.Context) {
@@ -136,6 +160,10 @@ func ErrorMappingMiddleware() gin.HandlerFunc {
 		if code == "" {
 			code = stableDatabaseCode(status)
 		}
+		if fields := fieldErrorsForDatabaseError(err); fields != nil {
+			writeErrorWithFields(c, status, code, fields)
+			return
+		}
 		writeError(c, status, code)
 	}
 }
@@ -152,11 +180,24 @@ func stableDatabaseCode(status int) string {
 }
 
 func writeError(c *gin.Context, status int, code string) {
+	writeErrorWithFields(c, status, code, nil)
+}
+
+func writeErrorWithFields(c *gin.Context, status int, code string, fields map[string]string) {
 	c.AbortWithStatusJSON(status, gin.H{
-		"code":       code,
-		"message":    safeMessage(code, status),
-		"request_id": c.GetString("request_id"),
+		"code":         code,
+		"message":      safeMessage(code, status),
+		"request_id":   c.GetString("request_id"),
+		"field_errors": fields,
 	})
+}
+
+func fieldErrorsForDatabaseError(err error) map[string]string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.Message == "rollover_over_threshold" {
+		return map[string]string{"readings": "Meter rollover is above the allowed threshold"}
+	}
+	return nil
 }
 
 func safeMessage(code string, status int) string {
