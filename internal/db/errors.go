@@ -27,7 +27,7 @@ func HTTPStatusForError(err error) int {
 		return http.StatusUnauthorized
 	case "42501":
 		switch pgErr.Message {
-		case "shift_not_found", "report_not_found", "amendment_not_found":
+		case "shift_not_found", "report_not_found", "amendment_not_found", "policy_revision_not_found", "policy_supersede_target_not_found":
 			return http.StatusNotFound
 		default:
 			return http.StatusForbidden
@@ -64,7 +64,12 @@ func safeDatabaseCode(message string) bool {
 		"amendment_queue_role_required", "amendment_separation_required", "amendment_target_not_in_base",
 		"break_glass_reason_required", "invalid_ack_request", "report_not_found", "shift_not_found",
 		"invalid_amendment_request", "stale_amendment_base", "stale_amendment_value", "unexpected_break_glass_reason",
-		"unexpected_rejection_reason", "rejection_reason_required":
+		"unexpected_rejection_reason", "rejection_reason_required", "policy_revision_role_required",
+		"policy_revision_overlap", "policy_revision_already_disabled", "policy_already_superseded",
+		"policy_valid_from_order", "policy_revision_not_found", "policy_supersede_target_not_found",
+		"invalid_policy_revision_request", "invalid_threshold_policy", "invalid_evidence_policy",
+		"invalid_evidence_policy_type", "duplicate_evidence_type", "required_evidence_minimum_missing",
+		"invalid_evidence_mime_type", "tombstone_reason_required":
 		return true
 	default:
 		return false

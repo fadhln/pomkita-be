@@ -34,14 +34,112 @@ type ReportingService interface {
 	ReadPolicyHistory(context.Context, string) ([]json.RawMessage, error)
 }
 
-func registerReportingRoutes(router *gin.Engine, verifier TokenVerifier, service ReportingService) {
+// PolicyRevisionService is the procedure boundary for policy revision APIs.
+type PolicyRevisionService interface {
+	CreatePolicyRevision(context.Context, string, appdb.CreatePolicyRevisionInput) (appdb.PolicyRevisionResult, error)
+	TombstonePolicyRevision(context.Context, string, appdb.TombstonePolicyRevisionInput) (appdb.PolicyRevisionResult, error)
+}
+
+func registerReportingRoutes(router *gin.Engine, verifier TokenVerifier, service ReportingService, policy PolicyRevisionService) {
 	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
+	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
 	router.GET("/report/:id/printout", append(protectedRead, readReportPrintoutHandler(service))...)
 	router.GET("/anomalies/export", append(protectedRead, readAnomalyExportHandler(service))...)
 	router.GET("/audit", append(protectedRead, readAuditTrailHandler(service))...)
 	router.GET("/audit/export", append(protectedRead, readAuditExportHandler(service))...)
 	router.GET("/audit/verify", append(protectedRead, verifyAuditChainHandler(service))...)
 	router.GET("/policy/history", append(protectedRead, readPolicyHistoryHandler(service))...)
+	router.POST("/policy/revision", append(protectedWrite, createPolicyRevisionHandler(policy))...)
+	router.POST("/policy/revision/tombstone", append(protectedWrite, tombstonePolicyRevisionHandler(policy))...)
+}
+
+type createPolicyRevisionRequest struct {
+	PolicyKind              string                     `json:"policy_kind"`
+	PolicyID                uuid.UUID                  `json:"policy_id"`
+	StationID               *uuid.UUID                 `json:"station_id"`
+	ValidFrom               string                     `json:"valid_from"`
+	SupersedesOrgID         *uuid.UUID                 `json:"supersedes_org_id"`
+	SupersedesRevisionID    *uuid.UUID                 `json:"supersedes_revision_id"`
+	LossLiterThreshold      string                     `json:"loss_liter_threshold"`
+	GainLiterThreshold      string                     `json:"gain_liter_threshold"`
+	LossRupiahThreshold     string                     `json:"loss_rupiah_threshold"`
+	GainRupiahThreshold     string                     `json:"gain_rupiah_threshold"`
+	VarianceRupiahThreshold string                     `json:"variance_rupiah_threshold"`
+	RolloverThreshold       string                     `json:"rollover_threshold"`
+	Mode                    string                     `json:"mode"`
+	Types                   []appdb.EvidencePolicyType `json:"types"`
+}
+
+type tombstonePolicyRevisionRequest struct {
+	PolicyKind string    `json:"policy_kind"`
+	RevisionID uuid.UUID `json:"revision_id"`
+	Reason     string    `json:"reason"`
+}
+
+func createPolicyRevisionHandler(service PolicyRevisionService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input createPolicyRevisionRequest
+		if !decodeRequest(c, &input) || !validCreatePolicyRevisionRequest(input) {
+			return
+		}
+		if service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		result, err := service.CreatePolicyRevision(c, c.GetString("raw_token"), appdb.CreatePolicyRevisionInput{
+			PolicyKind: input.PolicyKind, PolicyID: input.PolicyID, StationID: input.StationID,
+			ValidFrom: input.ValidFrom, SupersedesOrgID: input.SupersedesOrgID,
+			SupersedesRevisionID: input.SupersedesRevisionID,
+			LossLiterThreshold:   input.LossLiterThreshold, GainLiterThreshold: input.GainLiterThreshold,
+			LossRupiahThreshold: input.LossRupiahThreshold, GainRupiahThreshold: input.GainRupiahThreshold,
+			VarianceRupiahThreshold: input.VarianceRupiahThreshold, RolloverThreshold: input.RolloverThreshold,
+			Mode: input.Mode, Types: input.Types,
+		})
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	}
+}
+
+func tombstonePolicyRevisionHandler(service PolicyRevisionService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input tombstonePolicyRevisionRequest
+		if !decodeRequest(c, &input) || input.PolicyKind == "" || input.RevisionID == uuid.Nil || strings.TrimSpace(input.Reason) == "" {
+			return
+		}
+		if service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		result, err := service.TombstonePolicyRevision(c, c.GetString("raw_token"), appdb.TombstonePolicyRevisionInput{
+			PolicyKind: input.PolicyKind, RevisionID: input.RevisionID, Reason: input.Reason,
+		})
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		c.JSON(http.StatusOK, result)
+	}
+}
+
+func validCreatePolicyRevisionRequest(input createPolicyRevisionRequest) bool {
+	if input.PolicyKind != "threshold" && input.PolicyKind != "evidence" || input.PolicyID == uuid.Nil || input.ValidFrom == "" {
+		return false
+	}
+	if input.PolicyKind == "threshold" {
+		return validDecimal(input.LossLiterThreshold) && validDecimal(input.GainLiterThreshold) &&
+			validDecimal(input.LossRupiahThreshold) && validDecimal(input.GainRupiahThreshold) &&
+			validDecimal(input.VarianceRupiahThreshold) && validDecimal(input.RolloverThreshold) &&
+			input.Mode == "" && input.Types == nil
+	}
+	if input.Mode != "opsional" && input.Mode != "wajib" || len(input.Types) == 0 {
+		return false
+	}
+	return input.LossLiterThreshold == "" && input.GainLiterThreshold == "" &&
+		input.LossRupiahThreshold == "" && input.GainRupiahThreshold == "" &&
+		input.VarianceRupiahThreshold == "" && input.RolloverThreshold == ""
 }
 
 func readReportPrintoutHandler(service ReportingService) gin.HandlerFunc {

@@ -63,6 +63,7 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 	}
 	var governance GovernanceService
 	var reporting ReportingService
+	var policy PolicyRevisionService
 	for _, dependency := range dependencies {
 		if dependency == nil {
 			continue
@@ -72,6 +73,9 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 		}
 		if candidate, ok := dependency.(ReportingService); ok {
 			reporting = candidate
+		}
+		if candidate, ok := dependency.(PolicyRevisionService); ok {
+			policy = candidate
 		}
 	}
 
@@ -84,7 +88,7 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 	router.GET("/session", AuthMiddleware(verifier), sessionHandler(sessions))
 	registerShiftRoutes(router, verifier, shifts)
 	registerGovernanceRoutes(router, verifier, governance)
-	registerReportingRoutes(router, verifier, reporting)
+	registerReportingRoutes(router, verifier, reporting, policy)
 	return router
 }
 
