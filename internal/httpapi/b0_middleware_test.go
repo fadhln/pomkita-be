@@ -28,8 +28,8 @@ func TestReadyChecksLatestB1Migration(t *testing.T) {
 	router := NewRouterWithDependencies("test", nil, readyStub{current: true, latest: &latest}, nil)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
-	if recorder.Code != http.StatusOK || latest != 14 {
-		t.Fatalf("ready migration check: status=%d latest=%d, want 200 and 14", recorder.Code, latest)
+	if recorder.Code != http.StatusOK || latest != 19 {
+		t.Fatalf("ready migration check: status=%d latest=%d, want 200 and 19", recorder.Code, latest)
 	}
 }
 
