@@ -60,9 +60,10 @@ func safeDatabaseCode(message string) bool {
 	case "ack_already_decided", "ack_head_missing", "ack_report_not_pending", "ack_role_required",
 		"ack_separation_required", "amendment_base_not_current", "amendment_creator_forbidden",
 		"amendment_field_forbidden", "amendment_not_found", "amendment_not_pending",
-		"amendment_role_required", "amendment_separation_required", "amendment_target_not_in_base",
+		"amendment_role_required", "amendment_request_role_required", "amendment_reject_role_required",
+		"amendment_queue_role_required", "amendment_separation_required", "amendment_target_not_in_base",
 		"break_glass_reason_required", "invalid_ack_request", "report_not_found", "shift_not_found",
-		"stale_amendment_base", "stale_amendment_value", "unexpected_break_glass_reason",
+		"invalid_amendment_request", "stale_amendment_base", "stale_amendment_value", "unexpected_break_glass_reason",
 		"unexpected_rejection_reason", "rejection_reason_required":
 		return true
 	default:
