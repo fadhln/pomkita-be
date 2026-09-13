@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -219,7 +220,9 @@ func writeDraftSalesHandler(service ShiftService) gin.HandlerFunc {
 func writeDraftLossHandler(service ShiftService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input draftLossRequest
-		if !decodeRequest(c, &input) || input.DraftID == uuid.Nil || input.ClaimToken == uuid.Nil || input.LossID == uuid.Nil || !validDecimal(input.Liters) || (input.CashAmount != "" && !validDecimal(input.CashAmount)) {
+		decoded := decodeRequest(c, &input)
+		fmt.Printf("LOSS decoded=%v value=%#v\\n", decoded, input)
+		if !decoded || input.DraftID == uuid.Nil || input.ClaimToken == uuid.Nil || input.LossID == uuid.Nil || !validDecimal(input.Liters) || (input.CashAmount != "" && !validDecimal(input.CashAmount)) {
 			return
 		}
 		if service == nil {
@@ -233,7 +236,9 @@ func writeDraftLossHandler(service ShiftService) gin.HandlerFunc {
 func stageDraftEvidenceHandler(service ShiftService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input draftEvidenceRequest
-		if !decodeRequest(c, &input) || input.DraftID == uuid.Nil || input.ClaimToken == uuid.Nil || input.LossRowID == uuid.Nil || input.SizeBytes <= 0 || input.ContentHash == "" {
+		decoded := decodeRequest(c, &input)
+		fmt.Printf("EVIDENCE decoded=%v value=%#v\\n", decoded, input)
+		if !decoded || input.DraftID == uuid.Nil || input.ClaimToken == uuid.Nil || input.LossRowID == uuid.Nil || input.SizeBytes <= 0 || input.ContentHash == "" {
 			return
 		}
 		hash, err := hex.DecodeString(input.ContentHash)
@@ -252,8 +257,9 @@ func stageDraftEvidenceHandler(service ShiftService) gin.HandlerFunc {
 
 func readDraftHandler(service ShiftService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id, ok := pathUUID(c, "shift_id")
-		if !ok {
+		id, err := uuid.Parse(c.Query("shift_id"))
+		if err != nil {
+			validationError(c)
 			return
 		}
 		if service == nil {
