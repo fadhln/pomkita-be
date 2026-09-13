@@ -60,16 +60,5 @@ begin
 end
 $$;
 
-drop role if exists audit_lock_owner;
-drop role if exists registry_owner;
-drop role if exists auth_owner;
-drop role if exists user_owner;
-drop role if exists station_owner;
-drop role if exists org_owner;
-drop role if exists relay;
-drop role if exists audit_owner;
-drop role if exists report_writer;
-drop role if exists pomkita_app;
-
 drop extension if exists pgcrypto;
 drop schema if exists app;

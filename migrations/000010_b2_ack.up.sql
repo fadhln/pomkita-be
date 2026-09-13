@@ -411,7 +411,7 @@ grant references on public.ack_decisions to report_writer;
 grant select on public.ack_decisions to pomkita_app;
 grant select on public.ack_decisions to pomkita;
 grant references on public.ack_decisions to pomkita_app, pomkita;
-grant update on public.ack_decisions to report_writer, pomkita_app, pomkita;
+grant update on public.ack_decisions to report_writer, pomkita;
 grant select, insert, update on public.ack_head to report_writer;
 grant select, insert on public.ack_supersessions to report_writer;
 grant execute on function public.fn_ack_shift(uuid, uuid, integer, public.ack_decision, text, boolean, text) to pomkita_app;
