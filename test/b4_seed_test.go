@@ -116,6 +116,9 @@ func TestB4DemoSeed_SupportsLoginAndCompleteShiftHappyPath(t *testing.T) {
 	if verified.Code != http.StatusOK || !strings.Contains(verified.Body.String(), `"verified":true`) {
 		t.Fatalf("audit verify: status=%d body=%s", verified.Code, verified.Body)
 	}
+	if denied := demoCall(router, supervisorCookie, http.MethodGet, "/anomalies/export", "", false); denied.Code != http.StatusForbidden {
+		t.Fatalf("supervisor anomaly export: status=%d body=%s, want 403", denied.Code, denied.Body)
+	}
 	ownerCookie := demoLogin(t, router, "owner@demo.pomkita.test", "demo-password")
 	if _, err := appdb.NewReportingManager(database).ReadPolicyHistory(ctx, ownerCookie.Value); err != nil {
 		t.Fatalf("read policy history procedure: %v", err)
@@ -123,6 +126,9 @@ func TestB4DemoSeed_SupportsLoginAndCompleteShiftHappyPath(t *testing.T) {
 	policy := demoCall(router, ownerCookie, http.MethodGet, "/policy/history", "", false)
 	if policy.Code != http.StatusOK || !strings.Contains(policy.Body.String(), `"policy_kind":"threshold"`) {
 		t.Fatalf("policy history: status=%d body=%s", policy.Code, policy.Body)
+	}
+	if denied := demoCall(router, stationAdminCookie, http.MethodGet, "/policy/history", "", false); denied.Code != http.StatusForbidden {
+		t.Fatalf("station admin policy history: status=%d body=%s, want 403", denied.Code, denied.Body)
 	}
 }
 
