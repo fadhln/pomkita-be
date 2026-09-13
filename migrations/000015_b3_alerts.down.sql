@@ -3,6 +3,7 @@
 delete from public.procedure_registry
  where name in ('fn_record_alert_occurrence', 'fn_run_starvation_alerts',
                 'trg_alert_event_guard', 'trg_alert_event_check');
+drop policy if exists alert_shifts_scheduler on public.shifts;
 drop trigger if exists alert_events_invariants on public.alert_events;
 drop trigger if exists alert_events_guard on public.alert_events;
 drop function if exists public.fn_transition_shift(uuid, public.shift_status, text);
