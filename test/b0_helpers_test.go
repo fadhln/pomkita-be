@@ -60,6 +60,7 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 		name  string
 		check string
 	}{
+		{"000016_b3_evidence.down.sql", `select to_regclass('public.evidence_event') is not null`},
 		{"000015_b3_alerts.down.sql", `select to_regclass('public.alert_rules') is not null`},
 		{"000014_b2_scheduler.down.sql", `select to_regprocedure('public.fn_abandon_failed_shifts()') is not null`},
 		{"000013_b2_relay.down.sql", `select to_regclass('public.outbox_relay_state') is not null`},
