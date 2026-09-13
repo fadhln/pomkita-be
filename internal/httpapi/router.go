@@ -56,7 +56,7 @@ func NewRouterWithDependencies(environment string, allowedOrigins []string, read
 }
 
 // NewRouterWithAllDependencies creates a router with session and shift services.
-func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts any) *gin.Engine {
+func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts ShiftService) *gin.Engine {
 	if environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -72,27 +72,21 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 	return router
 }
 
-func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service any) {
+func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service ShiftService) {
 	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
 	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
-	router.POST("/shift/open", append(protectedWrite, shiftNotConfigured(service))...)
-	router.POST("/draft/claim", append(protectedWrite, shiftNotConfigured(service))...)
-	router.POST("/draft/heartbeat", append(protectedWrite, shiftNotConfigured(service))...)
-	router.POST("/draft/reading", append(protectedWrite, shiftNotConfigured(service))...)
-	router.POST("/draft/sales", append(protectedWrite, shiftNotConfigured(service))...)
-	router.POST("/draft/loss", append(protectedWrite, shiftNotConfigured(service))...)
-	router.POST("/draft/evidence", append(protectedWrite, shiftNotConfigured(service))...)
-	router.GET("/draft", append(protectedRead, shiftNotConfigured(service))...)
-	router.POST("/shift/submit", append(protectedWrite, shiftNotConfigured(service))...)
-	router.GET("/shifts", append(protectedRead, shiftNotConfigured(service))...)
-	router.GET("/shifts/:id", append(protectedRead, shiftNotConfigured(service))...)
-	router.GET("/report/:id", append(protectedRead, shiftNotConfigured(service))...)
-}
-
-func shiftNotConfigured(_ any) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		writeError(c, http.StatusInternalServerError, "internal_error")
-	}
+	router.POST("/shift/open", append(protectedWrite, openShiftHandler(service))...)
+	router.POST("/draft/claim", append(protectedWrite, claimDraftHandler(service))...)
+	router.POST("/draft/heartbeat", append(protectedWrite, heartbeatDraftHandler(service))...)
+	router.POST("/draft/reading", append(protectedWrite, writeDraftReadingHandler(service))...)
+	router.POST("/draft/sales", append(protectedWrite, writeDraftSalesHandler(service))...)
+	router.POST("/draft/loss", append(protectedWrite, writeDraftLossHandler(service))...)
+	router.POST("/draft/evidence", append(protectedWrite, stageDraftEvidenceHandler(service))...)
+	router.GET("/draft", append(protectedRead, readDraftHandler(service))...)
+	router.POST("/shift/submit", append(protectedWrite, submitShiftHandler(service))...)
+	router.GET("/shifts", append(protectedRead, readShiftListHandler(service))...)
+	router.GET("/shifts/:id", append(protectedRead, readShiftDetailHandler(service))...)
+	router.GET("/report/:id", append(protectedRead, readReportHandler(service))...)
 }
 
 func health(c *gin.Context) {
