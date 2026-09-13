@@ -47,7 +47,7 @@ func (shiftServiceStub) ReadShiftList(context.Context, string, *uuid.UUID) ([]js
 	return []json.RawMessage{json.RawMessage(`{"shift_id":"` + testUUID + `","station_id":"` + testUUID + `","station_seq":"1","business_date":"2026-01-02","status":"open","current_report_id":null}`)}, nil
 }
 func (shiftServiceStub) ReadShiftDetail(context.Context, string, uuid.UUID) (json.RawMessage, error) {
-	return json.RawMessage(`{"shift_id":"` + testUUID + `","station_id":"` + testUUID + `","station_seq":"1","opened_at":"2026-01-01T00:00:00.000000Z","business_date":"2026-01-02","status":"open","current_report_id":null,"draft":{"draft_id":"` + testUUID + `","status":"editing","revision":2,"recovery_count":0}}`), nil
+	return json.RawMessage(`{"shift_id":"` + testUUID + `","station_id":"` + testUUID + `","station_seq":"1","opened_at":"2026-01-01T00:00:00Z","business_date":"2026-01-02","status":"open","current_report_id":null,"draft":{"draft_id":"` + testUUID + `","status":"editing","revision":2,"recovery_count":0}}`), nil
 }
 func (shiftServiceStub) ReadReport(context.Context, string, uuid.UUID) (json.RawMessage, error) {
 	return json.RawMessage(`{"report_id":"` + testUUID + `","shift_id":"` + testUUID + `","version_no":1,"status":"submitted","submitted_at":"2026-01-01T00:00:00.000000Z","readings":[],"sales":[],"losses":[]}`), nil
@@ -205,6 +205,18 @@ func TestShiftAPI_EmptyShiftListIsAnArray(t *testing.T) {
 	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK || strings.TrimSpace(recorder.Body.String()) != "[]" {
 		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestShiftAPI_ReadPayloadUsesUTCWithSixFractionalDigits(t *testing.T) {
+	service := shiftServiceStub{}
+	router := NewRouterWithAllDependencies("test", nil, readyStub{}, verifierStub{}, nil, service)
+	request := httptest.NewRequest(http.MethodGet, "/shifts/"+testUUID, nil)
+	request.Header.Set("Authorization", "Bearer token")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if !strings.Contains(recorder.Body.String(), `"opened_at":"2026-01-01T00:00:00.000000Z"`) {
+		t.Fatalf("timestamp: body=%s", recorder.Body.String())
 	}
 }
 

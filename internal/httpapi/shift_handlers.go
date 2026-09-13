@@ -370,7 +370,39 @@ func writeJSONResult(c *gin.Context, result json.RawMessage, err error) {
 		_ = c.Error(err)
 		return
 	}
+	if normalized, normalizeErr := normalizeTimestamps(result); normalizeErr == nil {
+		result = normalized
+	}
 	c.Data(200, "application/json; charset=utf-8", result)
+}
+
+func normalizeTimestamps(raw json.RawMessage) (json.RawMessage, error) {
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, err
+	}
+	normalizeTimestampValue(value)
+	return json.Marshal(value)
+}
+
+func normalizeTimestampValue(value any) {
+	switch current := value.(type) {
+	case map[string]any:
+		for key, child := range current {
+			if strings.HasSuffix(key, "_at") {
+				if timestamp, ok := child.(string); ok {
+					if parsed, err := time.Parse(time.RFC3339Nano, timestamp); err == nil {
+						current[key] = parsed.UTC().Format("2006-01-02T15:04:05.000000Z")
+					}
+				}
+			}
+			normalizeTimestampValue(child)
+		}
+	case []any:
+		for _, child := range current {
+			normalizeTimestampValue(child)
+		}
+	}
 }
 func pathUUID(c *gin.Context, name string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(c.Param(name))
