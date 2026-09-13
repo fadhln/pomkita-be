@@ -3,7 +3,8 @@ delete from public.procedure_registry
 drop function if exists public.fn_request_amendment(uuid, uuid, text, jsonb);
 drop function if exists public.fn_reject_amendment(uuid, text);
 drop function if exists public.read_amendment_queue();
-
+revoke insert on public.amendments, public.amendment_items from report_writer;
+revoke select on public.users, public.user_station_roles from report_writer;
 create or replace function public.trg_amendment_guard()
 returns trigger
 language plpgsql
