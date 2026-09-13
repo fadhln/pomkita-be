@@ -38,6 +38,17 @@ type AuditExportRow struct {
 	RowHash      string
 }
 
+// AuditTrailRow is one audit row for the audit trail screen.
+type AuditTrailRow struct {
+	EventID     string  `json:"event_id"`
+	Sequence    string  `json:"sequence"`
+	EventType   string  `json:"event_type"`
+	StationID   *string `json:"station_id"`
+	ActorUserID string  `json:"actor_user_id"`
+	OccurredAt  string  `json:"occurred_at"`
+	Outcome     string  `json:"outcome"`
+}
+
 // AuditVerifyResult is the database result of an audit-chain verification.
 type AuditVerifyResult struct {
 	Verified    bool   `json:"verified"`
@@ -125,6 +136,60 @@ func (s *ReportingManager) ReadAuditExport(ctx context.Context, rawToken string)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read audit export: %w", err)
+	}
+	return result, nil
+}
+
+type auditTrailPayload struct {
+	StationID   *string `json:"station_id"`
+	ActorUserID string  `json:"actor_user_id"`
+}
+
+func mapAuditTrailRow(eventID, sequence, eventType string, payload json.RawMessage, outcome, occurredAt string) (AuditTrailRow, error) {
+	var fields auditTrailPayload
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return AuditTrailRow{}, fmt.Errorf("decode audit trail payload: %w", err)
+	}
+	return AuditTrailRow{
+		EventID:     eventID,
+		Sequence:    sequence,
+		EventType:   eventType,
+		StationID:   fields.StationID,
+		ActorUserID: fields.ActorUserID,
+		OccurredAt:  occurredAt,
+		Outcome:     outcome,
+	}, nil
+}
+
+// ReadAuditTrail calls read_audit_chain and maps its rows to the audit trail contract.
+func (s *ReportingManager) ReadAuditTrail(ctx context.Context, rawToken string) ([]AuditTrailRow, error) {
+	var result []AuditTrailRow
+	err := s.procedure(ctx, rawToken, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `select event_id::text, org_sequence::text, event_type, payload, outcome, to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') from public.read_audit_chain() order by org_sequence`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var eventID, sequence, eventType string
+			var payload []byte
+			var outcome, occurredAt string
+			if err := rows.Scan(&eventID, &sequence, &eventType, &payload, &outcome, &occurredAt); err != nil {
+				return err
+			}
+			row, err := mapAuditTrailRow(eventID, sequence, eventType, payload, outcome, occurredAt)
+			if err != nil {
+				return err
+			}
+			result = append(result, row)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read audit trail: %w", err)
+	}
+	if result == nil {
+		result = []AuditTrailRow{}
 	}
 	return result, nil
 }
