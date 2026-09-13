@@ -83,6 +83,53 @@ func TestB4Reporting_IsolationMatrixCoversEveryRegisteredProcedure(t *testing.T)
 	}
 }
 
+func TestB4RegisteredTenantProcedures_RejectMissingContextGenerated(t *testing.T) {
+	ctx := context.Background()
+	conn := openB0Connection(t)
+	defer conn.Close(ctx)
+	resetMigrations(t, conn)
+	applyB3Migrations(t, conn)
+	defer resetB0Foundation(t, conn, true)
+	setIsolationContext(t, conn, "", "", "", false)
+
+	rows, err := conn.Query(ctx, `
+		select p.oid::regprocedure::text,
+		       format('select %s(%s)', p.oid::regprocedure,
+		         coalesce((select string_agg(format('null::%s', a.arg_type::regtype), ',' order by a.ordinality)
+		                     from unnest(p.proargtypes) with ordinality a(arg_type, ordinality)), ''))
+		from public.procedure_registry r
+		join pg_proc p on p.proname = r.name
+		join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+		where p.prokind = 'f'
+		  and cardinality(r.allowed_roles) > 0
+		  and not r.allowed_roles @> array['pomkita_app']::text[]
+		  and r.name not like 'fn_relay_%'
+		order by r.name`)
+	if err != nil {
+		t.Fatalf("generate registered procedure calls: %v", err)
+	}
+	defer rows.Close()
+	var calls int
+	for rows.Next() {
+		var name, call string
+		if err := rows.Scan(&name, &call); err != nil {
+			t.Fatalf("scan generated procedure call: %v", err)
+		}
+		calls++
+		t.Run(name, func(t *testing.T) {
+			if _, err := conn.Exec(ctx, call); err == nil {
+				t.Fatalf("generated call accepted a missing request context: %s", name)
+			}
+		})
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("read generated procedure calls: %v", err)
+	}
+	if calls == 0 {
+		t.Fatal("procedure registry generated no tenant calls")
+	}
+}
+
 func setIsolationContext(t *testing.T, conn *pgx.Conn, org, station, role string, valid bool) {
 	t.Helper()
 	if _, err := conn.Exec(context.Background(), `
