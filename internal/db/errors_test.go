@@ -48,6 +48,10 @@ func TestGovernanceErrorsMapToStableHTTPResults(t *testing.T) {
 		{name: "missing shift", state: "42501", message: "shift_not_found", status: http.StatusNotFound, code: "shift_not_found"},
 		{name: "ack role", state: "42501", message: "ack_role_required", status: http.StatusForbidden, code: "ack_role_required"},
 		{name: "invalid ack", state: "22023", message: "invalid_ack_request", status: http.StatusBadRequest, code: "invalid_ack_request"},
+		{name: "invalid amendment request", state: "22023", message: "invalid_amendment_request", status: http.StatusBadRequest, code: "invalid_amendment_request"},
+		{name: "amendment request role", state: "42501", message: "amendment_request_role_required", status: http.StatusForbidden, code: "amendment_request_role_required"},
+		{name: "amendment reject role", state: "42501", message: "amendment_reject_role_required", status: http.StatusForbidden, code: "amendment_reject_role_required"},
+		{name: "amendment queue role", state: "42501", message: "amendment_queue_role_required", status: http.StatusForbidden, code: "amendment_queue_role_required"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

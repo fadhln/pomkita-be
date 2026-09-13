@@ -103,6 +103,9 @@ func registerGovernanceRoutes(router *gin.Engine, verifier TokenVerifier, servic
 	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
 	router.POST("/shift/ack", append(protectedWrite, ackShiftHandler(service))...)
 	router.POST("/amendment/approve", append(protectedWrite, approveAmendmentHandler(service))...)
+	router.POST("/amendment/request", append(protectedWrite, requestAmendmentHandler(service))...)
+	router.POST("/amendment/reject", append(protectedWrite, rejectAmendmentHandler(service))...)
+	router.GET("/amendments", append(protectedRead, readAmendmentQueueHandler(service))...)
 	router.GET("/anomalies", append(protectedRead, readGovernanceAnomaliesHandler(service))...)
 }
 
@@ -116,7 +119,7 @@ func readyHandler(readiness Readiness) gin.HandlerFunc {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return
 		}
-		current, err := readiness.MigrationsCurrent(c.Request.Context(), 14)
+		current, err := readiness.MigrationsCurrent(c.Request.Context(), 19)
 		if err != nil || !current {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return

@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,6 +23,12 @@ func TestB2HTTP_GovernanceEndpointsCallRegisteredProcedures(t *testing.T) {
 	applyB2Migrations(t, conn)
 	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000014_b2_scheduler.up.sql")); err != nil {
 		t.Fatalf("apply 000014_b2_scheduler.up.sql: %v", err)
+	}
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000012_b2_audit.up.sql")); err != nil {
+		t.Fatalf("apply 000012_b2_audit.up.sql: %v", err)
+	}
+	if _, err := conn.Exec(ctx, readMigration(t, repositoryRoot(t), "000019_b2_amendment_request.up.sql")); err != nil {
+		t.Fatalf("apply 000019_b2_amendment_request.up.sql: %v", err)
 	}
 	defer resetB0Foundation(t, conn, true)
 
@@ -52,6 +59,7 @@ func TestB2HTTP_GovernanceEndpointsCallRegisteredProcedures(t *testing.T) {
 	database.SetJWTAudience("spbu-recon")
 	tokens := appjwt.NewService(database.JWTStore(secrets), appjwt.Config{Issuer: "pomkita", Audience: "spbu-recon"})
 	adminToken := issueGovernanceToken(t, tokens, uuid.MustParse(admin))
+	supervisorToken := issueGovernanceToken(t, tokens, uuid.MustParse(supervisor))
 	ownerToken := issueGovernanceToken(t, tokens, uuid.MustParse(requester))
 	router := httpapi.NewRouterWithAllDependencies("test", nil, database, tokens, nil, nil, appdb.NewGovernanceManager(database))
 
@@ -63,6 +71,25 @@ func TestB2HTTP_GovernanceEndpointsCallRegisteredProcedures(t *testing.T) {
 	}
 	if second := governanceCall(router, adminToken, http.MethodPost, "/shift/ack", `{"shift_id":"`+shift+`","report_id":"`+report+`","version_no":1,"decision":"acked"}`, true); second.Code != http.StatusConflict {
 		t.Fatalf("second ack: status=%d body=%s", second.Code, second.Body)
+	}
+	requestBody := `{"shift_id":"` + shift + `","base_report_id":"` + report + `","reason":"cash correction","items":[{"target_kind":"sales_declared","target_logical_id":"` + governanceSaleID(t, conn, report) + `","field":"cash_amount","old_value":"2000","new_value":"2500"}]}`
+	requested := governanceCall(router, supervisorToken, http.MethodPost, "/amendment/request", requestBody, true)
+	if requested.Code != http.StatusOK || !strings.Contains(requested.Body.String(), `"status":"pending"`) {
+		t.Fatalf("request amendment: status=%d body=%s", requested.Code, requested.Body)
+	}
+	queued := governanceCall(router, adminToken, http.MethodGet, "/amendments", "", false)
+	if queued.Code != http.StatusOK || !strings.Contains(queued.Body.String(), `"display_name":"Supervisor"`) || !strings.Contains(queued.Body.String(), `"reason":"cash correction"`) {
+		t.Fatalf("amendment queue: status=%d body=%s", queued.Code, queued.Body)
+	}
+	var requestedPayload struct {
+		AmendmentID string `json:"amendment_id"`
+	}
+	if err := json.Unmarshal(requested.Body.Bytes(), &requestedPayload); err != nil {
+		t.Fatalf("decode requested amendment: %v", err)
+	}
+	rejectedAmendment := governanceCall(router, adminToken, http.MethodPost, "/amendment/reject", `{"amendment_id":"`+requestedPayload.AmendmentID+`","rejection_reason":"not enough evidence"}`, true)
+	if rejectedAmendment.Code != http.StatusOK || !strings.Contains(rejectedAmendment.Body.String(), `"status":"rejected"`) {
+		t.Fatalf("reject amendment: status=%d body=%s", rejectedAmendment.Code, rejectedAmendment.Body)
 	}
 
 	setTestContext(t, conn, org, station, supervisor, "Supervisor")

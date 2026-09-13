@@ -73,6 +73,62 @@ type ApproveAmendmentResult struct {
 	VersionNo       int       `json:"version_no"`
 }
 
+// AmendmentItem is one requested change to a report value.
+type AmendmentItem struct {
+	TargetKind      string          `json:"target_kind"`
+	TargetLogicalID uuid.UUID       `json:"target_logical_id"`
+	Field           string          `json:"field"`
+	OldValue        json.RawMessage `json:"old_value"`
+	NewValue        json.RawMessage `json:"new_value"`
+}
+
+// RequestAmendmentResult is the result returned by fn_request_amendment.
+type RequestAmendmentResult struct {
+	AmendmentID    uuid.UUID `json:"amendment_id"`
+	BaseReportID   uuid.UUID `json:"base_report_id"`
+	Status         string    `json:"status"`
+	StaleCheckHash string    `json:"stale_check_hash"`
+	RequestedAt    string    `json:"requested_at"`
+}
+
+// RejectAmendmentResult is the result returned by fn_reject_amendment.
+type RejectAmendmentResult struct {
+	AmendmentID     uuid.UUID `json:"amendment_id"`
+	Status          string    `json:"status"`
+	RejectionReason string    `json:"rejection_reason"`
+	DecidedAt       string    `json:"decided_at"`
+}
+
+// AmendmentQueueRequester identifies the user who requested an amendment.
+type AmendmentQueueRequester struct {
+	UserID      uuid.UUID `json:"user_id"`
+	DisplayName string    `json:"display_name"`
+}
+
+// AmendmentQueueItem is an item diff in the amendment queue.
+type AmendmentQueueItem struct {
+	ItemID          uuid.UUID       `json:"item_id"`
+	TargetKind      string          `json:"target_kind"`
+	TargetLogicalID uuid.UUID       `json:"target_logical_id"`
+	Field           string          `json:"field"`
+	OldValue        json.RawMessage `json:"old_value"`
+	NewValue        json.RawMessage `json:"new_value"`
+}
+
+// AmendmentQueueEntry is one pending amendment visible to an approver.
+type AmendmentQueueEntry struct {
+	AmendmentID   uuid.UUID               `json:"amendment_id"`
+	StationID     uuid.UUID               `json:"station_id"`
+	ShiftID       uuid.UUID               `json:"shift_id"`
+	BaseReportID  uuid.UUID               `json:"base_report_id"`
+	BaseVersionNo int                     `json:"base_version_no"`
+	Status        string                  `json:"status"`
+	Requester     AmendmentQueueRequester `json:"requester"`
+	Reason        string                  `json:"reason"`
+	RequestedAt   string                  `json:"requested_at"`
+	Items         []AmendmentQueueItem    `json:"items"`
+}
+
 // GovernanceManager calls the B2 governance procedures.
 type GovernanceManager struct {
 	db *DB
@@ -127,6 +183,75 @@ func (s *GovernanceManager) ApproveAmendment(ctx context.Context, rawToken strin
 	})
 	if err != nil {
 		return ApproveAmendmentResult{}, fmt.Errorf("approve amendment: %w", err)
+	}
+	return result, nil
+}
+
+// RequestAmendment calls fn_request_amendment.
+func (s *GovernanceManager) RequestAmendment(ctx context.Context, rawToken string, shift, baseReport uuid.UUID, reason string, items []AmendmentItem) (RequestAmendmentResult, error) {
+	var result RequestAmendmentResult
+	var requestedAt time.Time
+	payload, err := json.Marshal(items)
+	if err != nil {
+		return RequestAmendmentResult{}, fmt.Errorf("encode amendment items: %w", err)
+	}
+	err = s.procedure(ctx, rawToken, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			select amendment_id, base_report_id, status, encode(stale_check_hash, 'hex'), requested_at
+			from public.fn_request_amendment($1::uuid,$2::uuid,$3::text,$4::jsonb)
+		`, shift, baseReport, reason, payload).Scan(
+			&result.AmendmentID, &result.BaseReportID, &result.Status,
+			&result.StaleCheckHash, &requestedAt,
+		)
+	})
+	if err != nil {
+		return RequestAmendmentResult{}, fmt.Errorf("request amendment: %w", err)
+	}
+	result.RequestedAt = apiTimestamp(requestedAt)
+	return result, nil
+}
+
+// RejectAmendment calls fn_reject_amendment.
+func (s *GovernanceManager) RejectAmendment(ctx context.Context, rawToken string, amendment uuid.UUID, reason string) (RejectAmendmentResult, error) {
+	var result RejectAmendmentResult
+	var decidedAt time.Time
+	err := s.procedure(ctx, rawToken, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			select amendment_id, status, rejection_reason, decided_at
+			from public.fn_reject_amendment($1::uuid,$2::text)
+		`, amendment, reason).Scan(&result.AmendmentID, &result.Status, &result.RejectionReason, &decidedAt)
+	})
+	if err != nil {
+		return RejectAmendmentResult{}, fmt.Errorf("reject amendment: %w", err)
+	}
+	result.DecidedAt = apiTimestamp(decidedAt)
+	return result, nil
+}
+
+// ReadAmendmentQueue calls read_amendment_queue.
+func (s *GovernanceManager) ReadAmendmentQueue(ctx context.Context, rawToken string) ([]AmendmentQueueEntry, error) {
+	var result []AmendmentQueueEntry
+	err := s.procedure(ctx, rawToken, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `select amendment from public.read_amendment_queue() amendment`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var payload []byte
+			var entry AmendmentQueueEntry
+			if err := rows.Scan(&payload); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(payload, &entry); err != nil {
+				return fmt.Errorf("decode amendment queue entry: %w", err)
+			}
+			result = append(result, entry)
+		}
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read amendment queue: %w", err)
 	}
 	return result, nil
 }
