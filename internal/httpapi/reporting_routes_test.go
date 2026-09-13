@@ -23,6 +23,11 @@ func (reportingServiceStub) ReadAnomalyExport(context.Context, string) ([]Anomal
 	return []AnomalyExportRow{{Kind: "variance", SourceID: "event-1", VarianceRupiah: "-20"}}, nil
 }
 
+func (reportingServiceStub) ReadAuditTrail(context.Context, string) ([]AuditTrailRow, error) {
+	stationID := "station-1"
+	return []AuditTrailRow{{EventID: "event-1", Sequence: "1", EventType: "shift_transition", StationID: &stationID, ActorUserID: "actor-1", OccurredAt: "2026-09-13T08:00:00.123456Z", Outcome: "success"}}, nil
+}
+
 func (reportingServiceStub) ReadAuditExport(context.Context, string) ([]AuditExportRow, error) {
 	return []AuditExportRow{{EventID: "event-1", OrgSequence: "1", Payload: json.RawMessage(`{"ok":true}`)}}, nil
 }
@@ -43,6 +48,9 @@ func (s reportingErrorStub) ReadReportPrintout(context.Context, string, uuid.UUI
 func (s reportingErrorStub) ReadAnomalyExport(context.Context, string) ([]AnomalyExportRow, error) {
 	return nil, s.err
 }
+func (s reportingErrorStub) ReadAuditTrail(context.Context, string) ([]AuditTrailRow, error) {
+	return nil, s.err
+}
 func (s reportingErrorStub) ReadAuditExport(context.Context, string) ([]AuditExportRow, error) {
 	return nil, s.err
 }
@@ -59,6 +67,9 @@ func (timestampReportingStub) ReadReportPrintout(context.Context, string, uuid.U
 	return json.RawMessage(`{"report_id":"11111111-1111-4111-8111-111111111111","submitted_at":"2026-01-01T00:00:00+00:00"}`), nil
 }
 func (timestampReportingStub) ReadAnomalyExport(context.Context, string) ([]AnomalyExportRow, error) {
+	return nil, nil
+}
+func (timestampReportingStub) ReadAuditTrail(context.Context, string) ([]AuditTrailRow, error) {
 	return nil, nil
 }
 func (timestampReportingStub) ReadAuditExport(context.Context, string) ([]AuditExportRow, error) {
@@ -82,6 +93,7 @@ func TestReportingAPI_RequiresAuthenticationOnEveryEndpoint(t *testing.T) {
 	for _, path := range []string{
 		"/report/11111111-1111-4111-8111-111111111111/printout",
 		"/anomalies/export",
+		"/audit",
 		"/audit/export",
 		"/audit/verify",
 		"/policy/history",
@@ -93,6 +105,33 @@ func TestReportingAPI_RequiresAuthenticationOnEveryEndpoint(t *testing.T) {
 				t.Fatalf("status: got %d, want %d; body=%s", recorder.Code, http.StatusUnauthorized, recorder.Body.String())
 			}
 		})
+	}
+}
+
+func TestReportingAPI_ReturnsAuditTrailShape(t *testing.T) {
+	router := NewRouterWithAllDependencies("test", nil, readyStub{current: true}, verifierStub{}, nil, nil, reportingServiceStub{})
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/audit", nil)
+	req.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s, want 200", recorder.Code, recorder.Body)
+	}
+	var rows []struct {
+		EventID     string  `json:"event_id"`
+		Sequence    string  `json:"sequence"`
+		EventType   string  `json:"event_type"`
+		StationID   *string `json:"station_id"`
+		ActorUserID string  `json:"actor_user_id"`
+		OccurredAt  string  `json:"occurred_at"`
+		Outcome     string  `json:"outcome"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &rows); err != nil {
+		t.Fatalf("decode audit trail: %v; body=%s", err, recorder.Body)
+	}
+	if len(rows) != 1 || rows[0].EventID != "event-1" || rows[0].Sequence != "1" || rows[0].EventType != "shift_transition" || rows[0].StationID == nil || *rows[0].StationID != "station-1" || rows[0].ActorUserID != "actor-1" || rows[0].OccurredAt != "2026-09-13T08:00:00.123456Z" || rows[0].Outcome != "success" {
+		t.Fatalf("audit trail rows: %+v", rows)
 	}
 }
 
@@ -157,6 +196,7 @@ func TestReportingAPI_MapsProcedureAuthorizationFailureToForbidden(t *testing.T)
 	for _, path := range []string{
 		"/report/11111111-1111-4111-8111-111111111111/printout",
 		"/anomalies/export",
+		"/audit",
 		"/audit/export",
 		"/audit/verify",
 		"/policy/history",

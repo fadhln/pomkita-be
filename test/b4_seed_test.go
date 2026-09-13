@@ -112,6 +112,31 @@ func TestB4DemoSeed_SupportsLoginAndCompleteShiftHappyPath(t *testing.T) {
 	if audit.Code != http.StatusOK || !strings.HasPrefix(audit.Body.String(), "event_id,org_sequence,event_type") {
 		t.Fatalf("audit export: status=%d body=%s", audit.Code, audit.Body)
 	}
+	if _, err := conn.Exec(ctx, `select set_config('app.context_valid', 'true', false), set_config('app.org_id', '11111111-1111-4111-8111-111111111111', false), set_config('app.user_id', '88888888-8888-4888-8888-888888888888', false), set_config('app.role', 'Owner', false)`); err != nil {
+		t.Fatalf("set audit seed context: %v", err)
+	}
+	const trailEventID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	if _, err := conn.Exec(ctx, `select public.fn_append_audit_event($1::uuid, 'audit_trail_seed', jsonb_build_object('station_id', $2::text, 'actor_user_id', $3::text), 'success', null)`, trailEventID, stationID, "88888888-8888-4888-8888-888888888888"); err != nil {
+		t.Fatalf("seed audit trail event: %v", err)
+	}
+	auditTrail := demoCall(router, stationAdminCookie, http.MethodGet, "/audit", "", false)
+	if auditTrail.Code != http.StatusOK {
+		t.Fatalf("audit trail: status=%d body=%s", auditTrail.Code, auditTrail.Body)
+	}
+	var trailRows []appdb.AuditTrailRow
+	if err := json.Unmarshal(auditTrail.Body.Bytes(), &trailRows); err != nil {
+		t.Fatalf("decode audit trail: %v body=%s", err, auditTrail.Body)
+	}
+	var found *appdb.AuditTrailRow
+	for index := range trailRows {
+		if trailRows[index].EventID == trailEventID {
+			found = &trailRows[index]
+			break
+		}
+	}
+	if found == nil || found.Sequence == "" || found.EventType != "audit_trail_seed" || found.StationID == nil || *found.StationID != stationID || found.ActorUserID != "88888888-8888-4888-8888-888888888888" || found.OccurredAt == "" || found.Outcome != "success" {
+		t.Fatalf("audit trail seed row: %+v; body=%s", found, auditTrail.Body)
+	}
 	verified := demoCall(router, stationAdminCookie, http.MethodGet, "/audit/verify", "", false)
 	if verified.Code != http.StatusOK || !strings.Contains(verified.Body.String(), `"verified":true`) {
 		t.Fatalf("audit verify: status=%d body=%s", verified.Code, verified.Body)
