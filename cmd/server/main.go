@@ -35,7 +35,7 @@ func main() {
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
 	sessionManager := appdb.NewSessionManager(database, jwtService)
-	router := httpapi.NewRouterWithAllDependencies(cfg.Environment, cfg.CorsAllowedOrigins, database, jwtService, sessionManager, appdb.NewShiftManager(database))
+	router := httpapi.NewRouterWithAllDependencies(cfg.Environment, cfg.CorsAllowedOrigins, database, jwtService, sessionManager, appdb.NewShiftManager(database), appdb.NewGovernanceManager(database))
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Printf("server stopped: %v", err)

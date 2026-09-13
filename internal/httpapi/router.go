@@ -57,7 +57,7 @@ func NewRouterWithDependencies(environment string, allowedOrigins []string, read
 }
 
 // NewRouterWithAllDependencies creates a router with session and shift services.
-func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts ShiftService) *gin.Engine {
+func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts ShiftService, governance ...GovernanceService) *gin.Engine {
 	if environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -70,7 +70,15 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(sessions, environment == "production"))
 	router.GET("/session", AuthMiddleware(verifier), sessionHandler(sessions))
 	registerShiftRoutes(router, verifier, shifts)
+	registerGovernanceRoutes(router, verifier, firstGovernanceService(governance))
 	return router
+}
+
+func firstGovernanceService(services []GovernanceService) GovernanceService {
+	if len(services) == 0 {
+		return nil
+	}
+	return services[0]
 }
 
 func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service ShiftService) {
@@ -88,6 +96,14 @@ func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service Shi
 	router.GET("/shifts", append(protectedRead, readShiftListHandler(service))...)
 	router.GET("/shifts/:id", append(protectedRead, readShiftDetailHandler(service))...)
 	router.GET("/report/:id", append(protectedRead, readReportHandler(service))...)
+}
+
+func registerGovernanceRoutes(router *gin.Engine, verifier TokenVerifier, service GovernanceService) {
+	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
+	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
+	router.POST("/shift/ack", append(protectedWrite, ackShiftHandler(service))...)
+	router.POST("/amendment/approve", append(protectedWrite, approveAmendmentHandler(service))...)
+	router.GET("/anomalies", append(protectedRead, readGovernanceAnomaliesHandler(service))...)
 }
 
 func health(c *gin.Context) {

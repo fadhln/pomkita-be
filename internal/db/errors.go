@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -16,14 +17,23 @@ func HTTPStatusForError(err error) int {
 		return 500
 	}
 	switch pgErr.Code {
+	case "22023":
+		return http.StatusBadRequest
 	case "23514", "22003":
-		return 422
+		return http.StatusUnprocessableEntity
 	case "23505", "40P01":
-		return 409
+		return http.StatusConflict
 	case "28000":
-		return 401
+		return http.StatusUnauthorized
+	case "42501":
+		switch pgErr.Message {
+		case "shift_not_found", "report_not_found", "amendment_not_found":
+			return http.StatusNotFound
+		default:
+			return http.StatusForbidden
+		}
 	default:
-		return 500
+		return http.StatusInternalServerError
 	}
 }
 
@@ -39,5 +49,23 @@ func StableCodeForError(err error) string {
 	if pgErr.Code == "28000" && pgErr.Message == "invalid_credentials" {
 		return "invalid_credentials"
 	}
+	if safeDatabaseCode(pgErr.Message) {
+		return pgErr.Message
+	}
 	return ""
+}
+
+func safeDatabaseCode(message string) bool {
+	switch message {
+	case "ack_already_decided", "ack_head_missing", "ack_report_not_pending", "ack_role_required",
+		"ack_separation_required", "amendment_base_not_current", "amendment_creator_forbidden",
+		"amendment_field_forbidden", "amendment_not_found", "amendment_not_pending",
+		"amendment_role_required", "amendment_separation_required", "amendment_target_not_in_base",
+		"break_glass_reason_required", "invalid_ack_request", "report_not_found", "shift_not_found",
+		"stale_amendment_base", "stale_amendment_value", "unexpected_break_glass_reason",
+		"unexpected_rejection_reason", "rejection_reason_required":
+		return true
+	default:
+		return false
+	}
 }
