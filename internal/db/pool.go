@@ -18,6 +18,7 @@ import (
 // DB owns the PostgreSQL connection pool used by the service.
 type DB struct {
 	pool        *pgxpool.Pool
+	auditPool   *pgxpool.Pool
 	secretMu    sync.RWMutex
 	jwtSecrets  map[string]string
 	jwtAudience string
@@ -33,7 +34,12 @@ func New(ctx context.Context, databaseURL string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open database pool: %w", err)
 	}
-	database := &DB{pool: pool, jwtSecrets: make(map[string]string)}
+	auditPool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("open audit database pool: %w", err)
+	}
+	database := &DB{pool: pool, auditPool: auditPool, jwtSecrets: make(map[string]string)}
 	if err := database.Ping(ctx); err != nil {
 		database.Close()
 		return nil, err
@@ -45,6 +51,9 @@ func New(ctx context.Context, databaseURL string) (*DB, error) {
 func (d *DB) Close() {
 	if d != nil && d.pool != nil {
 		d.pool.Close()
+	}
+	if d != nil && d.auditPool != nil {
+		d.auditPool.Close()
 	}
 }
 
