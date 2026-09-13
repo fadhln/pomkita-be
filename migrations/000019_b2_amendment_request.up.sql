@@ -293,17 +293,17 @@ begin
     raise exception using errcode = '42501', message = 'amendment_reject_role_required';
   end if;
   perform set_config('app.transition', 'reject_amendment', true);
-  update public.amendments
+  update public.amendments as a
      set status = 'rejected', approver_user_id = v_actor,
          decided_at = clock_timestamp(), rejection_reason = p_rejection_reason
-   where org_id = v_org_id and station_id = v_station_id and amendment_id = p_amendment_id;
+   where a.org_id = v_org_id and a.station_id = v_station_id and a.amendment_id = p_amendment_id;
   select a.status, a.rejection_reason, a.decided_at
     into v_status, p_rejection_reason, v_decided_at
     from public.amendments a
    where a.org_id = v_org_id and a.station_id = v_station_id and a.amendment_id = p_amendment_id;
   perform public.fn_append_audit_event(
-    p_amendment_id, 'amendment_rejected',
-    jsonb_build_object('shift_id', (select shift_id::text from public.amendments where amendment_id = p_amendment_id),
+    app.gen_random_uuid(), 'amendment_rejected',
+    jsonb_build_object('shift_id', (select a.shift_id::text from public.amendments a where a.amendment_id = p_amendment_id),
                        'rejection_reason', p_rejection_reason), 'success', null);
   amendment_id := p_amendment_id;
   status := v_status;
