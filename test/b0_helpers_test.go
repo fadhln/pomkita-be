@@ -63,6 +63,8 @@ func resetMigrations(t *testing.T, conn *pgx.Conn) {
 		name  string
 		check string
 	}{
+		{"000021_b4_reporting_fix.down.sql", `select to_regprocedure('public.read_anomaly_export()') is not null`},
+		{"000020_b4_reporting.down.sql", `select to_regprocedure('public.read_report_printout(uuid)') is not null`},
 		{"000019_b2_amendment_request.down.sql", `select to_regprocedure('public.fn_request_amendment(uuid,uuid,text,jsonb)') is not null`},
 		{"000018_b3_reads_variance.down.sql", `select to_regprocedure('public.read_anomalies()') is not null`},
 		{"000017_b3_submit_backfill.down.sql", `select to_regprocedure('public.fn_submit_shift(uuid,uuid,uuid,integer,text,jsonb)') is not null`},
