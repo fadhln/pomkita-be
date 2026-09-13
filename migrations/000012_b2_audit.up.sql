@@ -232,7 +232,10 @@ end
 $$;
 create policy audit_log_context on public.audit_log using (org_id::text = current_setting('app.org_id', true));
 create policy audit_outbox_context on public.audit_outbox using (org_id::text = current_setting('app.org_id', true));
+create policy audit_outbox_relay on public.audit_outbox to relay
+using (org_id::text = coalesce(nullif(current_setting('app.relay_org_id', true), ''), current_setting('app.org_id', true)));
 create policy audit_denied_context on public.audit_denied using (org_id::text = current_setting('app.org_id', true));
+create policy audit_denied_writer on public.audit_denied to audit_owner using (true) with check (true);
 
 insert into public.procedure_registry(name, allowed_roles, action, lock_rank)
 values
