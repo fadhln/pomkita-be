@@ -1,5 +1,3 @@
--- PLAN.md section 3.3; BE-PLAN.md Phase B2.
-
 delete from public.procedure_registry
  where name in ('fn_request_amendment', 'read_amendment_queue', 'fn_reject_amendment');
 drop function if exists public.fn_request_amendment(uuid, uuid, text, jsonb);

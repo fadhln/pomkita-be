@@ -50,7 +50,7 @@ func TestB2AmendmentRequest_RejectsMeterAndStaleValues(t *testing.T) {
 			t.Fatal("invalid amendment item was accepted")
 		}
 		var pgErr *pgconn.PgError
-		if !errorsAs(err, &pgErr) || pgErr.Code != "23514" && pgErr.Code != "23505" {
+		if !errors.As(err, &pgErr) || pgErr.Code != "23514" && pgErr.Code != "23505" {
 			t.Fatalf("invalid amendment error: %v", err)
 		}
 	}
@@ -210,8 +210,4 @@ func amendmentRequestFixture(t *testing.T, conn *pgx.Conn) (string, string, stri
 	setTestContext(t, conn, org, station, supervisor, "Supervisor")
 	shift, report := submitGovernanceReport(t, conn, station, supervisor, lossID)
 	return org, station, supervisor, admin, requester, shift, report, governanceSaleID(t, conn, report)
-}
-
-func errorsAs(err error, target **pgconn.PgError) bool {
-	return errors.As(err, target)
 }
