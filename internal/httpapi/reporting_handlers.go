@@ -18,6 +18,9 @@ type AnomalyExportRow = appdb.AnomalyExportRow
 // AuditExportRow is one flat audit row for CSV output.
 type AuditExportRow = appdb.AuditExportRow
 
+// AuditTrailRow is one audit row for the audit trail screen.
+type AuditTrailRow = appdb.AuditTrailRow
+
 // AuditVerifyResult is the result of an audit-chain verification.
 type AuditVerifyResult = appdb.AuditVerifyResult
 
@@ -25,6 +28,7 @@ type AuditVerifyResult = appdb.AuditVerifyResult
 type ReportingService interface {
 	ReadReportPrintout(context.Context, string, uuid.UUID) (json.RawMessage, error)
 	ReadAnomalyExport(context.Context, string) ([]AnomalyExportRow, error)
+	ReadAuditTrail(context.Context, string) ([]AuditTrailRow, error)
 	ReadAuditExport(context.Context, string) ([]AuditExportRow, error)
 	VerifyAuditChain(context.Context, string) (AuditVerifyResult, error)
 	ReadPolicyHistory(context.Context, string) ([]json.RawMessage, error)
@@ -34,6 +38,7 @@ func registerReportingRoutes(router *gin.Engine, verifier TokenVerifier, service
 	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
 	router.GET("/report/:id/printout", append(protectedRead, readReportPrintoutHandler(service))...)
 	router.GET("/anomalies/export", append(protectedRead, readAnomalyExportHandler(service))...)
+	router.GET("/audit", append(protectedRead, readAuditTrailHandler(service))...)
 	router.GET("/audit/export", append(protectedRead, readAuditExportHandler(service))...)
 	router.GET("/audit/verify", append(protectedRead, verifyAuditChainHandler(service))...)
 	router.GET("/policy/history", append(protectedRead, readPolicyHistoryHandler(service))...)
@@ -81,6 +86,24 @@ func readAnomalyExportHandler(service ReportingService) gin.HandlerFunc {
 			}
 			return nil
 		})
+	}
+}
+
+func readAuditTrailHandler(service ReportingService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		rows, err := service.ReadAuditTrail(c, c.GetString("raw_token"))
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		if rows == nil {
+			rows = []AuditTrailRow{}
+		}
+		c.JSON(http.StatusOK, rows)
 	}
 }
 
