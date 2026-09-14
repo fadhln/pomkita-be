@@ -79,3 +79,30 @@ func TestPolicyRepository_CreateRevision_PersistsTombstoneReason(t *testing.T) {
 		t.Fatalf("tombstone reason: got %q", reason)
 	}
 }
+
+func TestPolicyRepository_History_DoesNotCrossOrganizationForGlobalRevisions(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+	otherOrg := uuid.New()
+	if err := fixture.store.db.Table("organizations").Create(map[string]any{"org_id": otherOrg, "name": "Other org"}).Error; err != nil {
+		t.Fatalf("create other organization: %v", err)
+	}
+	otherActor := uuid.New()
+	if err := fixture.store.db.Create(&UserModel{UserID: otherActor, OrgID: otherOrg, DisplayName: "Other owner", Email: "other-owner@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: fixture.now}).Error; err != nil {
+		t.Fatalf("create other user: %v", err)
+	}
+	otherRevision := ThresholdPolicyRevisionModel{RevID: uuid.New(), PolicyID: uuid.New(), OrgID: otherOrg, ValidFrom: fixture.now, LossLiterThreshold: Decimal("1"), GainLiterThreshold: Decimal("1"), LossRupiahThreshold: Decimal("1"), GainRupiahThreshold: Decimal("1"), VarianceThreshold: Decimal("1"), RolloverThreshold: Decimal("1"), CreatedBy: otherActor, CreatedAt: fixture.now}
+	if err := fixture.store.db.Create(&otherRevision).Error; err != nil {
+		t.Fatalf("create other global revision: %v", err)
+	}
+	rows, err := NewPolicyRepository(fixture.store).History(ctx, fixture.orgID, &fixture.stationID)
+	if err != nil {
+		t.Fatalf("read policy history: %v", err)
+	}
+	for _, row := range rows {
+		if row.RevisionID == otherRevision.RevID {
+			t.Fatalf("history returned revision from another organization: %s", row.RevisionID)
+		}
+	}
+}
