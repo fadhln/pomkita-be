@@ -546,6 +546,84 @@ func (r *GovernanceRepository) RecordAlertOccurrence(ctx context.Context, reques
 	return result, nil
 }
 
+// EvaluateStarvation fires overdue shift alerts and clears them after lock.
+func (r *GovernanceRepository) EvaluateStarvation(ctx context.Context, now time.Time, window time.Duration) (int, error) {
+	if r == nil || r.db == nil {
+		return 0, appgovernance.ErrDependencyUnavailable
+	}
+	if now.IsZero() || window != 24*time.Hour {
+		return 0, appgovernance.ErrAlertInvalidRequest
+	}
+	inserted := 0
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		cutoff := now.Add(-window)
+		var shifts []ShiftModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("status in ? and opened_at <= ?", []string{"open", "awaiting_confirmation", "locked"}, now).Order("org_id, station_id, shift_id").Find(&shifts).Error; err != nil {
+			return fmt.Errorf("load starvation shifts: %w", err)
+		}
+		var rules []AlertRuleModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("rule_type = ?", "starvation").Order("station_id, rule_id").Find(&rules).Error; err != nil {
+			return fmt.Errorf("load starvation rules: %w", err)
+		}
+		rulesByStation := make(map[uuid.UUID][]AlertRuleModel)
+		for _, rule := range rules {
+			rulesByStation[rule.StationID] = append(rulesByStation[rule.StationID], rule)
+		}
+		for _, shift := range shifts {
+			for _, rule := range rulesByStation[shift.StationID] {
+				if shift.Status == "open" || shift.Status == "awaiting_confirmation" {
+					if shift.OpenedAt.After(cutoff) || !rule.Enabled {
+						continue
+					}
+					period := shift.OpenedAt.UTC().Truncate(time.Hour)
+					var existing AlertEventModel
+					err := tx.Where("org_id = ? and station_id = ? and rule_id = ? and subject_kind = ? and subject_id = ? and event_type = ? and period_bucket = ?", shift.OrgID, shift.StationID, rule.RuleID, "shift", shift.ShiftID, "fired", period).First(&existing).Error
+					if err == nil {
+						continue
+					}
+					if !errors.Is(err, gorm.ErrRecordNotFound) {
+						return fmt.Errorf("load starvation alert: %w", err)
+					}
+					eventID := uuid.New()
+					event := AlertEventModel{EventID: eventID, OrgID: shift.OrgID, StationID: shift.StationID, RuleID: rule.RuleID, SubjectKind: "shift", SubjectID: shift.ShiftID, EventType: "fired", PeriodStart: shift.OpenedAt, RelatedFiredID: &eventID, SourceKind: "scheduler", SourceID: shift.ShiftID, SourceAt: now, CreatedAt: now}
+					if err := tx.Create(&event).Error; err != nil {
+						return fmt.Errorf("create starvation alert: %w", err)
+					}
+					inserted++
+				}
+				if shift.Status != "locked" {
+					continue
+				}
+				var fired []AlertEventModel
+				if err := tx.Where("org_id = ? and station_id = ? and rule_id = ? and subject_kind = ? and subject_id = ? and event_type = ?", shift.OrgID, shift.StationID, rule.RuleID, "shift", shift.ShiftID, "fired").Order("created_at, event_id").Find(&fired).Error; err != nil {
+					return fmt.Errorf("load fired starvation alerts: %w", err)
+				}
+				for _, firedEvent := range fired {
+					var cleared AlertEventModel
+					err := tx.Where("org_id = ? and station_id = ? and related_fired_event_id = ? and event_type = ?", shift.OrgID, shift.StationID, firedEvent.EventID, "cleared").First(&cleared).Error
+					if err == nil {
+						continue
+					}
+					if !errors.Is(err, gorm.ErrRecordNotFound) {
+						return fmt.Errorf("load cleared starvation alert: %w", err)
+					}
+					related := firedEvent.EventID
+					clear := AlertEventModel{EventID: uuid.New(), OrgID: shift.OrgID, StationID: shift.StationID, RuleID: rule.RuleID, SubjectKind: "shift", SubjectID: shift.ShiftID, EventType: "cleared", PeriodStart: firedEvent.PeriodStart, RelatedFiredID: &related, SourceKind: "shift_transition", SourceID: shift.ShiftID, SourceAt: now, CreatedAt: now}
+					if err := tx.Create(&clear).Error; err != nil {
+						return fmt.Errorf("create starvation clear: %w", err)
+					}
+					inserted++
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return inserted, nil
+}
+
 func (r *GovernanceRepository) reportSnapshotHash(tx *gorm.DB, report ShiftReportModel) ([]byte, error) {
 	var readings []DispenserReadingModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Order("reading_id").Find(&readings).Error; err != nil {
