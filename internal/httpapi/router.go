@@ -44,7 +44,6 @@ type RouterDependencies struct {
 	Readiness         Readiness
 	Verifier          TokenVerifier
 	Sessions          SessionService
-	Shifts            ShiftService
 	ModernShift       ModernShiftService
 	ModernShiftRead   ModernShiftReadService
 	ModernDraft       ModernDraftService
@@ -57,11 +56,7 @@ type RouterDependencies struct {
 	ModernAudit       ModernAuditService
 	ModernAuditVerify ModernAuditVerificationService
 	ModernAnomalies   ModernAnomalyService
-	LegacyRoutes      bool
-	Governance        GovernanceService
-	Reporting         ReportingService
 	Reports           ModernReportingService
-	Policy            PolicyRevisionService
 	LatestMigration   int
 }
 
@@ -70,16 +65,7 @@ var ErrInvalidCredentials = appauth.ErrInvalidCredentials
 
 // NewRouter creates a router without a database readiness dependency.
 func NewRouter(environment string, allowedOrigins []string) *gin.Engine {
-	return NewRouterWithDependencies(environment, allowedOrigins, nil, nil)
-}
-
-// NewRouterWithDependencies creates a router with its readiness and token services.
-func NewRouterWithDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, services ...SessionService) *gin.Engine {
-	var sessions SessionService
-	if len(services) > 0 {
-		sessions = services[0]
-	}
-	return NewRouterWithAllDependencies(environment, allowedOrigins, readiness, verifier, sessions, nil)
+	return buildRouter(environment, allowedOrigins, RouterDependencies{})
 }
 
 // NewRouterWithDependencySet creates a router with explicit typed dependencies.
@@ -87,64 +73,21 @@ func NewRouterWithDependencySet(environment string, allowedOrigins []string, dep
 	return buildRouter(environment, allowedOrigins, dependencies)
 }
 
-// NewRouterWithAllDependencies creates a router with session and shift services.
-func NewRouterWithAllDependencies(environment string, allowedOrigins []string, readiness Readiness, verifier TokenVerifier, sessions SessionService, shifts ShiftService, dependencies ...any) *gin.Engine {
-	if environment == "production" {
-		gin.SetMode(gin.ReleaseMode)
-	}
-	var governance GovernanceService
-	var reporting ReportingService
-	var reports ModernReportingService
-	var policy PolicyRevisionService
-	for _, dependency := range dependencies {
-		if dependency == nil {
-			continue
-		}
-		if candidate, ok := dependency.(GovernanceService); ok {
-			governance = candidate
-		}
-		if candidate, ok := dependency.(ReportingService); ok {
-			reporting = candidate
-		}
-		if candidate, ok := dependency.(ModernReportingService); ok {
-			reports = candidate
-		}
-		if candidate, ok := dependency.(PolicyRevisionService); ok {
-			policy = candidate
-		}
-	}
-
-	return buildRouter(environment, allowedOrigins, RouterDependencies{
-		Readiness: readiness, Verifier: verifier, Sessions: sessions, Shifts: shifts,
-		Governance: governance, Reporting: reporting, Reports: reports, Policy: policy, LegacyRoutes: true, LatestMigration: 23,
-	})
-}
-
 func buildRouter(environment string, allowedOrigins []string, dependencies RouterDependencies) *gin.Engine {
 	if environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	if dependencies.LatestMigration == 0 {
-		dependencies.LatestMigration = 23
+		dependencies.LatestMigration = 11
 	}
 	router := gin.New()
 	router.Use(gin.Recovery(), corsMiddleware(allowedOrigins), requestID(), ErrorMappingMiddleware())
 	router.GET("/health", health)
 	router.GET("/ready", readyHandler(dependencies.Readiness, dependencies.LatestMigration))
 	registerSessionRoutes(router, dependencies.Verifier, dependencies.Sessions, environment == "production")
-	if dependencies.LegacyRoutes {
-		registerShiftRoutes(router, dependencies.Verifier, dependencies.Shifts)
-		registerGovernanceRoutes(router, dependencies.Verifier, dependencies.Governance)
-		registerReportingRoutes(router, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
-	}
 
 	versioned := router.Group("/api/v1")
 	registerSessionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, environment == "production")
-	if dependencies.LegacyRoutes {
-		registerShiftRoutes(versioned, dependencies.Verifier, dependencies.Shifts)
-		registerGovernanceRoutes(versioned, dependencies.Verifier, dependencies.Governance)
-		registerReportingRoutes(versioned, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
-	}
 	registerModernReportingRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	registerModernShiftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShift)
 	registerModernShiftReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShiftRead)
@@ -169,34 +112,6 @@ func registerSessionRoutes(router gin.IRoutes, verifier TokenVerifier, service S
 	router.POST("/login", requireCSRF, loginHandler(service, secure))
 	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(service, secure))
 	router.GET("/session", AuthMiddleware(verifier), sessionHandler(service))
-}
-
-func registerShiftRoutes(router gin.IRoutes, verifier TokenVerifier, service ShiftService) {
-	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
-	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
-	router.POST("/shift/open", append(protectedWrite, openShiftHandler(service))...)
-	router.POST("/draft/claim", append(protectedWrite, claimDraftHandler(service))...)
-	router.POST("/draft/heartbeat", append(protectedWrite, heartbeatDraftHandler(service))...)
-	router.POST("/draft/reading", append(protectedWrite, writeDraftReadingHandler(service))...)
-	router.POST("/draft/sales", append(protectedWrite, writeDraftSalesHandler(service))...)
-	router.POST("/draft/loss", append(protectedWrite, writeDraftLossHandler(service))...)
-	router.POST("/draft/evidence", append(protectedWrite, stageDraftEvidenceHandler(service))...)
-	router.GET("/draft", append(protectedRead, readDraftHandler(service))...)
-	router.POST("/shift/submit", append(protectedWrite, submitShiftHandler(service))...)
-	router.GET("/shifts", append(protectedRead, readShiftListHandler(service))...)
-	router.GET("/shifts/:id", append(protectedRead, readShiftDetailHandler(service))...)
-	router.GET("/report/:id", append(protectedRead, readReportHandler(service))...)
-}
-
-func registerGovernanceRoutes(router gin.IRoutes, verifier TokenVerifier, service GovernanceService) {
-	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
-	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
-	router.POST("/shift/ack", append(protectedWrite, ackShiftHandler(service))...)
-	router.POST("/amendment/approve", append(protectedWrite, approveAmendmentHandler(service))...)
-	router.POST("/amendment/request", append(protectedWrite, requestAmendmentHandler(service))...)
-	router.POST("/amendment/reject", append(protectedWrite, rejectAmendmentHandler(service))...)
-	router.GET("/amendments", append(protectedRead, readAmendmentQueueHandler(service))...)
-	router.GET("/anomalies", append(protectedRead, readGovernanceAnomaliesHandler(service))...)
 }
 
 func health(c *gin.Context) {

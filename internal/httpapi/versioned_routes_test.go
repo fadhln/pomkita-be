@@ -9,7 +9,7 @@ import (
 
 func TestVersionedSessionRoute_UsesTheV1ProductPrefix(t *testing.T) {
 	view := SessionView{DisplayName: "Test User"}
-	router := NewRouterWithDependencies("test", nil, readyStub{}, verifierStub{}, &sessionServiceStub{view: view})
+	router := testRouter("test", nil, readyStub{}, verifierStub{}, &sessionServiceStub{view: view})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/session", nil)
@@ -25,7 +25,7 @@ func TestVersionedSessionRoute_UsesTheV1ProductPrefix(t *testing.T) {
 }
 
 func TestVersionedHealthAndReadyRoutes_AreNotRegistered(t *testing.T) {
-	router := NewRouterWithDependencies("test", nil, readyStub{}, nil)
+	router := testRouter("test", nil, readyStub{}, nil, nil)
 
 	for _, path := range []string{"/api/v1/health", "/api/v1/ready"} {
 		recorder := httptest.NewRecorder()

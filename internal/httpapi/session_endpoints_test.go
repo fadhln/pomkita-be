@@ -35,7 +35,7 @@ func (s *sessionServiceStub) ReadSession(context.Context, string) (SessionView, 
 
 func TestLoginSetsSessionCookieWithContractFlags(t *testing.T) {
 	service := &sessionServiceStub{loginToken: "jwt-token"}
-	router := NewRouterWithDependencies("production", nil, readyStub{}, nil, service)
+	router := testRouter("production", nil, readyStub{}, nil, service)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -58,7 +58,7 @@ func TestLoginSetsSessionCookieWithContractFlags(t *testing.T) {
 }
 
 func TestLoginRequiresCSRFHeader(t *testing.T) {
-	router := NewRouterWithDependencies("test", nil, readyStub{}, nil, &sessionServiceStub{loginToken: "jwt-token"})
+	router := testRouter("test", nil, readyStub{}, nil, &sessionServiceStub{loginToken: "jwt-token"})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -72,7 +72,7 @@ func TestLoginReturnsSameInvalidCredentialsErrorForBadPasswordAndUnknownEmail(t 
 	for _, name := range []string{"bad password", "unknown email"} {
 		t.Run(name, func(t *testing.T) {
 			service := &sessionServiceStub{loginErr: ErrInvalidCredentials}
-			router := NewRouterWithDependencies("test", nil, readyStub{}, nil, service)
+			router := testRouter("test", nil, readyStub{}, nil, service)
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"wrong"}`))
 			request.Header.Set("Content-Type", "application/json")
@@ -88,7 +88,7 @@ func TestLoginReturnsSameInvalidCredentialsErrorForBadPasswordAndUnknownEmail(t 
 func TestLogoutRevokesAuthenticatedSessionAndClearsCookie(t *testing.T) {
 	jti := uuid.MustParse("44444444-4444-4444-8444-444444444444")
 	service := &sessionServiceStub{}
-	router := NewRouterWithDependencies("test", nil, readyStub{}, verifierStub{claims: appjwt.Claims{JTI: jti}}, service)
+	router := testRouter("test", nil, readyStub{}, verifierStub{claims: appjwt.Claims{JTI: jti}}, service)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/logout", nil)
 	request.Header.Set("Authorization", "Bearer token")
@@ -108,7 +108,7 @@ func TestLogoutRevokesAuthenticatedSessionAndClearsCookie(t *testing.T) {
 }
 
 func TestLogoutRequiresCSRFHeader(t *testing.T) {
-	router := NewRouterWithDependencies("test", nil, readyStub{}, verifierStub{}, &sessionServiceStub{})
+	router := testRouter("test", nil, readyStub{}, verifierStub{}, &sessionServiceStub{})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/logout", nil)
 	request.Header.Set("Authorization", "Bearer token")
@@ -119,7 +119,7 @@ func TestLogoutRequiresCSRFHeader(t *testing.T) {
 }
 
 func TestLogoutReturnsInternalErrorWhenSessionServiceIsMissing(t *testing.T) {
-	router := NewRouterWithDependencies("test", nil, readyStub{}, verifierStub{}, nil)
+	router := testRouter("test", nil, readyStub{}, verifierStub{}, nil)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodDelete, "/logout", nil)
 	request.Header.Set("Authorization", "Bearer token")
@@ -139,7 +139,7 @@ func TestSessionReturnsProcedurePayload(t *testing.T) {
 		OrgID:       uuid.MustParse("11111111-1111-4111-8111-111111111111"),
 		StationIDs:  []uuid.UUID{uuid.MustParse("22222222-2222-4222-8222-222222222222")},
 	}
-	router := NewRouterWithDependencies("test", nil, readyStub{}, verifierStub{}, &sessionServiceStub{view: view})
+	router := testRouter("test", nil, readyStub{}, verifierStub{}, &sessionServiceStub{view: view})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/session", nil)
 	request.Header.Set("Authorization", "Bearer token")
