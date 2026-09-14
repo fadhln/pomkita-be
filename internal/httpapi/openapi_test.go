@@ -29,7 +29,7 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 	if document.OpenAPI != "3.0.3" {
 		t.Fatalf("OpenAPI version: got %q, want 3.0.3", document.OpenAPI)
 	}
-	for _, path := range []string{"/api/v1/login", "/api/v1/session", "/api/v1/shifts", "/api/v1/drafts/claim", "/api/v1/submissions", "/api/v1/reports/{id}", "/health", "/ready"} {
+	for _, path := range []string{"/api/v1/login", "/api/v1/session", "/api/v1/shifts", "/api/v1/drafts/claim", "/api/v1/submissions", "/api/v1/reports/{id}", "/api/v1/reports/{id}/acknowledgement", "/health", "/ready"} {
 		if _, ok := document.Paths[path]; !ok {
 			t.Fatalf("OpenAPI contract does not define %s", path)
 		}
