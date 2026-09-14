@@ -4,6 +4,7 @@ package shift
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,8 @@ var (
 	ErrDependencyUnavailable = domain.NewError(domain.CategoryDependency, "dependency_unavailable")
 	// ErrUnauthorized identifies an actor without operational shift authority.
 	ErrUnauthorized = domain.NewError(domain.CategoryAuthorization, "shift_open_forbidden")
+	// ErrBackfillApprovalRequired identifies incomplete or unexpected backfill data.
+	ErrBackfillApprovalRequired = domain.NewError(domain.CategoryValidation, "backfill_approval_required")
 )
 
 // Clock provides the current time to the service.
@@ -34,11 +37,16 @@ type Clock interface {
 
 // OpenRequest contains actor and station scope for a new shift.
 type OpenRequest struct {
-	OrgID     uuid.UUID
-	StationID uuid.UUID
-	ActorID   uuid.UUID
-	Role      string
-	OpenedAt  time.Time
+	OrgID             uuid.UUID
+	StationID         uuid.UUID
+	ActorID           uuid.UUID
+	Role              string
+	OpenedAt          time.Time
+	Backfilled        bool
+	OriginalEventDate string
+	ShiftKE           int
+	BackfillApprover  uuid.UUID
+	BackfillReason    string
 }
 
 // Shift is the immutable result of opening a shift.
@@ -82,6 +90,13 @@ func (s *Service) OpenShift(ctx context.Context, request OpenRequest) (Shift, er
 	}
 	if request.Role != "Supervisor" {
 		return Shift{}, ErrUnauthorized
+	}
+	if request.Backfilled {
+		if request.OriginalEventDate == "" || request.ShiftKE < 1 || request.BackfillApprover == uuid.Nil || strings.TrimSpace(request.BackfillReason) == "" {
+			return Shift{}, ErrBackfillApprovalRequired
+		}
+	} else if request.OriginalEventDate != "" || request.ShiftKE != 0 || request.BackfillApprover != uuid.Nil || strings.TrimSpace(request.BackfillReason) != "" {
+		return Shift{}, ErrBackfillApprovalRequired
 	}
 	if request.OpenedAt.IsZero() {
 		request.OpenedAt = s.clock.Now().UTC()

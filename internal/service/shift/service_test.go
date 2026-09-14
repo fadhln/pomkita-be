@@ -64,6 +64,15 @@ func TestService_OpenShift_RejectsOwnerOperationalAction(t *testing.T) {
 	}
 }
 
+func TestService_OpenShift_RejectsIncompleteBackfillApproval(t *testing.T) {
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.UTC)
+	service := NewService(&openShiftRepositoryStub{}, fixedClock{value: now})
+	_, err := service.OpenShift(context.Background(), OpenRequest{OrgID: uuid.New(), StationID: uuid.New(), ActorID: uuid.New(), Role: "Supervisor", Backfilled: true, OpenedAt: now})
+	if !errors.Is(err, ErrBackfillApprovalRequired) {
+		t.Fatalf("backfill error: got %v, want %v", err, ErrBackfillApprovalRequired)
+	}
+}
+
 type fixedClock struct{ value time.Time }
 
 func (c fixedClock) Now() time.Time { return c.value }

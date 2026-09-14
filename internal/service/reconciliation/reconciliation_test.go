@@ -34,3 +34,18 @@ func TestCalculateExpectedSale_UsesHalfUpAndRejectsOverflow(t *testing.T) {
 		t.Fatalf("overflow: got %v, want %v", err, ErrNumericOverflow)
 	}
 }
+
+func TestValidateMeterStart_RequiresTheSelectedContinuitySource(t *testing.T) {
+	if err := ValidateMeterStart("20.0", "20.0", "", ""); err != nil {
+		t.Fatalf("predecessor continuity: %v", err)
+	}
+	if err := ValidateMeterStart("21.0", "20.0", "", ""); !errors.Is(err, ErrMeterChainConflict) {
+		t.Fatalf("predecessor conflict: got %v, want %v", err, ErrMeterChainConflict)
+	}
+	if err := ValidateMeterStart("30.0", "20.0", "30.0", ""); err != nil {
+		t.Fatalf("approved reset: %v", err)
+	}
+	if err := ValidateMeterStart("30.0", "", "", "30.0"); err != nil {
+		t.Fatalf("baseline: %v", err)
+	}
+}

@@ -45,6 +45,35 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 		if err := tx.Model(&ShiftModel{}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).Select("coalesce(max(station_seq), 0) + 1").Scan(&sequence).Error; err != nil {
 			return fmt.Errorf("allocate station sequence: %w", err)
 		}
+		var originalEventDate *time.Time
+		var shiftKE *int
+		var backfillApprover *uuid.UUID
+		var backfillReason *string
+		var backfillApprovedAt *time.Time
+		if request.Backfilled {
+			parsedDate, err := time.Parse("2006-01-02", request.OriginalEventDate)
+			if err != nil || request.BackfillApprover == uuid.Nil || request.ShiftKE < 1 || strings.TrimSpace(request.BackfillReason) == "" {
+				return appshift.ErrBackfillApprovalRequired
+			}
+			var approverCount int64
+			if err := tx.Table("user_station_roles").Where("org_id = ? and station_id = ? and user_id = ? and role in ?", request.OrgID, request.StationID, request.BackfillApprover, []string{"Owner", "Superadmin"}).Count(&approverCount).Error; err != nil {
+				return fmt.Errorf("check backfill approver: %w", err)
+			}
+			if approverCount != 1 {
+				return appshift.ErrBackfillApprovalRequired
+			}
+			originalEventDate = &parsedDate
+			value := request.ShiftKE
+			shiftKE = &value
+			approver := request.BackfillApprover
+			backfillApprover = &approver
+			reason := strings.TrimSpace(request.BackfillReason)
+			backfillReason = &reason
+			approvedAt := request.OpenedAt
+			backfillApprovedAt = &approvedAt
+		} else if request.OriginalEventDate != "" || request.ShiftKE != 0 || request.BackfillApprover != uuid.Nil || strings.TrimSpace(request.BackfillReason) != "" {
+			return appshift.ErrBackfillApprovalRequired
+		}
 		snapshot, hash, err := r.catalogSnapshot(tx, request, request.OpenedAt)
 		if err != nil {
 			return err
@@ -59,7 +88,7 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 			ShiftID: shiftID, OrgID: request.OrgID, StationID: request.StationID,
 			StationSeq: sequence, SupervisorID: request.ActorID, OpenedAt: openedAt,
 			TimezoneSnapshot: station.Timezone, BusinessDate: openedAt.In(location).Format("2006-01-02"),
-			Status: string(appshift.StatusOpen), Backfilled: false, PriceMapSnapshot: snapshot, PriceMapHash: hash,
+			Status: string(appshift.StatusOpen), OriginalEventDate: originalEventDate, ShiftKE: shiftKE, Backfilled: request.Backfilled, BackfillApprover: backfillApprover, BackfillApproved: backfillApprovedAt, BackfillReason: backfillReason, PriceMapSnapshot: snapshot, PriceMapHash: hash,
 		}
 		if err := tx.Create(&shift).Error; err != nil {
 			return fmt.Errorf("create shift: %w", err)

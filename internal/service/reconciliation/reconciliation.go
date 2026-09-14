@@ -20,6 +20,8 @@ var (
 	ErrInvalidMeterRange = domain.NewError(domain.CategoryValidation, "invalid_meter_range")
 	// ErrNumericOverflow identifies a value outside the Rupiah numeric boundary.
 	ErrNumericOverflow = domain.NewError(domain.CategoryValidation, "numeric_overflow")
+	// ErrMeterChainConflict identifies a meter start that breaks continuity.
+	ErrMeterChainConflict = domain.NewError(domain.CategoryConflict, "meter_chain_conflict")
 )
 
 // CalculateMeterDelta calculates a meter delta without floating-point conversion.
@@ -53,6 +55,32 @@ func CalculateMeterDelta(start, end, modulus, rolloverThreshold string) (string,
 		}
 	}
 	return formatDecimal(delta, maxInt(scaleStart, maxInt(scaleEnd, maxInt(scaleModulus, scaleThreshold)))), nil
+}
+
+// ValidateMeterStart checks the current start against reset, baseline, or predecessor state.
+func ValidateMeterStart(current, predecessorEnd, resetValue, baselineValue string) error {
+	currentValue, _, err := parseDecimal(current)
+	if err != nil {
+		return err
+	}
+	expected := resetValue
+	if expected == "" {
+		expected = baselineValue
+	}
+	if expected == "" {
+		expected = predecessorEnd
+	}
+	if expected == "" {
+		return nil
+	}
+	expectedValue, _, err := parseDecimal(expected)
+	if err != nil {
+		return err
+	}
+	if currentValue.Cmp(expectedValue) != 0 {
+		return ErrMeterChainConflict
+	}
+	return nil
 }
 
 // CalculateExpectedSaleRupiah multiplies liters by price and rounds positive values half up.
