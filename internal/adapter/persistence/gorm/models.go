@@ -142,6 +142,61 @@ type ShiftReportModel struct {
 // TableName returns the shift_reports table name.
 func (ShiftReportModel) TableName() string { return "shift_reports" }
 
+// AckDecisionModel maps one immutable acknowledgement decision.
+type AckDecisionModel struct {
+	AckID            uuid.UUID `gorm:"column:ack_id;type:uuid;primaryKey"`
+	OrgID            uuid.UUID `gorm:"column:org_id;type:uuid;not null"`
+	StationID        uuid.UUID `gorm:"column:station_id;type:uuid;not null"`
+	ShiftID          uuid.UUID `gorm:"column:shift_id;type:uuid;not null"`
+	ReportID         uuid.UUID `gorm:"column:report_id;type:uuid;not null"`
+	VersionNo        int       `gorm:"column:version_no;not null"`
+	AckSeq           int64     `gorm:"column:ack_seq;not null"`
+	Decision         string    `gorm:"column:decision;not null"`
+	ActorUserID      uuid.UUID `gorm:"column:actor_user_id;type:uuid;not null"`
+	DecidedAt        time.Time `gorm:"column:decided_at;not null"`
+	RejectionReason  *string   `gorm:"column:rejection_reason"`
+	IsSuperadmin     bool      `gorm:"column:is_superadmin;not null"`
+	IsBreakGlass     bool      `gorm:"column:is_break_glass;not null"`
+	BreakGlassReason *string   `gorm:"column:break_glass_reason"`
+}
+
+// TableName returns the ack_decisions table name.
+func (AckDecisionModel) TableName() string { return "ack_decisions" }
+
+// AckHeadModel maps the active acknowledgement pointer for one report version.
+type AckHeadModel struct {
+	OrgID       uuid.UUID  `gorm:"column:org_id;type:uuid;primaryKey"`
+	StationID   uuid.UUID  `gorm:"column:station_id;type:uuid;primaryKey"`
+	ShiftID     uuid.UUID  `gorm:"column:shift_id;type:uuid;primaryKey"`
+	ReportID    uuid.UUID  `gorm:"column:report_id;type:uuid;primaryKey"`
+	VersionNo   int        `gorm:"column:version_no;primaryKey"`
+	ActiveAckID *uuid.UUID `gorm:"column:active_ack_id;type:uuid"`
+}
+
+// TableName returns the ack_head table name.
+func (AckHeadModel) TableName() string { return "ack_head" }
+
+// AckSupersessionModel maps an acknowledgement replacement relation.
+type AckSupersessionModel struct {
+	SupersessionID       uuid.UUID `gorm:"column:supersession_id;type:uuid;primaryKey"`
+	OldOrgID             uuid.UUID `gorm:"column:old_org_id;type:uuid;not null"`
+	OldStationID         uuid.UUID `gorm:"column:old_station_id;type:uuid;not null"`
+	OldShiftID           uuid.UUID `gorm:"column:old_shift_id;type:uuid;not null"`
+	OldReportID          uuid.UUID `gorm:"column:old_report_id;type:uuid;not null"`
+	OldVersionNo         int       `gorm:"column:old_version_no;not null"`
+	SupersededAckID      uuid.UUID `gorm:"column:superseded_ack_id;type:uuid;not null"`
+	ReplacementOrgID     uuid.UUID `gorm:"column:replacement_org_id;type:uuid;not null"`
+	ReplacementStationID uuid.UUID `gorm:"column:replacement_station_id;type:uuid;not null"`
+	ReplacementShiftID   uuid.UUID `gorm:"column:replacement_shift_id;type:uuid;not null"`
+	ReplacementReportID  uuid.UUID `gorm:"column:replacement_report_id;type:uuid;not null"`
+	ReplacementVersionNo int       `gorm:"column:replacement_version_no;not null"`
+	Reason               string    `gorm:"column:reason;not null"`
+	CreatedAt            time.Time `gorm:"column:created_at;not null"`
+}
+
+// TableName returns the ack_supersessions table name.
+func (AckSupersessionModel) TableName() string { return "ack_supersessions" }
+
 // PolicySnapshotSetModel maps the policy snapshot set for one shift.
 type PolicySnapshotSetModel struct {
 	SetID     uuid.UUID  `gorm:"column:set_id;type:uuid;primaryKey"`

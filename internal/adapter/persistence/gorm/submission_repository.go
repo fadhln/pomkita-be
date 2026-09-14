@@ -119,6 +119,10 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 		if err := tx.Create(&report).Error; err != nil {
 			return fmt.Errorf("create shift report: %w", err)
 		}
+		head := AckHeadModel{OrgID: report.OrgID, StationID: report.StationID, ShiftID: report.ShiftID, ReportID: report.ReportID, VersionNo: report.VersionNo}
+		if err := tx.Create(&head).Error; err != nil {
+			return fmt.Errorf("create acknowledgement head: %w", err)
+		}
 		if err := r.promoteDraftChildren(tx, shift, draft, report, payload, rolloverThreshold, now); err != nil {
 			return err
 		}

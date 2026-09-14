@@ -63,6 +63,13 @@ func TestSubmissionRepository_Submit_IsIdempotentByRequestHash(t *testing.T) {
 	if reportCount != 1 {
 		t.Fatalf("report count: got %d, want 1", reportCount)
 	}
+	var head AckHeadModel
+	if err := store.db.Where("report_id = ?", first.ReportID).First(&head).Error; err != nil {
+		t.Fatalf("load acknowledgement head: %v", err)
+	}
+	if head.ActiveAckID != nil {
+		t.Fatalf("new acknowledgement head has active decision %v", *head.ActiveAckID)
+	}
 }
 
 func TestSubmissionRepository_Submit_PromotesDraftChildrenToReport(t *testing.T) {
