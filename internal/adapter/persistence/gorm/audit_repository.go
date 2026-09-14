@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/pomkita/pomkita-be/internal/canonical"
 	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -113,8 +114,17 @@ func (r *AuditRepository) Verify(ctx context.Context, orgID uuid.UUID) error {
 }
 
 func auditRowHash(orgID uuid.UUID, sequence int64, eventID uuid.UUID, eventType string, payload []byte, createdAt time.Time, prevHash []byte) []byte {
-	canonical, _ := json.Marshal([]any{1, orgID.String(), sequence, strings.ToLower(eventID.String()), eventType, json.RawMessage(payload), createdAt.UTC().Format("2006-01-02T15:04:05.000000Z"), hex.EncodeToString(prevHash)})
-	digest := sha256.Sum256(canonical)
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	var decodedPayload any
+	if err := decoder.Decode(&decodedPayload); err != nil {
+		return nil
+	}
+	canonicalBytes, err := canonical.Marshal([]any{1, orgID.String(), sequence, strings.ToLower(eventID.String()), eventType, decodedPayload, createdAt.UTC().Format("2006-01-02T15:04:05.000000Z"), hex.EncodeToString(prevHash)})
+	if err != nil {
+		return nil
+	}
+	digest := sha256.Sum256(canonicalBytes)
 	return digest[:]
 }
 

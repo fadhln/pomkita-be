@@ -1,13 +1,42 @@
 package gormstore
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/pomkita/pomkita-be/internal/canonical"
 	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 )
+
+func TestAuditRowHash_UsesCanonicalJSONBytes(t *testing.T) {
+	orgID := uuid.MustParse("11111111-1111-4111-8111-111111111111")
+	eventID := uuid.MustParse("22222222-2222-4222-8222-222222222222")
+	createdAt := time.Date(2026, 1, 2, 14, 30, 0, 123456000, time.FixedZone("test", 7*60*60))
+	previous := bytes.Repeat([]byte{0xab}, 32)
+	payload := []byte(` { "z": 1, "a": "x" } `)
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	canonicalBytes, err := canonical.Marshal([]any{1, orgID.String(), int64(1), eventID.String(), "test", value, createdAt.UTC().Format("2006-01-02T15:04:05.000000Z"), hex.EncodeToString(previous)})
+	if err != nil {
+		t.Fatalf("canonical payload: %v", err)
+	}
+	wantDigest := sha256.Sum256(canonicalBytes)
+	got := auditRowHash(orgID, 1, eventID, "test", payload, createdAt, previous)
+	if !bytes.Equal(got, wantDigest[:]) {
+		t.Fatalf("row hash: got %x, want %x", got, wantDigest)
+	}
+}
 
 func TestAuditRepository_AppendBuildsAndVerifiesChainWithOutbox(t *testing.T) {
 	ctx := context.Background()
