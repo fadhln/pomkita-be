@@ -33,7 +33,7 @@
       "get": { "parameters": [{ "$ref": "#/components/parameters/ResourceID" }], "responses": { "200": { "description": "Report view" }, "401": { "$ref": "#/components/responses/Unauthorized" } } }
     },
     "/api/v1/reports/{id}": {
-      "get": { "parameters": [{ "$ref": "#/components/parameters/ResourceID" }, { "$ref": "#/components/parameters/StationID" }], "responses": { "200": { "description": "Typed report view" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "404": { "$ref": "#/components/responses/NotFound" } } }
+      "get": { "parameters": [{ "$ref": "#/components/parameters/ResourceID" }, { "$ref": "#/components/parameters/StationID" }], "responses": { "200": { "description": "Typed report view", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportView" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" }, "404": { "$ref": "#/components/responses/NotFound" } } }
     },
     "/api/v1/report/{id}/printout": {
       "get": { "parameters": [{ "$ref": "#/components/parameters/ResourceID" }], "responses": { "200": { "description": "Report printout" }, "401": { "$ref": "#/components/responses/Unauthorized" } } }
@@ -53,7 +53,57 @@
     "schemas": {
       "LoginRequest": { "type": "object", "required": ["email", "password"], "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string", "format": "password" } }, "additionalProperties": false },
       "Error": { "type": "object", "required": ["code", "message", "request_id"], "properties": { "code": { "type": "string" }, "message": { "type": "string" }, "request_id": { "type": "string" }, "field_errors": { "type": "object", "additionalProperties": { "type": "string" } } } },
-      "DecimalString": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" }
+      "DecimalString": { "type": "string", "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$" },
+      "ReportView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["report_id", "station_id", "shift_id", "version_no", "status", "submitted_at", "readings", "sales", "losses"],
+        "properties": {
+          "report_id": { "type": "string", "format": "uuid" },
+          "station_id": { "type": "string", "format": "uuid" },
+          "shift_id": { "type": "string", "format": "uuid" },
+          "version_no": { "type": "integer", "minimum": 1 },
+          "status": { "type": "string" },
+          "submitted_at": { "type": "string", "format": "date-time" },
+          "readings": { "type": "array", "items": { "$ref": "#/components/schemas/ReportReading" } },
+          "sales": { "type": "array", "items": { "$ref": "#/components/schemas/ReportSale" } },
+          "losses": { "type": "array", "items": { "$ref": "#/components/schemas/ReportLoss" } }
+        }
+      },
+      "ReportReading": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nozzle_id", "meter_start", "meter_end", "expected_sale"],
+        "properties": {
+          "nozzle_id": { "type": "string", "format": "uuid" },
+          "meter_start": { "$ref": "#/components/schemas/DecimalString" },
+          "meter_end": { "$ref": "#/components/schemas/DecimalString" },
+          "expected_sale": { "$ref": "#/components/schemas/DecimalString" }
+        }
+      },
+      "ReportSale": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dispenser_id", "cash_amount", "cashless_amount"],
+        "properties": {
+          "dispenser_id": { "type": "string", "format": "uuid" },
+          "cash_amount": { "$ref": "#/components/schemas/DecimalString" },
+          "cashless_amount": { "$ref": "#/components/schemas/DecimalString" }
+        }
+      },
+      "ReportLoss": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["row_id", "loss_id", "direction", "liters"],
+        "properties": {
+          "row_id": { "type": "string", "format": "uuid" },
+          "loss_id": { "type": "string", "format": "uuid" },
+          "direction": { "type": "string" },
+          "liters": { "$ref": "#/components/schemas/DecimalString" },
+          "cash_amount": { "$ref": "#/components/schemas/DecimalString" },
+          "note": { "type": "string" }
+        }
+      }
     },
     "responses": {
       "ValidationError": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
