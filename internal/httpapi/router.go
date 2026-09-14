@@ -83,16 +83,26 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 	router.Use(gin.Recovery(), corsMiddleware(allowedOrigins), requestID(), ErrorMappingMiddleware())
 	router.GET("/health", health)
 	router.GET("/ready", readyHandler(readiness))
-	router.POST("/login", requireCSRF, loginHandler(sessions, environment == "production"))
-	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(sessions, environment == "production"))
-	router.GET("/session", AuthMiddleware(verifier), sessionHandler(sessions))
+	registerSessionRoutes(router, verifier, sessions, environment == "production")
 	registerShiftRoutes(router, verifier, shifts)
 	registerGovernanceRoutes(router, verifier, governance)
 	registerReportingRoutes(router, verifier, reporting, policy)
+
+	versioned := router.Group("/api/v1")
+	registerSessionRoutes(versioned, verifier, sessions, environment == "production")
+	registerShiftRoutes(versioned, verifier, shifts)
+	registerGovernanceRoutes(versioned, verifier, governance)
+	registerReportingRoutes(versioned, verifier, reporting, policy)
 	return router
 }
 
-func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service ShiftService) {
+func registerSessionRoutes(router gin.IRoutes, verifier TokenVerifier, service SessionService, secure bool) {
+	router.POST("/login", requireCSRF, loginHandler(service, secure))
+	router.DELETE("/logout", AuthMiddleware(verifier), requireCSRF, logoutHandler(service, secure))
+	router.GET("/session", AuthMiddleware(verifier), sessionHandler(service))
+}
+
+func registerShiftRoutes(router gin.IRoutes, verifier TokenVerifier, service ShiftService) {
 	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
 	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
 	router.POST("/shift/open", append(protectedWrite, openShiftHandler(service))...)
@@ -109,7 +119,7 @@ func registerShiftRoutes(router *gin.Engine, verifier TokenVerifier, service Shi
 	router.GET("/report/:id", append(protectedRead, readReportHandler(service))...)
 }
 
-func registerGovernanceRoutes(router *gin.Engine, verifier TokenVerifier, service GovernanceService) {
+func registerGovernanceRoutes(router gin.IRoutes, verifier TokenVerifier, service GovernanceService) {
 	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
 	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
 	router.POST("/shift/ack", append(protectedWrite, ackShiftHandler(service))...)

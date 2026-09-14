@@ -40,7 +40,7 @@ type PolicyRevisionService interface {
 	TombstonePolicyRevision(context.Context, string, appdb.TombstonePolicyRevisionInput) (appdb.PolicyRevisionResult, error)
 }
 
-func registerReportingRoutes(router *gin.Engine, verifier TokenVerifier, service ReportingService, policy PolicyRevisionService) {
+func registerReportingRoutes(router gin.IRoutes, verifier TokenVerifier, service ReportingService, policy PolicyRevisionService) {
 	protectedRead := []gin.HandlerFunc{AuthMiddleware(verifier)}
 	protectedWrite := []gin.HandlerFunc{AuthMiddleware(verifier), requireCSRF}
 	router.GET("/report/:id/printout", append(protectedRead, readReportPrintoutHandler(service))...)
