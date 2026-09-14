@@ -23,7 +23,31 @@ type ModernAuditVerificationService interface {
 }
 
 func registerModernAuditRoutes(router gin.IRoutes, verifier TokenVerifier, sessions SessionService, service ModernAuditService) {
+	router.GET("/audit", AuthMiddleware(verifier), modernAuditTrailHandler(sessions, service))
 	router.GET("/audit/export", AuthMiddleware(verifier), modernAuditExportHandler(sessions, service))
+}
+
+func modernAuditTrailHandler(sessions SessionService, service ModernAuditService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if sessions == nil || service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		session, err := sessions.ReadSession(c.Request.Context(), c.GetString("raw_token"))
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		rows, err := service.ExportAudit(c.Request.Context(), session.OrgID)
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		if rows == nil {
+			rows = []appreporting.AuditRow{}
+		}
+		c.JSON(http.StatusOK, rows)
+	}
 }
 
 func registerModernAuditVerifyRoutes(router gin.IRoutes, verifier TokenVerifier, sessions SessionService, service ModernAuditVerificationService) {

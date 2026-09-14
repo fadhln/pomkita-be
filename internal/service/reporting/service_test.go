@@ -23,3 +23,7 @@ func (reportRepositorySpy) ReadReport(context.Context, uuid.UUID, uuid.UUID, uui
 func (reportRepositorySpy) ExportAudit(context.Context, uuid.UUID) ([]AuditRow, error) {
 	return nil, nil
 }
+
+func (reportRepositorySpy) Anomalies(context.Context, uuid.UUID, *uuid.UUID) ([]AnomalyView, error) {
+	return nil, nil
+}

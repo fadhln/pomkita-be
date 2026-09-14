@@ -80,3 +80,23 @@ func (r *ReportingRepository) ExportAudit(ctx context.Context, orgID uuid.UUID) 
 	}
 	return result, nil
 }
+
+// Anomalies reads alert occurrences in created order within a tenant scope.
+func (r *ReportingRepository) Anomalies(ctx context.Context, orgID uuid.UUID, stationID *uuid.UUID) ([]appreporting.AnomalyView, error) {
+	if r == nil || r.db == nil || orgID == uuid.Nil {
+		return nil, appreporting.ErrInvalidRequest
+	}
+	query := r.db.WithContext(ctx).Where("org_id = ?", orgID)
+	if stationID != nil {
+		query = query.Where("station_id = ?", *stationID)
+	}
+	var rows []AlertEventModel
+	if err := query.Order("created_at, event_id").Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("load anomalies: %w", err)
+	}
+	result := make([]appreporting.AnomalyView, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, appreporting.AnomalyView{EventID: row.EventID, StationID: row.StationID, RuleID: row.RuleID, SubjectKind: row.SubjectKind, SubjectID: row.SubjectID, EventType: row.EventType, SourceKind: row.SourceKind, SourceID: row.SourceID, SourceVersionNo: row.SourceVersionNo, HappenedAt: row.SourceAt.UTC().Format(time.RFC3339Nano)})
+	}
+	return result, nil
+}

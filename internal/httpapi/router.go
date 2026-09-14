@@ -57,6 +57,7 @@ type RouterDependencies struct {
 	ModernPolicyRead  ModernPolicyReadService
 	ModernAudit       ModernAuditService
 	ModernAuditVerify ModernAuditVerificationService
+	ModernAnomalies   ModernAnomalyService
 	LegacyRoutes      bool
 	Governance        GovernanceService
 	Reporting         ReportingService
@@ -161,6 +162,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	if dependencies.ModernAuditVerify != nil {
 		registerModernAuditVerifyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAuditVerify)
 	}
+	registerModernAnomalyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAnomalies)
 	return router
 }
 
