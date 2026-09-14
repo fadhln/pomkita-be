@@ -513,6 +513,9 @@ func (r *GovernanceRepository) RecordAlertOccurrence(ctx context.Context, reques
 			result = appgovernance.AlertEvent{}
 			return nil
 		}
+		if request.EventType == "cleared" && request.RelatedFiredEventID == nil {
+			return appgovernance.ErrAlertRelatedRequired
+		}
 		periodBucket := request.PeriodStart.UTC().Truncate(time.Hour)
 		var existing AlertEventModel
 		query := tx.Where("org_id = ? and station_id = ? and rule_id = ? and subject_kind = ? and subject_id = ? and event_type = ? and period_bucket = ?", request.OrgID, request.StationID, request.RuleID, request.SubjectKind, request.SubjectID, request.EventType, periodBucket)
