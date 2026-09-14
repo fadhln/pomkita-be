@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/pomkita/pomkita-be/internal/relay"
+	"github.com/pomkita/pomkita-be/internal/service/relay"
 )
 
 // Claim implements the relay.Store claim operation.
