@@ -11,7 +11,16 @@ import (
 	"github.com/pomkita/pomkita-be/internal/httpapi"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
+	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
+
+func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
+	return httpapi.RouterDependencies{
+		Readiness: readiness, Verifier: verifier, Sessions: sessions,
+		Shifts: shifts, Governance: governance, Reporting: reporting,
+		Reports: reports, Policy: policy, LatestMigration: 23,
+	}
+}
 
 func main() {
 	cfg := config.Load()
@@ -44,16 +53,12 @@ func main() {
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
 	sessionService := authservice.NewService(authRepository, jwtService)
-	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, httpapi.RouterDependencies{
-		Readiness:       database,
-		Verifier:        jwtService,
-		Sessions:        sessionService,
-		Shifts:          appdb.NewShiftManager(database),
-		Governance:      appdb.NewGovernanceManager(database),
-		Reporting:       appdb.NewReportingManager(database),
-		Policy:          appdb.NewPolicyManager(database),
-		LatestMigration: 23,
-	})
+	modernReporting := appreporting.NewService(gormstore.NewReportingRepository(gormDatabase))
+	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, composeRouterDependencies(
+		database, jwtService, sessionService, appdb.NewShiftManager(database),
+		appdb.NewGovernanceManager(database), appdb.NewReportingManager(database),
+		appdb.NewPolicyManager(database), modernReporting,
+	))
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Printf("server stopped: %v", err)
