@@ -21,6 +21,18 @@ func TestService_Append_DelegatesWithClock(t *testing.T) {
 	}
 }
 
+func TestService_Append_RejectsIncompleteEvent(t *testing.T) {
+	repository := &auditRepositorySpy{}
+	service := NewService(repository, auditClock{value: time.Now()})
+
+	if _, err := service.Append(context.Background(), AppendRequest{OrgID: uuid.New()}); err != ErrInvalidRequest {
+		t.Fatalf("append error: got %v, want %v", err, ErrInvalidRequest)
+	}
+	if repository.event.EventID != uuid.Nil {
+		t.Fatal("repository was called for an invalid audit event")
+	}
+}
+
 type auditRepositorySpy struct {
 	event Event
 	now   time.Time

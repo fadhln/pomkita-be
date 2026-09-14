@@ -4,6 +4,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -50,6 +51,9 @@ func NewService(repository Repository, clock Clock) *Service {
 func (s *Service) Append(ctx context.Context, request AppendRequest) (Event, error) {
 	if s == nil || s.repository == nil || s.clock == nil {
 		return Event{}, ErrDependencyUnavailable
+	}
+	if request.OrgID == uuid.Nil || request.EventID == uuid.Nil || strings.TrimSpace(request.EventType) == "" || len(request.Payload) == 0 || !json.Valid(request.Payload) || strings.TrimSpace(request.Outcome) == "" {
+		return Event{}, ErrInvalidRequest
 	}
 	return s.repository.Append(ctx, request, s.clock.Now().UTC())
 }
