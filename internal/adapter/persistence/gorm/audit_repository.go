@@ -31,6 +31,33 @@ func NewAuditRepository(store *Store) *AuditRepository {
 	return &AuditRepository{db: store.db}
 }
 
+// RecordDenied stores safe metadata for a denied request outside a business transaction.
+func (r *AuditRepository) RecordDenied(ctx context.Context, request appaudit.DeniedRequest, now time.Time) error {
+	if r == nil || r.db == nil {
+		return appaudit.ErrDependencyUnavailable
+	}
+	row := AuditDeniedModel{
+		RequestID: request.RequestID,
+		SubjectID: request.SubjectID,
+		JTI:       request.JTI,
+		OrgID:     request.OrgID,
+		StationID: request.StationID,
+		Action:    strings.TrimSpace(request.Action),
+		Target:    strings.TrimSpace(request.Target),
+		Reason:    strings.TrimSpace(request.Reason),
+		ServerAt:  now.UTC(),
+		Outcome:   strings.TrimSpace(request.Outcome),
+	}
+	if strings.TrimSpace(request.ErrorDetail) != "" {
+		detail := strings.TrimSpace(request.ErrorDetail)
+		row.ErrorDetail = &detail
+	}
+	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
+		return fmt.Errorf("record denied audit event: %w", err)
+	}
+	return nil
+}
+
 // Append adds one chained audit event and relay state in one transaction.
 func (r *AuditRepository) Append(ctx context.Context, request appaudit.AppendRequest, now time.Time) (appaudit.Event, error) {
 	if r == nil || r.db == nil {

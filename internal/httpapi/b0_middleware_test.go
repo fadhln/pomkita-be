@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
+	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 )
 
 type readyStub struct {
@@ -96,6 +97,28 @@ func TestAuthMiddlewareVerifiesTokenAndAttachesClaims(t *testing.T) {
 	if recorder.Code != http.StatusNoContent {
 		t.Fatalf("got %d, want %d", recorder.Code, http.StatusNoContent)
 	}
+}
+
+func TestAuthMiddlewareRecordsDeniedRequestMetadata(t *testing.T) {
+	denied := &deniedAuditSpy{}
+	router := NewRouterWithDependencySet("test", nil, RouterDependencies{Verifier: verifierStub{err: appjwt.ErrInvalidSignature}, DeniedAudit: denied})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/session", nil))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	if len(denied.requests) != 1 || denied.requests[0].Reason != "invalid_session" || denied.requests[0].Target != "/api/v1/session" {
+		t.Fatalf("denied audit requests: %+v", denied.requests)
+	}
+}
+
+type deniedAuditSpy struct {
+	requests []appaudit.DeniedRequest
+}
+
+func (s *deniedAuditSpy) RecordDenied(_ context.Context, request appaudit.DeniedRequest) error {
+	s.requests = append(s.requests, request)
+	return nil
 }
 
 func TestAuthMiddlewareRejectsInvalidToken(t *testing.T) {

@@ -113,3 +113,25 @@ func TestAuditRepository_ConcurrentFirstAppendsAllocateContiguousSequence(t *tes
 		}
 	}
 }
+
+func TestAuditRepository_RecordDeniedPersistsOnlySafeMetadata(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+	requestID, subjectID, jti := uuid.New(), fixture.actorID, uuid.New()
+	service := appaudit.NewDeniedService(NewAuditRepository(fixture.store), auditTestClock{value: fixture.now})
+	if err := service.Record(ctx, appaudit.DeniedRequest{RequestID: requestID, SubjectID: &subjectID, JTI: &jti, OrgID: &fixture.orgID, StationID: &fixture.stationID, Action: "read_report", Target: "report", Reason: "station_scope_forbidden", Outcome: "denied"}); err != nil {
+		t.Fatalf("record denied request: %v", err)
+	}
+	var row AuditDeniedModel
+	if err := fixture.store.db.First(&row, "request_id = ?", requestID).Error; err != nil {
+		t.Fatalf("load denied audit row: %v", err)
+	}
+	if row.Action != "read_report" || row.Target != "report" || row.Reason != "station_scope_forbidden" || row.Outcome != "denied" {
+		t.Fatalf("denied audit row: %+v", row)
+	}
+}
+
+type auditTestClock struct{ value time.Time }
+
+func (c auditTestClock) Now() time.Time { return c.value }

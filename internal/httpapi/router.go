@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pomkita/pomkita-be/internal/domain"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
+	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	appauth "github.com/pomkita/pomkita-be/internal/service/auth"
 )
 
@@ -39,6 +40,11 @@ type SessionService interface {
 	ReadSession(context.Context, string) (SessionView, error)
 }
 
+// DeniedAuditService records safe metadata for denied requests.
+type DeniedAuditService interface {
+	RecordDenied(context.Context, appaudit.DeniedRequest) error
+}
+
 // RouterDependencies contains all services required by the HTTP adapter.
 type RouterDependencies struct {
 	Readiness         Readiness
@@ -57,6 +63,7 @@ type RouterDependencies struct {
 	ModernAuditVerify ModernAuditVerificationService
 	ModernAnomalies   ModernAnomalyService
 	Reports           ModernReportingService
+	DeniedAudit       DeniedAuditService
 	LatestMigration   int
 }
 
@@ -81,7 +88,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 		dependencies.LatestMigration = 11
 	}
 	router := gin.New()
-	router.Use(gin.Recovery(), corsMiddleware(allowedOrigins), requestID(), ErrorMappingMiddleware())
+	router.Use(deniedAuditContext(dependencies.DeniedAudit), gin.Recovery(), corsMiddleware(allowedOrigins), requestID(), ErrorMappingMiddleware())
 	router.GET("/health", health)
 	router.GET("/ready", readyHandler(dependencies.Readiness, dependencies.LatestMigration))
 	registerSessionRoutes(router, dependencies.Verifier, dependencies.Sessions, environment == "production")
@@ -137,7 +144,7 @@ func readyHandler(readiness Readiness, latestMigration int) gin.HandlerFunc {
 func AuthMiddleware(verifier TokenVerifier) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if verifier == nil {
-			writeError(c, http.StatusUnauthorized, "invalid_session")
+			denyAuthentication(c, "invalid_session")
 			return
 		}
 		rawToken := bearerToken(c.GetHeader("Authorization"))
@@ -145,7 +152,7 @@ func AuthMiddleware(verifier TokenVerifier) gin.HandlerFunc {
 			rawToken, _ = c.Cookie("pomkita_session")
 		}
 		if rawToken == "" {
-			writeError(c, http.StatusUnauthorized, "invalid_session")
+			denyAuthentication(c, "invalid_session")
 			return
 		}
 		claims, err := verifier.Verify(c.Request.Context(), rawToken)
@@ -154,13 +161,42 @@ func AuthMiddleware(verifier TokenVerifier) gin.HandlerFunc {
 			if errors.Is(err, appjwt.ErrSessionIdle) {
 				code = "session_idle"
 			}
-			writeError(c, http.StatusUnauthorized, code)
+			denyAuthentication(c, code)
 			return
 		}
 		c.Set("jwt_claims", claims)
 		c.Set("raw_token", rawToken)
 		c.Next()
 	}
+}
+
+func deniedAuditContext(service DeniedAuditService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if service != nil {
+			c.Set("denied_audit", service)
+		}
+		c.Next()
+	}
+}
+
+func denyAuthentication(c *gin.Context, reason string) {
+	if value, exists := c.Get("denied_audit"); exists {
+		if service, ok := value.(DeniedAuditService); ok {
+			requestID := uuid.New()
+			if parsed, err := uuid.Parse(c.GetString("request_id")); err == nil {
+				requestID = parsed
+			}
+			target := c.FullPath()
+			if target == "" {
+				target = c.Request.URL.Path
+			}
+			if err := service.RecordDenied(c.Request.Context(), appaudit.DeniedRequest{RequestID: requestID, Action: strings.ToLower(c.Request.Method), Target: target, Reason: reason, Outcome: "denied"}); err != nil {
+				c.AbortWithStatus(http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+	writeError(c, http.StatusUnauthorized, reason)
 }
 
 func bearerToken(header string) string {

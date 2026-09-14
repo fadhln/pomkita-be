@@ -71,10 +71,14 @@ func main() {
 	modernGovernance := governanceservice.NewService(gormstore.NewGovernanceRepository(database), systemClock{})
 	modernAmendment := governanceservice.NewAmendmentService(gormstore.NewGovernanceRepository(database), systemClock{})
 	modernPolicy := policysservice.NewService(gormstore.NewPolicyRepository(database), systemClock{})
-	modernAudit := auditservice.NewService(gormstore.NewAuditRepository(database), systemClock{})
-	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, composeRouterDependencies(
+	auditRepository := gormstore.NewAuditRepository(database)
+	modernAudit := auditservice.NewService(auditRepository, systemClock{})
+	deniedAudit := auditservice.NewDeniedService(auditRepository, systemClock{})
+	dependencies := composeRouterDependencies(
 		database, jwtService, sessionService, modernShift, modernShift, modernDraft, modernDraft, modernSubmission, modernGovernance, modernAmendment, modernPolicy, modernPolicy, modernReporting, modernAudit, modernReporting, modernReporting,
-	))
+	)
+	dependencies.DeniedAudit = deniedAudit
+	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Printf("server stopped: %v", err)

@@ -42,6 +42,31 @@ func TestService_Verify_RejectsMissingOrganization(t *testing.T) {
 	}
 }
 
+func TestDeniedService_RecordsSafeRequestMetadata(t *testing.T) {
+	repository := &deniedRepositorySpy{}
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.FixedZone("test", 7*60*60))
+	service := NewDeniedService(repository, auditClock{value: now})
+	subjectID, jti, orgID, stationID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	request := DeniedRequest{RequestID: uuid.New(), SubjectID: &subjectID, JTI: &jti, OrgID: &orgID, StationID: &stationID, Action: "read_report", Target: "report", Reason: "station_scope_forbidden", Outcome: "denied"}
+	if err := service.Record(context.Background(), request); err != nil {
+		t.Fatalf("record denied request: %v", err)
+	}
+	if repository.request.RequestID != request.RequestID || !repository.now.Equal(now.UTC()) || repository.request.Reason != request.Reason {
+		t.Fatalf("denied repository call: request=%+v now=%v", repository.request, repository.now)
+	}
+}
+
+func TestDeniedService_RejectsIncompleteRequest(t *testing.T) {
+	repository := &deniedRepositorySpy{}
+	service := NewDeniedService(repository, auditClock{value: time.Now()})
+	if err := service.Record(context.Background(), DeniedRequest{Action: "read_report"}); err != ErrInvalidDeniedRequest {
+		t.Fatalf("record denied error: got %v, want %v", err, ErrInvalidDeniedRequest)
+	}
+	if repository.request.RequestID != uuid.Nil {
+		t.Fatal("repository was called for an invalid denied request")
+	}
+}
+
 type auditRepositorySpy struct {
 	event Event
 	now   time.Time
@@ -53,6 +78,17 @@ func (s *auditRepositorySpy) Append(_ context.Context, _ AppendRequest, now time
 }
 
 func (*auditRepositorySpy) Verify(context.Context, uuid.UUID) error { return nil }
+
+type deniedRepositorySpy struct {
+	request DeniedRequest
+	now     time.Time
+}
+
+func (s *deniedRepositorySpy) RecordDenied(_ context.Context, request DeniedRequest, now time.Time) error {
+	s.request = request
+	s.now = now
+	return nil
+}
 
 type auditClock struct{ value time.Time }
 
