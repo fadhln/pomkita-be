@@ -6,6 +6,7 @@ The sequence has reversible up and down files. It uses PostgreSQL constraints,
 indexes, numeric columns, and exclusion constraints. It does not create
 business functions, procedures, triggers, roles, or grants.
 
-The sequence is available through `internal/platform/migrations`. The legacy
-server still uses the original migration directory for the operational managers.
-Authentication uses the GORM repository and Go service boundary.
+The sequence is available through `internal/platform/migrations`. Production
+uses this source with the GORM repositories and Go service boundaries.
+The historical migration directory remains only for compatibility tests and
+is not part of the production bootstrap.
