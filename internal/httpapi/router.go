@@ -13,10 +13,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
-	appdb "github.com/pomkita/pomkita-be/internal/db"
 	"github.com/pomkita/pomkita-be/internal/domain"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
+	appauth "github.com/pomkita/pomkita-be/internal/service/auth"
 )
 
 // Readiness checks database reachability and migration state.
@@ -67,7 +66,7 @@ type RouterDependencies struct {
 }
 
 // ErrInvalidCredentials indicates that login credentials do not match an enabled user.
-var ErrInvalidCredentials = appdb.ErrInvalidCredentials
+var ErrInvalidCredentials = appauth.ErrInvalidCredentials
 
 // NewRouter creates a router without a database readiness dependency.
 func NewRouter(environment string, allowedOrigins []string) *gin.Engine {
@@ -265,8 +264,8 @@ func ErrorMappingMiddleware() gin.HandlerFunc {
 			return
 		}
 		err := c.Errors.Last().Err
-		status := appdb.HTTPStatusForError(err)
-		code := appdb.StableCodeForError(err)
+		status := httpStatusForDatabaseError(err)
+		code := stableCodeForDatabaseError(err)
 		if domainStatus, domainCode := domainHTTPError(err); domainCode != "" {
 			status = domainStatus
 			code = domainCode
@@ -327,14 +326,6 @@ func writeErrorWithFields(c *gin.Context, status int, code string, fields map[st
 		"request_id":   c.GetString("request_id"),
 		"field_errors": fields,
 	})
-}
-
-func fieldErrorsForDatabaseError(err error) map[string]string {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.Message == "rollover_over_threshold" {
-		return map[string]string{"readings": "Meter rollover is above the allowed threshold"}
-	}
-	return nil
 }
 
 func safeMessage(code string, status int) string {
