@@ -1,0 +1,82 @@
+package gormstore
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
+	"gorm.io/gorm"
+)
+
+// ReportingRepository reads tenant-scoped report and audit views.
+type ReportingRepository struct {
+	db *gorm.DB
+}
+
+// NewReportingRepository creates a reporting repository.
+func NewReportingRepository(store *Store) *ReportingRepository {
+	if store == nil {
+		return &ReportingRepository{}
+	}
+	return &ReportingRepository{db: store.db}
+}
+
+// ReadReport loads one report and its immutable children in stable order.
+func (r *ReportingRepository) ReadReport(ctx context.Context, orgID, stationID, reportID uuid.UUID) (appreporting.ReportView, error) {
+	if r == nil || r.db == nil {
+		return appreporting.ReportView{}, appreporting.ErrInvalidRequest
+	}
+	var report ShiftReportModel
+	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).First(&report).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return appreporting.ReportView{}, appreporting.ErrNotFound
+		}
+		return appreporting.ReportView{}, fmt.Errorf("load report: %w", err)
+	}
+	view := appreporting.ReportView{ReportID: report.ReportID, StationID: report.StationID, ShiftID: report.ShiftID, VersionNo: report.VersionNo, Status: report.Status, SubmittedAt: report.SubmittedAt.UTC().Format(time.RFC3339Nano)}
+	var readings []DispenserReadingModel
+	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).Order("nozzle_id").Find(&readings).Error; err != nil {
+		return appreporting.ReportView{}, fmt.Errorf("load report readings: %w", err)
+	}
+	for _, row := range readings {
+		view.Readings = append(view.Readings, appreporting.ReadingView{NozzleID: row.NozzleID, MeterStart: row.MeterStart.String(), MeterEnd: row.MeterEnd.String(), ExpectedSale: row.ExpectedSale.String()})
+	}
+	var sales []SalesDeclaredModel
+	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).Order("dispenser_id").Find(&sales).Error; err != nil {
+		return appreporting.ReportView{}, fmt.Errorf("load report sales: %w", err)
+	}
+	for _, row := range sales {
+		view.Sales = append(view.Sales, appreporting.SalesView{DispenserID: row.DispenserID, CashAmount: row.CashAmount.String(), CashlessAmount: row.CashlessAmount.String()})
+	}
+	var losses []LossEntryModel
+	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).Order("row_id").Find(&losses).Error; err != nil {
+		return appreporting.ReportView{}, fmt.Errorf("load report losses: %w", err)
+	}
+	for _, row := range losses {
+		var cash *string
+		if row.CashAmount != nil {
+			value := row.CashAmount.String()
+			cash = &value
+		}
+		view.Losses = append(view.Losses, appreporting.LossView{RowID: row.RowID, LossID: row.LossID, Direction: row.Direction, Liters: row.Liters.String(), CashAmount: cash, Note: row.Note})
+	}
+	return view, nil
+}
+
+// ExportAudit reads one organization's audit chain in sequence order.
+func (r *ReportingRepository) ExportAudit(ctx context.Context, orgID uuid.UUID) ([]appreporting.AuditRow, error) {
+	if r == nil || r.db == nil || orgID == uuid.Nil {
+		return nil, appreporting.ErrInvalidRequest
+	}
+	var rows []AuditLogModel
+	if err := r.db.WithContext(ctx).Where("org_id = ?", orgID).Order("org_sequence").Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("load audit export: %w", err)
+	}
+	result := make([]appreporting.AuditRow, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, appreporting.AuditRow{EventID: row.EventID, OrgSequence: row.OrgSequence, EventType: row.EventType, Payload: append([]byte(nil), row.Payload...), Outcome: row.Outcome, CreatedAt: row.CreatedAt.UTC().Format(time.RFC3339Nano), PrevHash: append([]byte(nil), row.PrevHash...), RowHash: append([]byte(nil), row.RowHash...)})
+	}
+	return result, nil
+}

@@ -1,0 +1,97 @@
+// Package reporting contains read-only report and audit export use cases.
+package reporting
+
+import (
+	"context"
+
+	"github.com/google/uuid"
+	"github.com/pomkita/pomkita-be/internal/domain"
+)
+
+var (
+	// ErrInvalidRequest identifies a missing report or organization scope.
+	ErrInvalidRequest = domain.NewError(domain.CategoryValidation, "invalid_reporting_request")
+	// ErrNotFound identifies a report outside the organization scope.
+	ErrNotFound = domain.NewError(domain.CategoryNotFound, "report_not_found")
+)
+
+// ReadingView is a decimal-safe report reading.
+type ReadingView struct {
+	NozzleID     uuid.UUID
+	MeterStart   string
+	MeterEnd     string
+	ExpectedSale string
+}
+
+// SalesView is a decimal-safe declared sales row.
+type SalesView struct {
+	DispenserID    uuid.UUID
+	CashAmount     string
+	CashlessAmount string
+}
+
+// LossView is a decimal-safe report loss row.
+type LossView struct {
+	RowID      uuid.UUID
+	LossID     uuid.UUID
+	Direction  string
+	Liters     string
+	CashAmount *string
+	Note       *string
+}
+
+// ReportView is the common source for reporting and printout adapters.
+type ReportView struct {
+	ReportID    uuid.UUID
+	StationID   uuid.UUID
+	ShiftID     uuid.UUID
+	VersionNo   int
+	Status      string
+	SubmittedAt string
+	Readings    []ReadingView
+	Sales       []SalesView
+	Losses      []LossView
+}
+
+// AuditRow is one ordered audit export row.
+type AuditRow struct {
+	EventID     uuid.UUID
+	OrgSequence int64
+	EventType   string
+	Payload     []byte
+	Outcome     string
+	CreatedAt   string
+	PrevHash    []byte
+	RowHash     []byte
+}
+
+// Repository reads report and audit data within a tenant scope.
+type Repository interface {
+	ReadReport(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (ReportView, error)
+	ExportAudit(context.Context, uuid.UUID) ([]AuditRow, error)
+}
+
+// Service owns reporting read use cases.
+type Service struct{ repository Repository }
+
+// NewService creates a reporting service.
+func NewService(repository Repository) *Service { return &Service{repository: repository} }
+
+// ReadReport reads one immutable report view.
+func (s *Service) ReadReport(ctx context.Context, orgID, stationID, reportID uuid.UUID) (ReportView, error) {
+	if s == nil || s.repository == nil {
+		return ReportView{}, ErrInvalidRequest
+	}
+	if orgID == uuid.Nil || stationID == uuid.Nil || reportID == uuid.Nil {
+		return ReportView{}, ErrInvalidRequest
+	}
+	return s.repository.ReadReport(ctx, orgID, stationID, reportID)
+}
+
+// ExportAudit returns ordered audit rows for one organization.
+func (s *Service) ExportAudit(ctx context.Context, orgID uuid.UUID) ([]AuditRow, error) {
+	if s == nil || s.repository == nil || orgID == uuid.Nil {
+		return nil, ErrInvalidRequest
+	}
+	return s.repository.ExportAudit(ctx, orgID)
+}
