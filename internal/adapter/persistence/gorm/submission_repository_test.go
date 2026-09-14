@@ -173,6 +173,13 @@ func TestSubmissionRepository_Submit_PromotesDraftChildrenToReport(t *testing.T)
 	if alertCount != 1 {
 		t.Fatalf("variance alert count: got %d, want 1", alertCount)
 	}
+	var auditCount int64
+	if err := store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_id = ?", orgID, result.ReportID).Count(&auditCount).Error; err != nil {
+		t.Fatalf("count submit audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("submit audit count: got %d, want 1", auditCount)
+	}
 }
 
 func TestSubmissionRepository_Submit_RejectsBrokenMeterChain(t *testing.T) {

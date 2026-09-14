@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 	appreconciliation "github.com/pomkita/pomkita-be/internal/service/reconciliation"
 	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
@@ -144,6 +145,13 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 		}
 		if err := tx.Model(&SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(map[string]any{"status": "succeeded", "resulting_report_id": reportID, "lease_expires_at": nil, "updated_at": now}).Error; err != nil {
 			return fmt.Errorf("complete submit idempotency: %w", err)
+		}
+		auditPayload, err := json.Marshal(map[string]any{"report_id": reportID.String(), "shift_id": shift.ShiftID.String(), "version_no": report.VersionNo})
+		if err != nil {
+			return fmt.Errorf("encode submit audit payload: %w", err)
+		}
+		if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: request.OrgID, EventID: reportID, EventType: "report.submitted", Payload: auditPayload, Outcome: "success"}, now); err != nil {
+			return fmt.Errorf("append submit audit event: %w", err)
 		}
 		result = appsubmission.Result{ReportID: reportID}
 		return nil
