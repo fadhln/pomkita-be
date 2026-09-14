@@ -18,6 +18,7 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 	}
 	var document struct {
 		OpenAPI    string                            `json:"openapi"`
+		Generator  string                            `json:"x-generated-by"`
 		Paths      map[string]map[string]interface{} `json:"paths"`
 		Components struct {
 			Schemas map[string]map[string]interface{} `json:"schemas"`
@@ -28,6 +29,9 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 	}
 	if document.OpenAPI != "3.0.3" {
 		t.Fatalf("OpenAPI version: got %q, want 3.0.3", document.OpenAPI)
+	}
+	if document.Generator != "huma" {
+		t.Fatalf("OpenAPI generator: got %q, want huma", document.Generator)
 	}
 	for _, path := range []string{"/api/v1/login", "/api/v1/session", "/api/v1/shifts", "/api/v1/drafts/claim", "/api/v1/drafts/heartbeat", "/api/v1/drafts/readings", "/api/v1/drafts/sales", "/api/v1/drafts/losses", "/api/v1/drafts/evidence", "/api/v1/submissions", "/api/v1/reports/{id}", "/api/v1/reports/{id}/printout", "/api/v1/reports/{id}/acknowledgement", "/api/v1/amendments", "/api/v1/amendments/{id}/approve", "/api/v1/amendments/{id}/reject", "/api/v1/policies/revisions", "/api/v1/policies/history", "/api/v1/anomalies", "/api/v1/anomalies/export", "/api/v1/audit", "/api/v1/audit/export", "/api/v1/audit/verify", "/health", "/ready"} {
 		if _, ok := document.Paths[path]; !ok {
