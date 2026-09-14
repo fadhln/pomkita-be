@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -350,8 +351,25 @@ func (r *SubmissionRepository) ensureThresholdSnapshot(tx *gorm.DB, request apps
 	var revision ThresholdPolicyRevisionModel
 	revisionErr := tx.Where("org_id = ? and disabled = false and valid_from <= ? and (station_id = ? or station_id is null)", request.OrgID, now, request.StationID).
 		Order("station_id is not null desc").Order("valid_from desc").First(&revision).Error
-	if errors.Is(revisionErr, gorm.ErrRecordNotFound) {
-		return "10.0", nil
+	if revisionErr == gorm.ErrRecordNotFound || errors.Is(revisionErr, gorm.ErrRecordNotFound) || revisionErr != nil && strings.Contains(revisionErr.Error(), gorm.ErrRecordNotFound.Error()) {
+		revision = ThresholdPolicyRevisionModel{
+			RevID:               uuid.New(),
+			PolicyID:            uuid.New(),
+			OrgID:               request.OrgID,
+			ValidFrom:           now,
+			LossLiterThreshold:  Decimal("10.00"),
+			GainLiterThreshold:  Decimal("0.00"),
+			LossRupiahThreshold: Decimal("0"),
+			GainRupiahThreshold: Decimal("0"),
+			VarianceThreshold:   Decimal("0"),
+			RolloverThreshold:   Decimal("10.0"),
+			CreatedBy:           request.ActorID,
+			CreatedAt:           now,
+		}
+		if err := tx.Create(&revision).Error; err != nil {
+			return "", fmt.Errorf("create default threshold policy: %w", err)
+		}
+		revisionErr = nil
 	}
 	if revisionErr != nil {
 		return "", fmt.Errorf("resolve threshold policy: %w", revisionErr)

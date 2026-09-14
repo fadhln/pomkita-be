@@ -52,6 +52,13 @@ func TestSubmissionRepository_Submit_IsIdempotentByRequestHash(t *testing.T) {
 	if !second.Replay || first.ReportID != second.ReportID {
 		t.Fatalf("replay result: first=%+v second=%+v", first, second)
 	}
+	var thresholdSnapshotCount int64
+	if err := store.db.Model(&PolicySnapshotItemModel{}).Where("shift_id = ? and policy_kind = ?", shiftID, "threshold").Count(&thresholdSnapshotCount).Error; err != nil {
+		t.Fatalf("count threshold snapshots: %v", err)
+	}
+	if thresholdSnapshotCount != 1 {
+		t.Fatalf("threshold snapshot count: got %d, want 1", thresholdSnapshotCount)
+	}
 	request.Payload = []byte(`{"readings":[{"nozzle_id":"different"}],"sales":[],"losses":[]}`)
 	if _, err := service.Submit(ctx, request); !errors.Is(err, appsubmission.ErrIdempotencyConflict) {
 		t.Fatalf("hash conflict: got %v, want %v", err, appsubmission.ErrIdempotencyConflict)
