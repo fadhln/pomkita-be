@@ -54,3 +54,28 @@ func TestPolicyRepository_CreateRevision_RejectsOverlapAndRequiresForwardSuperse
 		t.Fatalf("backward revision error: got %v, want %v", err, apppolicy.ErrPolicyOverlap)
 	}
 }
+
+func TestPolicyRepository_CreateRevision_PersistsTombstoneReason(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+	if err := fixture.store.db.Table("user_station_roles").Create(map[string]any{"org_id": fixture.orgID, "station_id": fixture.stationID, "user_id": fixture.actorID, "role": "Owner"}).Error; err != nil {
+		t.Fatalf("create owner role: %v", err)
+	}
+	result, err := NewPolicyRepository(fixture.store).CreateRevision(ctx, apppolicy.PolicyRevisionRequest{
+		OrgID: fixture.orgID, StationID: fixture.stationID, ActorID: fixture.actorID, Role: "Owner",
+		PolicyKind: "threshold", PolicyID: uuid.New(), ValidFrom: fixture.now, Disabled: true,
+		TombstoneReason: "replaced by approved revision", LossLiterThreshold: "1", GainLiterThreshold: "1",
+		LossRupiahThreshold: "1", GainRupiahThreshold: "1", VarianceRupiahThreshold: "1", RolloverThreshold: "1",
+	}, fixture.now)
+	if err != nil {
+		t.Fatalf("create tombstone: %v", err)
+	}
+	var reason string
+	if err := fixture.store.db.Table("threshold_policy_revisions").Where("rev_id = ?", result.RevisionID).Pluck("tombstone_reason", &reason).Error; err != nil {
+		t.Fatalf("load tombstone reason: %v", err)
+	}
+	if reason != "replaced by approved revision" {
+		t.Fatalf("tombstone reason: got %q", reason)
+	}
+}

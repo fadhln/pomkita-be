@@ -627,6 +627,7 @@ type ThresholdPolicyRevisionModel struct {
 	SupersedesOrgID     *uuid.UUID `gorm:"column:supersedes_org_id;type:uuid"`
 	SupersedesRevID     *uuid.UUID `gorm:"column:supersedes_rev_id;type:uuid"`
 	Disabled            bool       `gorm:"column:disabled;not null"`
+	TombstoneReason     *string    `gorm:"column:tombstone_reason"`
 	LossLiterThreshold  Decimal    `gorm:"column:loss_liter_threshold;type:numeric(8,2);not null"`
 	GainLiterThreshold  Decimal    `gorm:"column:gain_liter_threshold;type:numeric(8,2);not null"`
 	LossRupiahThreshold Decimal    `gorm:"column:loss_rupiah_threshold;type:numeric(14,0);not null"`
@@ -651,6 +652,7 @@ type EvidencePolicyRevisionModel struct {
 	SupersedesRevID *uuid.UUID `gorm:"column:supersedes_rev_id;type:uuid"`
 	Mode            string     `gorm:"column:mode;not null"`
 	Disabled        bool       `gorm:"column:disabled;not null"`
+	TombstoneReason *string    `gorm:"column:tombstone_reason"`
 	CreatedBy       uuid.UUID  `gorm:"column:created_by;type:uuid;not null"`
 	CreatedAt       time.Time  `gorm:"column:created_at;not null"`
 }

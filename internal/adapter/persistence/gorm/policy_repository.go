@@ -88,12 +88,12 @@ func (r *PolicyRepository) CreateRevision(ctx context.Context, request apppolicy
 			supersedesOrgID = &request.OrgID
 		}
 		if request.PolicyKind == "threshold" {
-			model := ThresholdPolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Disabled: request.Disabled, LossLiterThreshold: Decimal(request.LossLiterThreshold), GainLiterThreshold: Decimal(request.GainLiterThreshold), LossRupiahThreshold: Decimal(request.LossRupiahThreshold), GainRupiahThreshold: Decimal(request.GainRupiahThreshold), VarianceThreshold: Decimal(request.VarianceRupiahThreshold), RolloverThreshold: Decimal(request.RolloverThreshold), CreatedBy: request.ActorID, CreatedAt: now}
+			model := ThresholdPolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Disabled: request.Disabled, TombstoneReason: optionalString(request.TombstoneReason), LossLiterThreshold: Decimal(request.LossLiterThreshold), GainLiterThreshold: Decimal(request.GainLiterThreshold), LossRupiahThreshold: Decimal(request.LossRupiahThreshold), GainRupiahThreshold: Decimal(request.GainRupiahThreshold), VarianceThreshold: Decimal(request.VarianceRupiahThreshold), RolloverThreshold: Decimal(request.RolloverThreshold), CreatedBy: request.ActorID, CreatedAt: now}
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create threshold policy revision: %w", err)
 			}
 		} else {
-			model := EvidencePolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Mode: request.EvidenceMode, Disabled: request.Disabled, CreatedBy: request.ActorID, CreatedAt: now}
+			model := EvidencePolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Mode: request.EvidenceMode, Disabled: request.Disabled, TombstoneReason: optionalString(request.TombstoneReason), CreatedBy: request.ActorID, CreatedAt: now}
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create evidence policy revision: %w", err)
 			}
@@ -124,6 +124,13 @@ func (r *PolicyRepository) supersededValidFrom(tx *gorm.DB, request apppolicy.Po
 
 func optionalUUID(value uuid.UUID) *uuid.UUID {
 	if value == uuid.Nil {
+		return nil
+	}
+	return &value
+}
+
+func optionalString(value string) *string {
+	if value == "" {
 		return nil
 	}
 	return &value
