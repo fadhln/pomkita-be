@@ -15,16 +15,17 @@ import (
 	draftservice "github.com/pomkita/pomkita-be/internal/service/draft"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 	shiftservice "github.com/pomkita/pomkita-be/internal/service/shift"
+	submissionservice "github.com/pomkita/pomkita-be/internal/service/submission"
 )
 
 type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, modernShift httpapi.ModernShiftService, modernDraft httpapi.ModernDraftService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
+func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, modernShift httpapi.ModernShiftService, modernDraft httpapi.ModernDraftService, modernSubmission httpapi.ModernSubmissionService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
-		Shifts: shifts, ModernShift: modernShift, ModernDraft: modernDraft, Governance: governance, Reporting: reporting,
+		Shifts: shifts, ModernShift: modernShift, ModernDraft: modernDraft, ModernSubmission: modernSubmission, Governance: governance, Reporting: reporting,
 		Reports: reports, Policy: policy, LatestMigration: 23,
 	}
 }
@@ -63,8 +64,9 @@ func main() {
 	modernReporting := appreporting.NewService(gormstore.NewReportingRepository(gormDatabase))
 	modernShift := shiftservice.NewService(gormstore.NewShiftRepository(gormDatabase), systemClock{})
 	modernDraft := draftservice.NewService(gormstore.NewDraftRepository(gormDatabase), systemClock{})
+	modernSubmission := submissionservice.NewService(gormstore.NewSubmissionRepository(gormDatabase), systemClock{})
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, composeRouterDependencies(
-		database, jwtService, sessionService, appdb.NewShiftManager(database), modernShift, modernDraft,
+		database, jwtService, sessionService, appdb.NewShiftManager(database), modernShift, modernDraft, modernSubmission,
 		appdb.NewGovernanceManager(database), appdb.NewReportingManager(database),
 		appdb.NewPolicyManager(database), modernReporting,
 	))

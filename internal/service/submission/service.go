@@ -41,9 +41,9 @@ type Request struct {
 
 // Result identifies the created report and whether the request was replayed.
 type Result struct {
-	ReportID    uuid.UUID
-	Replay      bool
-	RequestHash []byte
+	ReportID    uuid.UUID `json:"report_id"`
+	Replay      bool      `json:"replay"`
+	RequestHash []byte    `json:"request_hash,omitempty"`
 }
 
 // Repository performs the complete submission transaction.

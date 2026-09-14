@@ -42,17 +42,18 @@ type SessionService interface {
 
 // RouterDependencies contains all services required by the HTTP adapter.
 type RouterDependencies struct {
-	Readiness       Readiness
-	Verifier        TokenVerifier
-	Sessions        SessionService
-	Shifts          ShiftService
-	ModernShift     ModernShiftService
-	ModernDraft     ModernDraftService
-	Governance      GovernanceService
-	Reporting       ReportingService
-	Reports         ModernReportingService
-	Policy          PolicyRevisionService
-	LatestMigration int
+	Readiness        Readiness
+	Verifier         TokenVerifier
+	Sessions         SessionService
+	Shifts           ShiftService
+	ModernShift      ModernShiftService
+	ModernDraft      ModernDraftService
+	ModernSubmission ModernSubmissionService
+	Governance       GovernanceService
+	Reporting        ReportingService
+	Reports          ModernReportingService
+	Policy           PolicyRevisionService
+	LatestMigration  int
 }
 
 // ErrInvalidCredentials indicates that login credentials do not match an enabled user.
@@ -134,6 +135,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	registerModernReportingRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	registerModernShiftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShift)
 	registerModernDraftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernDraft)
+	registerModernSubmissionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernSubmission)
 	return router
 }
 
