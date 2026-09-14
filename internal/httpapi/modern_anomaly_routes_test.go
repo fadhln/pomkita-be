@@ -27,6 +27,19 @@ func TestModernAnomalyExportRoute_UsesVerifiedOrganization(t *testing.T) {
 	}
 }
 
+func TestModernAnomalyRoute_RequiresStationForStationScopedActor(t *testing.T) {
+	service := &modernAnomalyStub{}
+	sessions := &modernSessionStub{view: SessionView{OrgID: uuid.New(), UserID: uuid.New(), Roles: []string{"Supervisor"}, StationIDs: []uuid.UUID{uuid.New(), uuid.New()}}}
+	router := NewRouterWithDependencySet("test", nil, RouterDependencies{Readiness: readyStub{current: true}, Verifier: verifierStub{}, Sessions: sessions, ModernAnomalies: service, LatestMigration: 11})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/anomalies", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status: got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 type modernAnomalyStub struct{ orgID uuid.UUID }
 
 func (s *modernAnomalyStub) Anomalies(_ context.Context, orgID uuid.UUID, _ *uuid.UUID) ([]appreporting.AnomalyView, error) {

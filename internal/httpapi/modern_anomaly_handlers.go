@@ -80,6 +80,10 @@ func readModernAnomalies(c *gin.Context, sessions SessionService, service Modern
 		}
 		stationID = &parsed
 	}
+	if stationID == nil && !containsString(session.Roles, "Owner") && !containsString(session.Roles, "Superadmin") {
+		writeError(c, http.StatusForbidden, "station_scope_forbidden")
+		return nil, false
+	}
 	rows, err := service.Anomalies(c.Request.Context(), session.OrgID, stationID)
 	if err != nil {
 		_ = c.Error(err)
