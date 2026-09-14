@@ -9,6 +9,9 @@ func TestPersistenceModels_UseExplicitTableNames(t *testing.T) {
 		want  string
 	}{
 		{name: "organization", model: OrganizationModel{}, want: "organizations"},
+		{name: "user", model: UserModel{}, want: "users"},
+		{name: "JWT key", model: JWTKeyModel{}, want: "jwt_keys"},
+		{name: "session", model: SessionModel{}, want: "sessions"},
 		{name: "station", model: StationModel{}, want: "stations"},
 		{name: "shift", model: ShiftModel{}, want: "shifts"},
 		{name: "draft", model: ShiftDraftModel{}, want: "shift_drafts"},

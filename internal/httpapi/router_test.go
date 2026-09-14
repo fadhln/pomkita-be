@@ -25,3 +25,17 @@ func TestHealthAndReady(t *testing.T) {
 		}
 	}
 }
+
+func TestRouterWithDependencySetUsesExplicitReadinessConfiguration(t *testing.T) {
+	latest := 0
+	router := NewRouterWithDependencySet("test", nil, RouterDependencies{
+		Readiness:       readyStub{current: true, latest: &latest},
+		LatestMigration: 6,
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest("GET", "/ready", nil))
+
+	if recorder.Code != 200 || latest != 6 {
+		t.Fatalf("ready response: status=%d latest=%d, want 200 and 6", recorder.Code, latest)
+	}
+}

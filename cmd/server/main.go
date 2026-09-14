@@ -5,10 +5,12 @@ import (
 	"log"
 	"os"
 
+	gormstore "github.com/pomkita/pomkita-be/internal/adapter/persistence/gorm"
 	"github.com/pomkita/pomkita-be/internal/config"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
 	"github.com/pomkita/pomkita-be/internal/httpapi"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
+	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
 )
 
 func main() {
@@ -31,11 +33,27 @@ func main() {
 		log.Printf("apply migrations: %v", err)
 		os.Exit(1)
 	}
-	jwtService := appjwt.NewService(database.JWTStore(cfg.JWTSecrets), appjwt.Config{
+	gormDatabase, err := gormstore.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Printf("open GORM database: %v", err)
+		os.Exit(1)
+	}
+	defer gormDatabase.Close()
+	authRepository := gormstore.NewLegacyAuthRepository(gormDatabase, cfg.JWTSecrets)
+	jwtService := appjwt.NewService(authRepository, appjwt.Config{
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
-	sessionManager := appdb.NewSessionManager(database, jwtService)
-	router := httpapi.NewRouterWithAllDependencies(cfg.Environment, cfg.CorsAllowedOrigins, database, jwtService, sessionManager, appdb.NewShiftManager(database), appdb.NewGovernanceManager(database), appdb.NewReportingManager(database), appdb.NewPolicyManager(database))
+	sessionService := authservice.NewService(authRepository, jwtService)
+	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, httpapi.RouterDependencies{
+		Readiness:       database,
+		Verifier:        jwtService,
+		Sessions:        sessionService,
+		Shifts:          appdb.NewShiftManager(database),
+		Governance:      appdb.NewGovernanceManager(database),
+		Reporting:       appdb.NewReportingManager(database),
+		Policy:          appdb.NewPolicyManager(database),
+		LatestMigration: 23,
+	})
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Printf("server stopped: %v", err)

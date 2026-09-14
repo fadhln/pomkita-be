@@ -118,6 +118,19 @@ func TestLogoutRequiresCSRFHeader(t *testing.T) {
 	}
 }
 
+func TestLogoutReturnsInternalErrorWhenSessionServiceIsMissing(t *testing.T) {
+	router := NewRouterWithDependencies("test", nil, readyStub{}, verifierStub{}, nil)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodDelete, "/logout", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	request.Header.Set("X-Requested-With", "XMLHttpRequest")
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), `"code":"internal_error"`) {
+		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestSessionReturnsProcedurePayload(t *testing.T) {
 	view := SessionView{
 		UserID:      uuid.MustParse("33333333-3333-4333-8333-333333333333"),

@@ -180,6 +180,41 @@ func TestService_VerifyReissuesExpiryFromActivityAndCapsAtKeyExpiry(t *testing.T
 	}
 }
 
+func TestService_VerifyRejectsExpiredPersistedSession(t *testing.T) {
+	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	key := Key{KID: "key_1", Secret: "secret", Status: KeyActive, MaxTokenExpiry: now.Add(20 * time.Minute)}
+	userID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
+	jti := uuid.MustParse("44444444-4444-4444-8444-444444444444")
+	store := &memoryStore{keys: map[string]Key{"key_1": key}, sessions: map[uuid.UUID]Session{
+		jti: {JTI: jti, UserID: userID, KID: key.KID, IssuedAt: now.Add(-20 * time.Minute), ExpiresAt: now.Add(-2 * time.Minute), LastActiveAt: now.Add(-time.Minute)},
+	}}
+	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return now }})
+
+	_, err := service.Verify(context.Background(), signedToken(t, key.Secret, key.KID, nil, userID, jti, now))
+
+	if !errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("got %v, want %v", err, ErrSessionExpired)
+	}
+}
+
+func TestService_VerifyRejectsSessionBoundToAnotherUser(t *testing.T) {
+	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	key := Key{KID: "key_1", Secret: "secret", Status: KeyActive, MaxTokenExpiry: now.Add(20 * time.Minute)}
+	userID := uuid.MustParse("33333333-3333-4333-8333-333333333333")
+	otherUserID := uuid.MustParse("55555555-5555-4555-8555-555555555555")
+	jti := uuid.MustParse("44444444-4444-4444-8444-444444444444")
+	store := &memoryStore{keys: map[string]Key{"key_1": key}, sessions: map[uuid.UUID]Session{
+		jti: {JTI: jti, UserID: otherUserID, KID: key.KID, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(10 * time.Minute), LastActiveAt: now.Add(-time.Minute)},
+	}}
+	service := NewService(store, Config{Issuer: "pomkita", Audience: "pomkita", Now: func() time.Time { return now }})
+
+	_, err := service.Verify(context.Background(), signedToken(t, key.Secret, key.KID, nil, userID, jti, now))
+
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("got %v, want %v", err, ErrSessionNotFound)
+	}
+}
+
 func TestService_LogoutRevokesSession(t *testing.T) {
 	now := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
 	jti := uuid.MustParse("44444444-4444-4444-8444-444444444444")

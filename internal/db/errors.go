@@ -5,10 +5,11 @@ import (
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	appauth "github.com/pomkita/pomkita-be/internal/service/auth"
 )
 
 // ErrInvalidCredentials means that login credentials do not match an enabled user.
-var ErrInvalidCredentials = errors.New("invalid_credentials")
+var ErrInvalidCredentials = appauth.ErrInvalidCredentials
 
 // HTTPStatusForError maps database errors to the backend status groups.
 func HTTPStatusForError(err error) int {

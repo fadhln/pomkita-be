@@ -39,6 +39,18 @@ type SessionService interface {
 	ReadSession(context.Context, string) (SessionView, error)
 }
 
+// RouterDependencies contains all services required by the HTTP adapter.
+type RouterDependencies struct {
+	Readiness       Readiness
+	Verifier        TokenVerifier
+	Sessions        SessionService
+	Shifts          ShiftService
+	Governance      GovernanceService
+	Reporting       ReportingService
+	Policy          PolicyRevisionService
+	LatestMigration int
+}
+
 // ErrInvalidCredentials indicates that login credentials do not match an enabled user.
 var ErrInvalidCredentials = appdb.ErrInvalidCredentials
 
@@ -54,6 +66,11 @@ func NewRouterWithDependencies(environment string, allowedOrigins []string, read
 		sessions = services[0]
 	}
 	return NewRouterWithAllDependencies(environment, allowedOrigins, readiness, verifier, sessions, nil)
+}
+
+// NewRouterWithDependencySet creates a router with explicit typed dependencies.
+func NewRouterWithDependencySet(environment string, allowedOrigins []string, dependencies RouterDependencies) *gin.Engine {
+	return buildRouter(environment, allowedOrigins, dependencies)
 }
 
 // NewRouterWithAllDependencies creates a router with session and shift services.
@@ -79,20 +96,33 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 		}
 	}
 
+	return buildRouter(environment, allowedOrigins, RouterDependencies{
+		Readiness: readiness, Verifier: verifier, Sessions: sessions, Shifts: shifts,
+		Governance: governance, Reporting: reporting, Policy: policy, LatestMigration: 23,
+	})
+}
+
+func buildRouter(environment string, allowedOrigins []string, dependencies RouterDependencies) *gin.Engine {
+	if environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+	if dependencies.LatestMigration == 0 {
+		dependencies.LatestMigration = 23
+	}
 	router := gin.New()
 	router.Use(gin.Recovery(), corsMiddleware(allowedOrigins), requestID(), ErrorMappingMiddleware())
 	router.GET("/health", health)
-	router.GET("/ready", readyHandler(readiness))
-	registerSessionRoutes(router, verifier, sessions, environment == "production")
-	registerShiftRoutes(router, verifier, shifts)
-	registerGovernanceRoutes(router, verifier, governance)
-	registerReportingRoutes(router, verifier, reporting, policy)
+	router.GET("/ready", readyHandler(dependencies.Readiness, dependencies.LatestMigration))
+	registerSessionRoutes(router, dependencies.Verifier, dependencies.Sessions, environment == "production")
+	registerShiftRoutes(router, dependencies.Verifier, dependencies.Shifts)
+	registerGovernanceRoutes(router, dependencies.Verifier, dependencies.Governance)
+	registerReportingRoutes(router, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
 
 	versioned := router.Group("/api/v1")
-	registerSessionRoutes(versioned, verifier, sessions, environment == "production")
-	registerShiftRoutes(versioned, verifier, shifts)
-	registerGovernanceRoutes(versioned, verifier, governance)
-	registerReportingRoutes(versioned, verifier, reporting, policy)
+	registerSessionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, environment == "production")
+	registerShiftRoutes(versioned, dependencies.Verifier, dependencies.Shifts)
+	registerGovernanceRoutes(versioned, dependencies.Verifier, dependencies.Governance)
+	registerReportingRoutes(versioned, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
 	return router
 }
 
@@ -134,13 +164,13 @@ func health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-func readyHandler(readiness Readiness) gin.HandlerFunc {
+func readyHandler(readiness Readiness, latestMigration int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if readiness == nil || readiness.Ping(c.Request.Context()) != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return
 		}
-		current, err := readiness.MigrationsCurrent(c.Request.Context(), 23)
+		current, err := readiness.MigrationsCurrent(c.Request.Context(), latestMigration)
 		if err != nil || !current {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unready"})
 			return
@@ -314,6 +344,10 @@ func requireCSRF(c *gin.Context) {
 
 func logoutHandler(service SessionService, secure bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
 		claims := c.MustGet("jwt_claims").(appjwt.Claims)
 		if err := service.Logout(c.Request.Context(), claims.JTI); err != nil {
 			_ = c.Error(err)
@@ -327,6 +361,10 @@ func logoutHandler(service SessionService, secure bool) gin.HandlerFunc {
 
 func sessionHandler(service SessionService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
 		view, err := service.ReadSession(c.Request.Context(), c.GetString("raw_token"))
 		if err != nil {
 			_ = c.Error(err)

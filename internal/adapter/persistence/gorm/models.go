@@ -17,6 +17,57 @@ type OrganizationModel struct {
 // TableName returns the organizations table name.
 func (OrganizationModel) TableName() string { return "organizations" }
 
+// UserModel maps credentials and account state for one user.
+type UserModel struct {
+	UserID       uuid.UUID `gorm:"column:user_id;type:uuid;primaryKey"`
+	OrgID        uuid.UUID `gorm:"column:org_id;type:uuid;not null"`
+	DisplayName  string    `gorm:"column:display_name;not null"`
+	Email        string    `gorm:"column:email;not null"`
+	PasswordHash string    `gorm:"column:password_hash;not null"`
+	Enabled      bool      `gorm:"column:enabled;not null"`
+	CreatedAt    time.Time `gorm:"column:created_at;not null"`
+}
+
+// TableName returns the users table name.
+func (UserModel) TableName() string { return "users" }
+
+// JWTKeyModel maps signing-key metadata. Secret values stay outside PostgreSQL.
+type JWTKeyModel struct {
+	KID            string    `gorm:"column:kid;primaryKey"`
+	SecretRef      string    `gorm:"column:secret_ref;not null"`
+	Status         string    `gorm:"column:status;not null"`
+	ActivatedAt    time.Time `gorm:"column:activated_at;not null"`
+	MaxTokenExpiry time.Time `gorm:"column:max_token_expiry;not null"`
+}
+
+// TableName returns the jwt_keys table name.
+func (JWTKeyModel) TableName() string { return "jwt_keys" }
+
+// SessionModel maps one issued session token.
+type SessionModel struct {
+	JTI          uuid.UUID  `gorm:"column:jti;type:uuid;primaryKey"`
+	UserID       uuid.UUID  `gorm:"column:user_id;type:uuid;not null"`
+	KID          string     `gorm:"column:kid;not null"`
+	IssuedAt     time.Time  `gorm:"column:issued_at;not null"`
+	ExpiresAt    time.Time  `gorm:"column:expires_at;not null"`
+	LastActiveAt time.Time  `gorm:"column:last_active_at;not null"`
+	RevokedAt    *time.Time `gorm:"column:revoked_at"`
+}
+
+// TableName returns the sessions table name.
+func (SessionModel) TableName() string { return "sessions" }
+
+type legacySessionModel struct {
+	JTI          uuid.UUID  `gorm:"column:jti;type:uuid;primaryKey"`
+	KID          string     `gorm:"column:kid;not null"`
+	IssuedAt     time.Time  `gorm:"column:issued_at;not null"`
+	ExpiresAt    time.Time  `gorm:"column:expires_at;not null"`
+	LastActiveAt time.Time  `gorm:"column:last_active_at;not null"`
+	RevokedAt    *time.Time `gorm:"column:revoked_at"`
+}
+
+func (legacySessionModel) TableName() string { return "sessions" }
+
 // StationModel maps the tenant-scoped stations table.
 type StationModel struct {
 	OrgID     uuid.UUID `gorm:"column:org_id;type:uuid;primaryKey"`
