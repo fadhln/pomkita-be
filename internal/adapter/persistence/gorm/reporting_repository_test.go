@@ -2,6 +2,7 @@ package gormstore
 
 import (
 	"context"
+	"crypto/sha256"
 	"testing"
 
 	"github.com/google/uuid"
@@ -89,6 +90,61 @@ func TestReportingRepository_AnomaliesIncludesBreakGlassAndEvidenceExceptions(t 
 	}
 	if !seen["break_glass"] || !seen["loss_exception"] {
 		t.Fatalf("anomaly sources: got %+v", seen)
+	}
+}
+
+func TestReportingRepository_AnomaliesIncludesLossGainAndVariance(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+	dispenserID, nozzleID := uuid.New(), uuid.New()
+	if err := fixture.store.db.Create(&DispenserModel{OrgID: fixture.orgID, StationID: fixture.stationID, DispenserID: dispenserID}).Error; err != nil {
+		t.Fatalf("create dispenser: %v", err)
+	}
+	if err := fixture.store.db.Create(&NozzleModel{OrgID: fixture.orgID, StationID: fixture.stationID, NozzleID: nozzleID, DispenserID: dispenserID, MeterMax: Decimal("99999.9")}).Error; err != nil {
+		t.Fatalf("create nozzle: %v", err)
+	}
+	payload := []byte(`{"hash_version":1,"loss_liter_threshold":"10.00","gain_liter_threshold":"1.00","loss_rupiah_threshold":"100","gain_rupiah_threshold":"50","variance_rupiah_threshold":"0","rollover_threshold":"0"}`)
+	payloadHash := sha256.Sum256(payload)
+	if err := fixture.store.db.Create(&PolicySnapshotItemModel{ItemID: uuid.New(), OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, SetID: fixture.policySetID, PolicyKind: "threshold", PolicyID: uuid.New(), RevID: uuid.New(), Scope: "organization", Payload: payload, PayloadHash: payloadHash[:]}).Error; err != nil {
+		t.Fatalf("create threshold snapshot: %v", err)
+	}
+	if err := fixture.store.db.Create(&DispenserReadingModel{ReadingID: uuid.New(), OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, ReportID: fixture.reportID, NozzleID: nozzleID, MeterStart: Decimal("10.0"), MeterEnd: Decimal("11.0"), PriceUsed: Decimal("120"), ExpectedSale: Decimal("120"), Observed: true, IsCarriedForward: false}).Error; err != nil {
+		t.Fatalf("create report reading: %v", err)
+	}
+	if err := fixture.store.db.Create(&SalesDeclaredModel{SalesID: uuid.New(), OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, ReportID: fixture.reportID, DispenserID: dispenserID, CashAmount: Decimal("100"), CashlessAmount: Decimal("0"), CreatedBy: fixture.creatorID}).Error; err != nil {
+		t.Fatalf("create declared sale: %v", err)
+	}
+	for _, entry := range []struct {
+		lossID, rowID uuid.UUID
+		direction     string
+		liters        string
+		cash          string
+	}{
+		{uuid.New(), uuid.New(), "loss", "11.00", "101"},
+		{uuid.New(), uuid.New(), "gain", "2.00", "51"},
+	} {
+		if err := fixture.store.db.Create(&LossIdentityModel{LossID: entry.lossID, OrgID: fixture.orgID, StationID: fixture.stationID, CreatedBy: fixture.creatorID, CreatedAt: fixture.now}).Error; err != nil {
+			t.Fatalf("create loss identity: %v", err)
+		}
+		cash := Decimal(entry.cash)
+		if err := fixture.store.db.Create(&LossEntryModel{RowID: entry.rowID, OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, ReportID: fixture.reportID, VersionNo: 1, LossID: entry.lossID, NozzleID: nozzleID, Direction: entry.direction, ReasonCode: "test", Liters: Decimal(entry.liters), CashAmount: &cash, CreatedBy: fixture.creatorID}).Error; err != nil {
+			t.Fatalf("create %s entry: %v", entry.direction, err)
+		}
+	}
+
+	rows, err := NewReportingRepository(fixture.store).Anomalies(ctx, fixture.orgID, &fixture.stationID)
+	if err != nil {
+		t.Fatalf("load anomalies: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, row := range rows {
+		seen[row.SourceKind] = true
+	}
+	for _, source := range []string{"loss_threshold", "gain_threshold", "variance"} {
+		if !seen[source] {
+			t.Fatalf("missing %s anomaly in %+v", source, rows)
+		}
 	}
 }
 
