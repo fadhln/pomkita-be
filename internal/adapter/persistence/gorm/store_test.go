@@ -11,6 +11,23 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestStoreReadinessReportsCleanMigrationState(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	if err := store.Ping(ctx); err != nil {
+		t.Fatalf("ping store: %v", err)
+	}
+	current, err := store.MigrationsCurrent(ctx, 11)
+	if err != nil || !current {
+		t.Fatalf("current migration: current=%t err=%v", current, err)
+	}
+	current, err = store.MigrationsCurrent(ctx, 10)
+	if err != nil || current {
+		t.Fatalf("unexpected migration state: current=%t err=%v", current, err)
+	}
+}
+
 func TestStoreTransaction_RollsBackAllWritesWhenCallbackFails(t *testing.T) {
 	ctx := context.Background()
 	dsn := os.Getenv("DATABASE_URL")

@@ -48,6 +48,37 @@ func (s *Store) Close() error {
 	return sqlDatabase.Close()
 }
 
+// Ping checks database reachability for the readiness endpoint.
+func (s *Store) Ping(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return errors.New("GORM store is not configured")
+	}
+	database, err := s.db.DB()
+	if err != nil {
+		return fmt.Errorf("get GORM SQL database: %w", err)
+	}
+	if err := database.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping database: %w", err)
+	}
+	return nil
+}
+
+// MigrationsCurrent reports whether the clean migration state is current.
+func (s *Store) MigrationsCurrent(ctx context.Context, expected int) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, errors.New("GORM store is not configured")
+	}
+	var state struct {
+		Version int  `gorm:"column:version"`
+		Dirty   bool `gorm:"column:dirty"`
+	}
+	result := s.db.WithContext(ctx).Table("schema_migrations").Select("version, dirty").Order("version desc").Limit(1).Scan(&state)
+	if result.Error != nil {
+		return false, fmt.Errorf("read migration state: %w", result.Error)
+	}
+	return state.Version == expected && !state.Dirty, nil
+}
+
 // Transaction runs fn in one database transaction and rolls it back on error.
 func (s *Store) Transaction(ctx context.Context, fn func(context.Context, *gorm.DB) error) error {
 	if s == nil || s.db == nil {
