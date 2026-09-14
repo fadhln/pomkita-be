@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // OrganizationModel maps the organizations table.
@@ -651,11 +652,11 @@ func (EvidencePolicyRevisionModel) TableName() string { return "evidence_policy_
 
 // EvidencePolicyTypeModel maps one accepted evidence type.
 type EvidencePolicyTypeModel struct {
-	OrgID               uuid.UUID `gorm:"column:org_id;type:uuid;primaryKey"`
-	RevID               uuid.UUID `gorm:"column:rev_id;type:uuid;primaryKey"`
-	EvidenceType        string    `gorm:"column:evidence_type;primaryKey"`
-	MinimumCountPerLoss int       `gorm:"column:minimum_count_per_loss;not null"`
-	AcceptedMIMETypes   []string  `gorm:"column:accepted_mime_types;type:text[];not null"`
+	OrgID               uuid.UUID      `gorm:"column:org_id;type:uuid;primaryKey"`
+	RevID               uuid.UUID      `gorm:"column:rev_id;type:uuid;primaryKey"`
+	EvidenceType        string         `gorm:"column:evidence_type;primaryKey"`
+	MinimumCountPerLoss int            `gorm:"column:minimum_count_per_loss;not null"`
+	AcceptedMIMETypes   pq.StringArray `gorm:"column:accepted_mime_types;type:text[];not null"`
 }
 
 // TableName returns the evidence_policy_types table name.

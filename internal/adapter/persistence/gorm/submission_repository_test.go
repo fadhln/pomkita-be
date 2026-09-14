@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	appreconciliation "github.com/pomkita/pomkita-be/internal/service/reconciliation"
 	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
 )
@@ -88,6 +89,7 @@ func TestSubmissionRepository_Submit_PromotesDraftChildrenToReport(t *testing.T)
 	orgID, stationID, userID := uuid.New(), uuid.New(), uuid.New()
 	shiftID, draftID, claimToken, policySetID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	dispenserID, nozzleID, draftReadingID, draftSalesID, lossID, lossRowID, evidenceRowID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	evidencePolicyID, evidenceRevisionID, varianceRuleID := uuid.New(), uuid.New(), uuid.New()
 	if err := store.db.Create(&OrganizationModel{OrgID: orgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
@@ -113,10 +115,19 @@ func TestSubmissionRepository_Submit_PromotesDraftChildrenToReport(t *testing.T)
 	if err := store.db.Create(&PolicySnapshotSetModel{SetID: policySetID, OrgID: orgID, StationID: stationID, ShiftID: &shiftID, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create policy snapshot set: %v", err)
 	}
+	if err := store.db.Create(&EvidencePolicyRevisionModel{RevID: evidenceRevisionID, PolicyID: evidencePolicyID, OrgID: orgID, Mode: "wajib", ValidFrom: now.Add(-time.Hour), CreatedBy: userID, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create evidence policy revision: %v", err)
+	}
+	if err := store.db.Create(&EvidencePolicyTypeModel{OrgID: orgID, RevID: evidenceRevisionID, EvidenceType: "photo", MinimumCountPerLoss: 1, AcceptedMIMETypes: pq.StringArray{"image/jpeg"}}).Error; err != nil {
+		t.Fatalf("create evidence policy type: %v", err)
+	}
+	if err := store.db.Create(&AlertRuleModel{RuleID: varianceRuleID, OrgID: orgID, StationID: stationID, RuleType: "variance", AlertKey: "variance", Threshold: Decimal("0"), Enabled: true, Channel: "in_app", CreatedBy: &userID, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create variance alert rule: %v", err)
+	}
 	if err := store.db.Create(&DraftReadingModel{RowID: draftReadingID, OrgID: orgID, StationID: stationID, DraftID: draftID, NozzleID: nozzleID, MeterStart: Decimal("10.0"), MeterEnd: Decimal("12.0"), CreatedBy: userID}).Error; err != nil {
 		t.Fatalf("create draft reading: %v", err)
 	}
-	if err := store.db.Create(&DraftSalesModel{RowID: draftSalesID, OrgID: orgID, StationID: stationID, DraftID: draftID, DispenserID: dispenserID, CashAmount: Decimal("20000"), CashlessAmount: Decimal("0"), CreatedBy: userID}).Error; err != nil {
+	if err := store.db.Create(&DraftSalesModel{RowID: draftSalesID, OrgID: orgID, StationID: stationID, DraftID: draftID, DispenserID: dispenserID, CashAmount: Decimal("19000"), CashlessAmount: Decimal("0"), CreatedBy: userID}).Error; err != nil {
 		t.Fatalf("create draft sales: %v", err)
 	}
 	if err := store.db.Create(&DraftLossModel{RowID: lossRowID, OrgID: orgID, StationID: stationID, DraftID: draftID, LossID: lossID, Direction: "loss", ReasonCode: "test", Liters: Decimal("0.10"), CreatedBy: userID}).Error; err != nil {
@@ -147,6 +158,20 @@ func TestSubmissionRepository_Submit_PromotesDraftChildrenToReport(t *testing.T)
 	}
 	if readingCount != 1 || salesCount != 1 || lossCount != 1 || evidenceCount != 1 {
 		t.Fatalf("report children: readings=%d sales=%d losses=%d evidence=%d", readingCount, salesCount, lossCount, evidenceCount)
+	}
+	var evidenceSnapshotCount int64
+	if err := store.db.Model(&PolicySnapshotItemModel{}).Where("shift_id = ? and policy_kind = ?", shiftID, "evidence").Count(&evidenceSnapshotCount).Error; err != nil {
+		t.Fatalf("count evidence snapshots: %v", err)
+	}
+	if evidenceSnapshotCount != 1 {
+		t.Fatalf("evidence snapshot count: got %d, want 1", evidenceSnapshotCount)
+	}
+	var alertCount int64
+	if err := store.db.Model(&AlertEventModel{}).Where("rule_id = ? and subject_id = ? and event_type = ?", varianceRuleID, result.ReportID, "fired").Count(&alertCount).Error; err != nil {
+		t.Fatalf("count variance alerts: %v", err)
+	}
+	if alertCount != 1 {
+		t.Fatalf("variance alert count: got %d, want 1", alertCount)
 	}
 }
 

@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 	appreconciliation "github.com/pomkita/pomkita-be/internal/service/reconciliation"
 	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
 	"gorm.io/gorm"
@@ -115,6 +118,9 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 		if err != nil {
 			return err
 		}
+		if err := r.ensureEvidenceSnapshot(tx, request, policySet, now); err != nil {
+			return err
+		}
 		reportID := uuid.New()
 		report := ShiftReportModel{ReportID: reportID, OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, VersionNo: 1, Status: "submitted", SubmittedBy: request.ActorID, SubmittedAt: now, PolicySnapshot: policySet.SetID}
 		if err := tx.Create(&report).Error; err != nil {
@@ -125,6 +131,9 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 			return fmt.Errorf("create acknowledgement head: %w", err)
 		}
 		if err := r.promoteDraftChildren(tx, shift, draft, report, payload, rolloverThreshold, now); err != nil {
+			return err
+		}
+		if err := r.evaluateVarianceAlerts(tx, report, policySet, now); err != nil {
 			return err
 		}
 		if err := tx.Model(&ShiftModel{}).Where("shift_id = ?", request.ShiftID).Updates(map[string]any{"status": "awaiting_confirmation", "current_report_id": reportID, "closed_at": now}).Error; err != nil {
@@ -307,6 +316,9 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 	if err := tx.Where("org_id = ? and station_id = ? and draft_id = ?", draft.OrgID, draft.StationID, draft.DraftID).Find(&stagedEvidence).Error; err != nil {
 		return fmt.Errorf("load staged evidence: %w", err)
 	}
+	if err := r.validateStagedEvidence(tx, draft, draftLosses, stagedEvidence); err != nil {
+		return err
+	}
 	for _, staged := range stagedEvidence {
 		var draftLoss DraftLossModel
 		if err := tx.Where("row_id = ? and draft_id = ?", staged.LossRowID, draft.DraftID).First(&draftLoss).Error; err != nil {
@@ -332,6 +344,190 @@ type thresholdSnapshotPayload struct {
 	GainRupiahThreshold string `json:"gain_rupiah_threshold"`
 	VarianceRupiah      string `json:"variance_rupiah_threshold"`
 	RolloverThreshold   string `json:"rollover_threshold"`
+}
+
+type evidenceSnapshotPayload struct {
+	HashVersion int                    `json:"hash_version"`
+	Mode        string                 `json:"mode"`
+	Types       []evidenceSnapshotType `json:"types"`
+}
+
+type evidenceSnapshotType struct {
+	Type                string   `json:"type"`
+	MinimumCountPerLoss int      `json:"minimum_count_per_loss"`
+	AcceptedMIMETypes   []string `json:"accepted_mime_types"`
+}
+
+func (r *SubmissionRepository) ensureEvidenceSnapshot(tx *gorm.DB, request appsubmission.Request, policySet PolicySnapshotSetModel, now time.Time) error {
+	var item PolicySnapshotItemModel
+	err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and set_id = ? and policy_kind = ?", request.OrgID, request.StationID, request.ShiftID, policySet.SetID, "evidence").First(&item).Error
+	if err == nil {
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("load evidence policy snapshot: %w", err)
+	}
+
+	var revision EvidencePolicyRevisionModel
+	revisionErr := tx.Where("org_id = ? and disabled = false and valid_from <= ? and (station_id = ? or station_id is null)", request.OrgID, now, request.StationID).
+		Order("station_id is not null desc").Order("valid_from desc").First(&revision).Error
+	if errors.Is(revisionErr, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if revisionErr != nil {
+		return fmt.Errorf("resolve evidence policy: %w", revisionErr)
+	}
+	var policyTypes []EvidencePolicyTypeModel
+	if err := tx.Where("org_id = ? and rev_id = ?", revision.OrgID, revision.RevID).Order("evidence_type").Find(&policyTypes).Error; err != nil {
+		return fmt.Errorf("load evidence policy types: %w", err)
+	}
+	if len(policyTypes) == 0 {
+		return fmt.Errorf("evidence policy has no types: %w", appsubmission.ErrInvalidRequest)
+	}
+	payload := evidenceSnapshotPayload{HashVersion: 1, Mode: revision.Mode, Types: make([]evidenceSnapshotType, 0, len(policyTypes))}
+	for _, policyType := range policyTypes {
+		accepted := append([]string(nil), policyType.AcceptedMIMETypes...)
+		sort.Strings(accepted)
+		payload.Types = append(payload.Types, evidenceSnapshotType{Type: policyType.EvidenceType, MinimumCountPerLoss: policyType.MinimumCountPerLoss, AcceptedMIMETypes: accepted})
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode evidence policy snapshot: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	scope := "organization"
+	if revision.StationID != nil {
+		scope = "station"
+	}
+	item = PolicySnapshotItemModel{ItemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, SetID: policySet.SetID, PolicyKind: "evidence", PolicyID: revision.PolicyID, RevID: revision.RevID, Scope: scope, Payload: encoded, PayloadHash: hash[:]}
+	if err := tx.Create(&item).Error; err != nil {
+		return fmt.Errorf("create evidence policy snapshot: %w", err)
+	}
+	return nil
+}
+
+func (r *SubmissionRepository) validateStagedEvidence(tx *gorm.DB, draft ShiftDraftModel, losses []DraftLossModel, staged []DraftEvidenceStagingModel) error {
+	var item PolicySnapshotItemModel
+	err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and policy_kind = ?", draft.OrgID, draft.StationID, draft.ShiftID, "evidence").First(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("load evidence policy for validation: %w", err)
+	}
+	var payload evidenceSnapshotPayload
+	if err := json.Unmarshal(item.Payload, &payload); err != nil || payload.Mode == "" {
+		return fmt.Errorf("decode evidence policy snapshot: %w", appsubmission.ErrInvalidRequest)
+	}
+	types := make(map[string]evidenceSnapshotType, len(payload.Types))
+	for _, policyType := range payload.Types {
+		types[policyType.Type] = policyType
+	}
+	counts := make(map[uuid.UUID]map[string]int)
+	for _, evidence := range staged {
+		policyType, ok := types[evidence.EvidenceType]
+		if !ok {
+			return fmt.Errorf("evidence type %q: %w", evidence.EvidenceType, appgovernance.ErrEvidenceInvalid)
+		}
+		if !containsEvidenceMIME(policyType.AcceptedMIMETypes, evidence.MIME) {
+			return fmt.Errorf("evidence MIME %q: %w", evidence.MIME, appgovernance.ErrEvidenceInvalid)
+		}
+		if evidence.Status == "finalized" {
+			if counts[evidence.LossRowID] == nil {
+				counts[evidence.LossRowID] = make(map[string]int)
+			}
+			counts[evidence.LossRowID][evidence.EvidenceType]++
+		}
+	}
+	for _, loss := range losses {
+		for _, policyType := range payload.Types {
+			finalized := 0
+			if counts[loss.RowID] != nil {
+				finalized = counts[loss.RowID][policyType.Type]
+			}
+			if err := appgovernance.ValidateEvidence(appgovernance.EvidenceValidationRequest{Mode: payload.Mode, MinimumCount: policyType.MinimumCountPerLoss, FinalizedCount: finalized}); err != nil {
+				return fmt.Errorf("loss %s evidence type %s: %w", loss.LossID, policyType.Type, err)
+			}
+		}
+	}
+	return nil
+}
+
+func containsEvidenceMIME(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *SubmissionRepository) evaluateVarianceAlerts(tx *gorm.DB, report ShiftReportModel, policySet PolicySnapshotSetModel, now time.Time) error {
+	var snapshot PolicySnapshotItemModel
+	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and set_id = ? and policy_kind = ?", report.OrgID, report.StationID, report.ShiftID, policySet.SetID, "threshold").First(&snapshot).Error; err != nil {
+		return fmt.Errorf("load variance policy snapshot: %w", err)
+	}
+	var policy thresholdSnapshotPayload
+	if err := json.Unmarshal(snapshot.Payload, &policy); err != nil || policy.VarianceRupiah == "" {
+		return fmt.Errorf("decode variance policy snapshot: %w", appsubmission.ErrInvalidRequest)
+	}
+	threshold, ok := new(big.Rat).SetString(policy.VarianceRupiah)
+	if !ok || threshold.Sign() < 0 {
+		return fmt.Errorf("invalid variance threshold: %w", appsubmission.ErrInvalidRequest)
+	}
+	var readings []DispenserReadingModel
+	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Find(&readings).Error; err != nil {
+		return fmt.Errorf("load report readings for variance: %w", err)
+	}
+	var sales []SalesDeclaredModel
+	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Find(&sales).Error; err != nil {
+		return fmt.Errorf("load report sales for variance: %w", err)
+	}
+	expected := new(big.Rat)
+	for _, reading := range readings {
+		value, ok := new(big.Rat).SetString(reading.ExpectedSale.String())
+		if !ok {
+			return fmt.Errorf("invalid expected sale: %w", appsubmission.ErrInvalidRequest)
+		}
+		expected.Add(expected, value)
+	}
+	declared := new(big.Rat)
+	for _, sale := range sales {
+		cash, ok := new(big.Rat).SetString(sale.CashAmount.String())
+		if !ok {
+			return fmt.Errorf("invalid cash amount: %w", appsubmission.ErrInvalidRequest)
+		}
+		cashless, ok := new(big.Rat).SetString(sale.CashlessAmount.String())
+		if !ok {
+			return fmt.Errorf("invalid cashless amount: %w", appsubmission.ErrInvalidRequest)
+		}
+		declared.Add(declared, new(big.Rat).Add(cash, cashless))
+	}
+	variance := new(big.Rat).Sub(expected, declared)
+	absolute := new(big.Rat).Abs(variance)
+	if absolute.Cmp(threshold) <= 0 {
+		return nil
+	}
+	var rules []AlertRuleModel
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and rule_type = ? and enabled = true", report.OrgID, report.StationID, "variance").Order("rule_id").Find(&rules).Error; err != nil {
+		return fmt.Errorf("load variance alert rules: %w", err)
+	}
+	version := report.VersionNo
+	for _, rule := range rules {
+		ruleThreshold, ok := new(big.Rat).SetString(rule.Threshold.String())
+		if !ok || ruleThreshold.Sign() < 0 {
+			return fmt.Errorf("invalid alert threshold: %w", appsubmission.ErrInvalidRequest)
+		}
+		if absolute.Cmp(ruleThreshold) <= 0 {
+			continue
+		}
+		eventID := uuid.New()
+		event := AlertEventModel{EventID: eventID, OrgID: report.OrgID, StationID: report.StationID, RuleID: rule.RuleID, SubjectKind: "report", SubjectID: report.ReportID, EventType: "fired", PeriodStart: now, RelatedFiredID: &eventID, SourceKind: "report", SourceID: report.ReportID, SourceVersionNo: &version, SourceAt: now, CreatedBy: &report.SubmittedBy, CreatedAt: now}
+		if err := tx.Create(&event).Error; err != nil {
+			return fmt.Errorf("create variance alert: %w", err)
+		}
+	}
+	return nil
 }
 
 func (r *SubmissionRepository) ensureThresholdSnapshot(tx *gorm.DB, request appsubmission.Request, policySet PolicySnapshotSetModel, now time.Time) (string, error) {
