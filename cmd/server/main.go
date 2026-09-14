@@ -26,6 +26,13 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
+func cleanMigrationsDirectory(value string) string {
+	if filepath.Base(filepath.Clean(value)) == "clean" {
+		return value
+	}
+	return filepath.Join(value, "clean")
+}
+
 func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, modernShift httpapi.ModernShiftService, modernShiftRead httpapi.ModernShiftReadService, modernDraft httpapi.ModernDraftService, modernDraftWrites httpapi.ModernDraftWriteService, modernSubmission httpapi.ModernSubmissionService, modernGovernance httpapi.ModernGovernanceService, modernAmendment httpapi.ModernAmendmentService, modernPolicy httpapi.ModernPolicyService, modernPolicyRead httpapi.ModernPolicyReadService, modernAudit httpapi.ModernAuditService, modernAuditVerify httpapi.ModernAuditVerificationService, modernAnomalies httpapi.ModernAnomalyService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
@@ -37,7 +44,7 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.Tok
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
-	migrator, err := cleanmigrations.New(cfg.DatabaseURL, filepath.Join(cfg.MigrationsDir, "clean"))
+	migrator, err := cleanmigrations.New(cfg.DatabaseURL, cleanMigrationsDirectory(cfg.MigrationsDir))
 	if err != nil {
 		log.Printf("create migration runner: %v", err)
 		os.Exit(1)
