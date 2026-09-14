@@ -53,17 +53,17 @@ type OpenRequest struct {
 
 // Shift is the immutable result of opening a shift.
 type Shift struct {
-	ShiftID          uuid.UUID
-	OrgID            uuid.UUID
-	StationID        uuid.UUID
-	StationSeq       int64
-	SupervisorID     uuid.UUID
-	OpenedAt         time.Time
-	TimezoneSnapshot string
-	BusinessDate     string
-	Status           Status
-	PriceMapSnapshot []byte
-	PriceMapHash     []byte
+	ShiftID          uuid.UUID `json:"shift_id"`
+	OrgID            uuid.UUID `json:"org_id"`
+	StationID        uuid.UUID `json:"station_id"`
+	StationSeq       int64     `json:"station_seq"`
+	SupervisorID     uuid.UUID `json:"supervisor_id"`
+	OpenedAt         time.Time `json:"opened_at"`
+	TimezoneSnapshot string    `json:"timezone_snapshot"`
+	BusinessDate     string    `json:"business_date"`
+	Status           Status    `json:"status"`
+	PriceMapSnapshot []byte    `json:"price_map_snapshot,omitempty"`
+	PriceMapHash     []byte    `json:"price_map_hash,omitempty"`
 }
 
 // Repository persists one shift opening as one transaction.

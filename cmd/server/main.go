@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	gormstore "github.com/pomkita/pomkita-be/internal/adapter/persistence/gorm"
 	"github.com/pomkita/pomkita-be/internal/config"
@@ -12,12 +13,17 @@ import (
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
+	shiftservice "github.com/pomkita/pomkita-be/internal/service/shift"
 )
 
-func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
+type systemClock struct{}
+
+func (systemClock) Now() time.Time { return time.Now().UTC() }
+
+func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, modernShift httpapi.ModernShiftService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
-		Shifts: shifts, Governance: governance, Reporting: reporting,
+		Shifts: shifts, ModernShift: modernShift, Governance: governance, Reporting: reporting,
 		Reports: reports, Policy: policy, LatestMigration: 23,
 	}
 }
@@ -54,8 +60,9 @@ func main() {
 	})
 	sessionService := authservice.NewService(authRepository, jwtService)
 	modernReporting := appreporting.NewService(gormstore.NewReportingRepository(gormDatabase))
+	modernShift := shiftservice.NewService(gormstore.NewShiftRepository(gormDatabase), systemClock{})
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, composeRouterDependencies(
-		database, jwtService, sessionService, appdb.NewShiftManager(database),
+		database, jwtService, sessionService, appdb.NewShiftManager(database), modernShift,
 		appdb.NewGovernanceManager(database), appdb.NewReportingManager(database),
 		appdb.NewPolicyManager(database), modernReporting,
 	))
