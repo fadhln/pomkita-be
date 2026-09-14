@@ -237,6 +237,46 @@ type AmendmentItemModel struct {
 // TableName returns the amendment_items table name.
 func (AmendmentItemModel) TableName() string { return "amendment_items" }
 
+// AlertRuleModel maps one station alert rule.
+type AlertRuleModel struct {
+	RuleID    uuid.UUID  `gorm:"column:rule_id;type:uuid;primaryKey"`
+	OrgID     uuid.UUID  `gorm:"column:org_id;type:uuid;not null"`
+	StationID uuid.UUID  `gorm:"column:station_id;type:uuid;not null"`
+	RuleType  string     `gorm:"column:rule_type;not null"`
+	AlertKey  string     `gorm:"column:alert_key;not null"`
+	Threshold Decimal    `gorm:"column:threshold;type:numeric;not null"`
+	Enabled   bool       `gorm:"column:enabled;not null"`
+	Channel   string     `gorm:"column:channel;not null"`
+	CreatedBy *uuid.UUID `gorm:"column:created_by;type:uuid"`
+	CreatedAt time.Time  `gorm:"column:created_at;not null"`
+}
+
+// TableName returns the alert_rules table name.
+func (AlertRuleModel) TableName() string { return "alert_rules" }
+
+// AlertEventModel maps one immutable alert event.
+type AlertEventModel struct {
+	EventID         uuid.UUID  `gorm:"column:event_id;type:uuid;primaryKey"`
+	OrgID           uuid.UUID  `gorm:"column:org_id;type:uuid;not null"`
+	StationID       uuid.UUID  `gorm:"column:station_id;type:uuid;not null"`
+	RuleID          uuid.UUID  `gorm:"column:rule_id;type:uuid;not null"`
+	SubjectKind     string     `gorm:"column:subject_kind;not null"`
+	SubjectID       uuid.UUID  `gorm:"column:subject_id;type:uuid;not null"`
+	EventType       string     `gorm:"column:event_type;not null"`
+	PeriodStart     time.Time  `gorm:"column:period_start;not null"`
+	PeriodBucket    time.Time  `gorm:"column:period_bucket;->"`
+	RelatedFiredID  *uuid.UUID `gorm:"column:related_fired_event_id;type:uuid"`
+	SourceKind      string     `gorm:"column:source_kind;not null"`
+	SourceID        uuid.UUID  `gorm:"column:source_id;type:uuid;not null"`
+	SourceVersionNo *int       `gorm:"column:source_version_no"`
+	SourceAt        time.Time  `gorm:"column:source_at;not null"`
+	CreatedBy       *uuid.UUID `gorm:"column:created_by;type:uuid"`
+	CreatedAt       time.Time  `gorm:"column:created_at;not null"`
+}
+
+// TableName returns the alert_events table name.
+func (AlertEventModel) TableName() string { return "alert_events" }
+
 // PolicySnapshotSetModel maps the policy snapshot set for one shift.
 type PolicySnapshotSetModel struct {
 	SetID     uuid.UUID  `gorm:"column:set_id;type:uuid;primaryKey"`

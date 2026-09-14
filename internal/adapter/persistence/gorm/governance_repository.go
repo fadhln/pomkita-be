@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -495,6 +496,51 @@ func amendmentDecimalValue(raw []byte) (Decimal, error) {
 		text = strings.TrimSpace(string(raw))
 	}
 	return NewDecimal(text)
+}
+
+// RecordAlertOccurrence inserts one alert event or returns its existing key.
+func (r *GovernanceRepository) RecordAlertOccurrence(ctx context.Context, request appgovernance.AlertOccurrenceRequest, now time.Time) (appgovernance.AlertEvent, error) {
+	if r == nil || r.db == nil {
+		return appgovernance.AlertEvent{}, appgovernance.ErrDependencyUnavailable
+	}
+	var result appgovernance.AlertEvent
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var rule AlertRuleModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and rule_id = ?", request.OrgID, request.StationID, request.RuleID).First(&rule).Error; err != nil {
+			return appgovernance.ErrAlertInvalidRequest
+		}
+		if !rule.Enabled && request.EventType == "fired" {
+			result = appgovernance.AlertEvent{}
+			return nil
+		}
+		periodBucket := request.PeriodStart.UTC().Truncate(time.Hour)
+		var existing AlertEventModel
+		query := tx.Where("org_id = ? and station_id = ? and rule_id = ? and subject_kind = ? and subject_id = ? and event_type = ? and period_bucket = ?", request.OrgID, request.StationID, request.RuleID, request.SubjectKind, request.SubjectID, request.EventType, periodBucket)
+		if request.EventType == "cleared" {
+			query = tx.Where("org_id = ? and station_id = ? and related_fired_event_id = ? and event_type = ?", request.OrgID, request.StationID, *request.RelatedFiredEventID, request.EventType)
+		}
+		if err := query.First(&existing).Error; err == nil {
+			result = appgovernance.AlertEvent{EventID: existing.EventID, Inserted: false, RelatedFiredID: existing.RelatedFiredID}
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("load existing alert event: %w", err)
+		}
+		eventID := uuid.New()
+		related := request.RelatedFiredEventID
+		if request.EventType == "fired" {
+			related = &eventID
+		}
+		model := AlertEventModel{EventID: eventID, OrgID: request.OrgID, StationID: request.StationID, RuleID: request.RuleID, SubjectKind: request.SubjectKind, SubjectID: request.SubjectID, EventType: request.EventType, PeriodStart: request.PeriodStart, RelatedFiredID: related, SourceKind: request.SourceKind, SourceID: request.SourceID, SourceVersionNo: request.SourceVersionNo, SourceAt: request.SourceAt, CreatedBy: request.CreatedBy, CreatedAt: now}
+		if err := tx.Create(&model).Error; err != nil {
+			return fmt.Errorf("create alert event: %w", err)
+		}
+		result = appgovernance.AlertEvent{EventID: eventID, Inserted: true, RelatedFiredID: related}
+		return nil
+	})
+	if err != nil {
+		return appgovernance.AlertEvent{}, err
+	}
+	return result, nil
 }
 
 func (r *GovernanceRepository) reportSnapshotHash(tx *gorm.DB, report ShiftReportModel) ([]byte, error) {

@@ -21,6 +21,8 @@ func TestPersistenceModels_UseExplicitTableNames(t *testing.T) {
 		{name: "ack supersession", model: AckSupersessionModel{}, want: "ack_supersessions"},
 		{name: "amendment", model: AmendmentModel{}, want: "amendments"},
 		{name: "amendment item", model: AmendmentItemModel{}, want: "amendment_items"},
+		{name: "alert rule", model: AlertRuleModel{}, want: "alert_rules"},
+		{name: "alert event", model: AlertEventModel{}, want: "alert_events"},
 		{name: "dispenser", model: DispenserModel{}, want: "dispensers"},
 		{name: "tank", model: TankModel{}, want: "tanks"},
 		{name: "nozzle", model: NozzleModel{}, want: "nozzles"},
