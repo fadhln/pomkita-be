@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	appdb "github.com/pomkita/pomkita-be/internal/db"
+	"github.com/pomkita/pomkita-be/internal/domain"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
@@ -47,6 +48,7 @@ type RouterDependencies struct {
 	Shifts          ShiftService
 	Governance      GovernanceService
 	Reporting       ReportingService
+	Reports         ModernReportingService
 	Policy          PolicyRevisionService
 	LatestMigration int
 }
@@ -123,6 +125,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	registerShiftRoutes(versioned, dependencies.Verifier, dependencies.Shifts)
 	registerGovernanceRoutes(versioned, dependencies.Verifier, dependencies.Governance)
 	registerReportingRoutes(versioned, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
+	registerModernReportingRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	return router
 }
 
@@ -227,6 +230,10 @@ func ErrorMappingMiddleware() gin.HandlerFunc {
 		err := c.Errors.Last().Err
 		status := appdb.HTTPStatusForError(err)
 		code := appdb.StableCodeForError(err)
+		if domainStatus, domainCode := domainHTTPError(err); domainCode != "" {
+			status = domainStatus
+			code = domainCode
+		}
 		if code == "" {
 			code = stableDatabaseCode(status)
 		}
@@ -235,6 +242,29 @@ func ErrorMappingMiddleware() gin.HandlerFunc {
 			return
 		}
 		writeError(c, status, code)
+	}
+}
+
+func domainHTTPError(err error) (int, string) {
+	var domainErr *domain.Error
+	if !errors.As(err, &domainErr) {
+		return 0, ""
+	}
+	switch domainErr.Category {
+	case domain.CategoryAuthentication:
+		return http.StatusUnauthorized, domainErr.Code
+	case domain.CategoryAuthorization:
+		return http.StatusForbidden, domainErr.Code
+	case domain.CategoryValidation:
+		return http.StatusUnprocessableEntity, domainErr.Code
+	case domain.CategoryConflict:
+		return http.StatusConflict, domainErr.Code
+	case domain.CategoryNotFound:
+		return http.StatusNotFound, domainErr.Code
+	case domain.CategoryDependency:
+		return http.StatusServiceUnavailable, domainErr.Code
+	default:
+		return http.StatusInternalServerError, domainErr.Code
 	}
 }
 

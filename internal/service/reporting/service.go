@@ -17,40 +17,40 @@ var (
 
 // ReadingView is a decimal-safe report reading.
 type ReadingView struct {
-	NozzleID     uuid.UUID
-	MeterStart   string
-	MeterEnd     string
-	ExpectedSale string
+	NozzleID     uuid.UUID `json:"nozzle_id"`
+	MeterStart   string    `json:"meter_start"`
+	MeterEnd     string    `json:"meter_end"`
+	ExpectedSale string    `json:"expected_sale"`
 }
 
 // SalesView is a decimal-safe declared sales row.
 type SalesView struct {
-	DispenserID    uuid.UUID
-	CashAmount     string
-	CashlessAmount string
+	DispenserID    uuid.UUID `json:"dispenser_id"`
+	CashAmount     string    `json:"cash_amount"`
+	CashlessAmount string    `json:"cashless_amount"`
 }
 
 // LossView is a decimal-safe report loss row.
 type LossView struct {
-	RowID      uuid.UUID
-	LossID     uuid.UUID
-	Direction  string
-	Liters     string
-	CashAmount *string
-	Note       *string
+	RowID      uuid.UUID `json:"row_id"`
+	LossID     uuid.UUID `json:"loss_id"`
+	Direction  string    `json:"direction"`
+	Liters     string    `json:"liters"`
+	CashAmount *string   `json:"cash_amount,omitempty"`
+	Note       *string   `json:"note,omitempty"`
 }
 
 // ReportView is the common source for reporting and printout adapters.
 type ReportView struct {
-	ReportID    uuid.UUID
-	StationID   uuid.UUID
-	ShiftID     uuid.UUID
-	VersionNo   int
-	Status      string
-	SubmittedAt string
-	Readings    []ReadingView
-	Sales       []SalesView
-	Losses      []LossView
+	ReportID    uuid.UUID     `json:"report_id"`
+	StationID   uuid.UUID     `json:"station_id"`
+	ShiftID     uuid.UUID     `json:"shift_id"`
+	VersionNo   int           `json:"version_no"`
+	Status      string        `json:"status"`
+	SubmittedAt string        `json:"submitted_at"`
+	Readings    []ReadingView `json:"readings"`
+	Sales       []SalesView   `json:"sales"`
+	Losses      []LossView    `json:"losses"`
 }
 
 // AuditRow is one ordered audit export row.

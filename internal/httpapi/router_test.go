@@ -4,6 +4,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pomkita/pomkita-be/internal/domain"
 )
 
 func TestHealthAndReady(t *testing.T) {
@@ -37,5 +40,17 @@ func TestRouterWithDependencySetUsesExplicitReadinessConfiguration(t *testing.T)
 
 	if recorder.Code != 200 || latest != 6 {
 		t.Fatalf("ready response: status=%d latest=%d, want 200 and 6", recorder.Code, latest)
+	}
+}
+
+func TestErrorMappingMiddleware_MapsDomainConflictToStableResponse(t *testing.T) {
+	router := NewRouter("test", nil)
+	router.GET("/domain-error", func(c *gin.Context) {
+		_ = c.Error(domain.NewError(domain.CategoryConflict, "ack_already_decided"))
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest("GET", "/domain-error", nil))
+	if recorder.Code != 409 || !strings.Contains(recorder.Body.String(), `"code":"ack_already_decided"`) {
+		t.Fatalf("domain error response: status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
