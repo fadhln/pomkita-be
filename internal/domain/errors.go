@@ -9,6 +9,14 @@ const (
 	CategoryAuthentication ErrorCategory = "authentication"
 	// CategoryDependency identifies a missing or unavailable application dependency.
 	CategoryDependency ErrorCategory = "dependency"
+	// CategoryValidation identifies an invalid application request.
+	CategoryValidation ErrorCategory = "validation"
+	// CategoryConflict identifies a stale or conflicting state change.
+	CategoryConflict ErrorCategory = "conflict"
+	// CategoryNotFound identifies a resource outside the permitted scope.
+	CategoryNotFound ErrorCategory = "not_found"
+	// CategoryAuthorization identifies an authenticated actor without authority.
+	CategoryAuthorization ErrorCategory = "authorization"
 )
 
 // Error is a stable domain error with a safe machine code.
