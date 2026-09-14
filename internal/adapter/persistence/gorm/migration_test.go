@@ -197,6 +197,28 @@ func TestCleanMigrationSet_DefinesAcknowledgementTables(t *testing.T) {
 	}
 }
 
+func TestCleanMigrationSet_DefinesAmendmentTables(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "migrations", "clean", "000008_governance_amendments.up.sql")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read amendment migration: %v", err)
+	}
+
+	migration := strings.ToLower(string(contents))
+	for _, required := range []string{
+		"create table amendments",
+		"create table amendment_items",
+		"amendments_one_pending_base",
+		"stale_check_hash",
+		"target_kind",
+	} {
+		if !strings.Contains(migration, required) {
+			t.Fatalf("amendment migration does not contain %q", required)
+		}
+	}
+}
+
 func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	ctx := context.Background()
 	dsn := os.Getenv("DATABASE_URL")
@@ -247,11 +269,11 @@ func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 		where n.nspname = current_schema()
 		  and c.relkind = 'r'
 		  and c.relname = any($1::text[])
-	`, []string{"organizations", "stations", "users", "user_station_roles", "policy_snapshot_sets", "shifts", "shift_drafts", "shift_reports", "dispensers", "tanks", "nozzles", "nozzle_tank_map", "dispenser_nozzle_map", "dispenser_prices", "draft_readings", "draft_sales", "draft_losses", "draft_evidence_staging", "submit_idempotency", "dispenser_readings", "sales_declared", "loss_identity", "loss_entries", "deliveries", "dip_readings", "shift_transitions", "meter_reset_events", "threshold_policy_revisions", "evidence_policy_revisions", "evidence_policy_types", "policy_snapshot_items", "delivery_snapshots", "dip_snapshots", "loss_exception", "evidence_event", "nozzle_baseline_revisions", "nozzle_baseline_current", "jwt_keys", "sessions", "ack_decisions", "ack_head", "ack_supersessions"}).Scan(&tableCount); err != nil {
+	`, []string{"organizations", "stations", "users", "user_station_roles", "policy_snapshot_sets", "shifts", "shift_drafts", "shift_reports", "dispensers", "tanks", "nozzles", "nozzle_tank_map", "dispenser_nozzle_map", "dispenser_prices", "draft_readings", "draft_sales", "draft_losses", "draft_evidence_staging", "submit_idempotency", "dispenser_readings", "sales_declared", "loss_identity", "loss_entries", "deliveries", "dip_readings", "shift_transitions", "meter_reset_events", "threshold_policy_revisions", "evidence_policy_revisions", "evidence_policy_types", "policy_snapshot_items", "delivery_snapshots", "dip_snapshots", "loss_exception", "evidence_event", "nozzle_baseline_revisions", "nozzle_baseline_current", "jwt_keys", "sessions", "ack_decisions", "ack_head", "ack_supersessions", "amendments", "amendment_items"}).Scan(&tableCount); err != nil {
 		t.Fatalf("count clean tables: %v", err)
 	}
-	if tableCount != 42 {
-		t.Fatalf("clean table count: got %d, want 42", tableCount)
+	if tableCount != 44 {
+		t.Fatalf("clean table count: got %d, want 44", tableCount)
 	}
 
 	if err := runner.Down(ctx); err != nil {
@@ -271,8 +293,8 @@ func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname <> 'schema_migrations'`).Scan(&remaining); err != nil {
 		t.Fatalf("count clean tables after reapply: %v", err)
 	}
-	if remaining != 42 {
-		t.Fatalf("clean table count after reapply: got %d, want 42", remaining)
+	if remaining != 44 {
+		t.Fatalf("clean table count after reapply: got %d, want 44", remaining)
 	}
 	if err := runner.Down(ctx); err != nil {
 		t.Fatalf("reverse reapplied migrations: %v", err)

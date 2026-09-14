@@ -197,6 +197,46 @@ type AckSupersessionModel struct {
 // TableName returns the ack_supersessions table name.
 func (AckSupersessionModel) TableName() string { return "ack_supersessions" }
 
+// AmendmentModel maps one amendment request and its decision state.
+type AmendmentModel struct {
+	AmendmentID      uuid.UUID  `gorm:"column:amendment_id;type:uuid;primaryKey"`
+	OrgID            uuid.UUID  `gorm:"column:org_id;type:uuid;not null"`
+	StationID        uuid.UUID  `gorm:"column:station_id;type:uuid;not null"`
+	ShiftID          uuid.UUID  `gorm:"column:shift_id;type:uuid;not null"`
+	BaseReportID     uuid.UUID  `gorm:"column:base_report_id;type:uuid;not null"`
+	Reason           string     `gorm:"column:reason;not null"`
+	Status           string     `gorm:"column:status;not null"`
+	RequesterUserID  uuid.UUID  `gorm:"column:requester_user_id;type:uuid;not null"`
+	ApproverUserID   *uuid.UUID `gorm:"column:approver_user_id;type:uuid"`
+	RequestedAt      time.Time  `gorm:"column:requested_at;not null"`
+	DecidedAt        *time.Time `gorm:"column:decided_at"`
+	RejectionReason  *string    `gorm:"column:rejection_reason"`
+	AppliedReportID  *uuid.UUID `gorm:"column:applied_report_id;type:uuid"`
+	StaleCheckHash   []byte     `gorm:"column:stale_check_hash;not null"`
+	IsBreakGlass     bool       `gorm:"column:is_break_glass;not null"`
+	BreakGlassReason *string    `gorm:"column:break_glass_reason"`
+}
+
+// TableName returns the amendments table name.
+func (AmendmentModel) TableName() string { return "amendments" }
+
+// AmendmentItemModel maps one allowlisted amendment field change.
+type AmendmentItemModel struct {
+	ItemID          uuid.UUID       `gorm:"column:item_id;type:uuid;primaryKey"`
+	AmendmentID     uuid.UUID       `gorm:"column:amendment_id;type:uuid;not null"`
+	OrgID           uuid.UUID       `gorm:"column:org_id;type:uuid;not null"`
+	StationID       uuid.UUID       `gorm:"column:station_id;type:uuid;not null"`
+	ShiftID         uuid.UUID       `gorm:"column:shift_id;type:uuid;not null"`
+	TargetKind      string          `gorm:"column:target_kind;not null"`
+	TargetLogicalID uuid.UUID       `gorm:"column:target_logical_id;type:uuid;not null"`
+	Field           string          `gorm:"column:field;not null"`
+	OldValue        json.RawMessage `gorm:"column:old_value;type:jsonb;not null"`
+	NewValue        json.RawMessage `gorm:"column:new_value;type:jsonb"`
+}
+
+// TableName returns the amendment_items table name.
+func (AmendmentItemModel) TableName() string { return "amendment_items" }
+
 // PolicySnapshotSetModel maps the policy snapshot set for one shift.
 type PolicySnapshotSetModel struct {
 	SetID     uuid.UUID  `gorm:"column:set_id;type:uuid;primaryKey"`
