@@ -235,6 +235,32 @@ func TestCleanMigrationSet_DefinesAlertTables(t *testing.T) {
 	}
 }
 
+func TestCleanMigrationSet_DefinesAuditAndRelayTables(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, name := range []string{"000010_audit.up.sql", "000011_relay.up.sql"} {
+		contents, err := os.ReadFile(filepath.Join(root, "migrations", "clean", name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		migration := strings.ToLower(string(contents))
+		for _, required := range []string{"create table"} {
+			if !strings.Contains(migration, required) {
+				t.Fatalf("%s does not contain %q", name, required)
+			}
+		}
+	}
+	audit, _ := os.ReadFile(filepath.Join(root, "migrations", "clean", "000010_audit.up.sql"))
+	for _, required := range []string{"create table audit_chain_locks", "create table audit_log", "create table audit_outbox", "create table audit_denied", "prev_hash", "row_hash"} {
+		if !strings.Contains(strings.ToLower(string(audit)), required) {
+			t.Fatalf("audit migration does not contain %q", required)
+		}
+	}
+	relay, _ := os.ReadFile(filepath.Join(root, "migrations", "clean", "000011_relay.up.sql"))
+	if !strings.Contains(strings.ToLower(string(relay)), "create table outbox_relay_state") {
+		t.Fatal("relay migration does not contain outbox_relay_state")
+	}
+}
+
 func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	ctx := context.Background()
 	dsn := os.Getenv("DATABASE_URL")
@@ -285,11 +311,11 @@ func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 		where n.nspname = current_schema()
 		  and c.relkind = 'r'
 		  and c.relname = any($1::text[])
-	`, []string{"organizations", "stations", "users", "user_station_roles", "policy_snapshot_sets", "shifts", "shift_drafts", "shift_reports", "dispensers", "tanks", "nozzles", "nozzle_tank_map", "dispenser_nozzle_map", "dispenser_prices", "draft_readings", "draft_sales", "draft_losses", "draft_evidence_staging", "submit_idempotency", "dispenser_readings", "sales_declared", "loss_identity", "loss_entries", "deliveries", "dip_readings", "shift_transitions", "meter_reset_events", "threshold_policy_revisions", "evidence_policy_revisions", "evidence_policy_types", "policy_snapshot_items", "delivery_snapshots", "dip_snapshots", "loss_exception", "evidence_event", "nozzle_baseline_revisions", "nozzle_baseline_current", "jwt_keys", "sessions", "ack_decisions", "ack_head", "ack_supersessions", "amendments", "amendment_items", "alert_rules", "alert_events"}).Scan(&tableCount); err != nil {
+	`, []string{"organizations", "stations", "users", "user_station_roles", "policy_snapshot_sets", "shifts", "shift_drafts", "shift_reports", "dispensers", "tanks", "nozzles", "nozzle_tank_map", "dispenser_nozzle_map", "dispenser_prices", "draft_readings", "draft_sales", "draft_losses", "draft_evidence_staging", "submit_idempotency", "dispenser_readings", "sales_declared", "loss_identity", "loss_entries", "deliveries", "dip_readings", "shift_transitions", "meter_reset_events", "threshold_policy_revisions", "evidence_policy_revisions", "evidence_policy_types", "policy_snapshot_items", "delivery_snapshots", "dip_snapshots", "loss_exception", "evidence_event", "nozzle_baseline_revisions", "nozzle_baseline_current", "jwt_keys", "sessions", "ack_decisions", "ack_head", "ack_supersessions", "amendments", "amendment_items", "alert_rules", "alert_events", "audit_chain_locks", "audit_log", "audit_outbox", "audit_denied", "outbox_relay_state"}).Scan(&tableCount); err != nil {
 		t.Fatalf("count clean tables: %v", err)
 	}
-	if tableCount != 46 {
-		t.Fatalf("clean table count: got %d, want 46", tableCount)
+	if tableCount != 51 {
+		t.Fatalf("clean table count: got %d, want 51", tableCount)
 	}
 
 	if err := runner.Down(ctx); err != nil {
@@ -309,8 +335,8 @@ func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname <> 'schema_migrations'`).Scan(&remaining); err != nil {
 		t.Fatalf("count clean tables after reapply: %v", err)
 	}
-	if remaining != 46 {
-		t.Fatalf("clean table count after reapply: got %d, want 46", remaining)
+	if remaining != 51 {
+		t.Fatalf("clean table count after reapply: got %d, want 51", remaining)
 	}
 	if err := runner.Down(ctx); err != nil {
 		t.Fatalf("reverse reapplied migrations: %v", err)

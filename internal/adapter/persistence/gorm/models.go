@@ -277,6 +277,78 @@ type AlertEventModel struct {
 // TableName returns the alert_events table name.
 func (AlertEventModel) TableName() string { return "alert_events" }
 
+// AuditChainLockModel maps the per-organization audit sequence lock.
+type AuditChainLockModel struct {
+	OrgID uuid.UUID `gorm:"column:org_id;type:uuid;primaryKey"`
+}
+
+// TableName returns the audit_chain_locks table name.
+func (AuditChainLockModel) TableName() string { return "audit_chain_locks" }
+
+// AuditLogModel maps one immutable audit chain row.
+type AuditLogModel struct {
+	EventID      uuid.UUID       `gorm:"column:event_id;type:uuid;primaryKey"`
+	OrgID        uuid.UUID       `gorm:"column:org_id;type:uuid;not null"`
+	OrgSequence  int64           `gorm:"column:org_sequence;not null"`
+	EventType    string          `gorm:"column:event_type;not null"`
+	Payload      json.RawMessage `gorm:"column:payload;type:jsonb;not null"`
+	Outcome      string          `gorm:"column:outcome;not null"`
+	OutcomeError *string         `gorm:"column:outcome_error"`
+	CreatedAt    time.Time       `gorm:"column:created_at;not null"`
+	PrevHash     []byte          `gorm:"column:prev_hash;not null"`
+	RowHash      []byte          `gorm:"column:row_hash;not null"`
+}
+
+// TableName returns the audit_log table name.
+func (AuditLogModel) TableName() string { return "audit_log" }
+
+// AuditOutboxModel maps one audit event delivery payload.
+type AuditOutboxModel struct {
+	OrgID     uuid.UUID       `gorm:"column:org_id;type:uuid;primaryKey"`
+	EventID   uuid.UUID       `gorm:"column:event_id;type:uuid;primaryKey"`
+	EventType string          `gorm:"column:event_type;not null"`
+	Payload   json.RawMessage `gorm:"column:payload;type:jsonb;not null"`
+	CreatedAt time.Time       `gorm:"column:created_at;not null"`
+}
+
+// TableName returns the audit_outbox table name.
+func (AuditOutboxModel) TableName() string { return "audit_outbox" }
+
+// AuditDeniedModel maps safe metadata for one denied request.
+type AuditDeniedModel struct {
+	RequestID   uuid.UUID  `gorm:"column:request_id;type:uuid;primaryKey"`
+	SubjectID   *uuid.UUID `gorm:"column:sub;type:uuid"`
+	JTI         *uuid.UUID `gorm:"column:jti;type:uuid"`
+	OrgID       *uuid.UUID `gorm:"column:org_id;type:uuid"`
+	StationID   *uuid.UUID `gorm:"column:station_id;type:uuid"`
+	Action      string     `gorm:"column:action;not null"`
+	Target      string     `gorm:"column:target;not null"`
+	Reason      string     `gorm:"column:reason;not null"`
+	ServerAt    time.Time  `gorm:"column:server_at;not null"`
+	Outcome     string     `gorm:"column:outcome;not null"`
+	ErrorDetail *string    `gorm:"column:error_detail"`
+}
+
+// TableName returns the audit_denied table name.
+func (AuditDeniedModel) TableName() string { return "audit_denied" }
+
+// OutboxRelayStateModel maps one relay lease and retry state.
+type OutboxRelayStateModel struct {
+	OrgID          uuid.UUID  `gorm:"column:org_id;type:uuid;primaryKey"`
+	EventID        uuid.UUID  `gorm:"column:event_id;type:uuid;primaryKey"`
+	RelayStatus    string     `gorm:"column:relay_status;not null"`
+	AttemptCount   int        `gorm:"column:attempt_count;not null"`
+	LeaseToken     *uuid.UUID `gorm:"column:lease_token;type:uuid"`
+	LeaseExpiresAt *time.Time `gorm:"column:lease_expires_at"`
+	LastAttemptAt  *time.Time `gorm:"column:last_attempt_at"`
+	NextAttemptAt  *time.Time `gorm:"column:next_attempt_at"`
+	DeliveredAt    *time.Time `gorm:"column:delivered_at"`
+	LastError      *string    `gorm:"column:last_error"`
+}
+
+// TableName returns the outbox_relay_state table name.
+func (OutboxRelayStateModel) TableName() string { return "outbox_relay_state" }
+
 // PolicySnapshotSetModel maps the policy snapshot set for one shift.
 type PolicySnapshotSetModel struct {
 	SetID     uuid.UUID  `gorm:"column:set_id;type:uuid;primaryKey"`
