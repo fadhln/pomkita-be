@@ -2,11 +2,13 @@ package gormstore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/google/uuid"
+	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -134,6 +136,17 @@ func (r *PolicyRepository) CreateRevision(ctx context.Context, request apppolicy
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create evidence policy revision: %w", err)
 			}
+		}
+		station := ""
+		if request.StationID != uuid.Nil {
+			station = request.StationID.String()
+		}
+		auditPayload, err := json.Marshal(map[string]any{"revision_id": revisionID.String(), "policy_id": request.PolicyID.String(), "policy_kind": request.PolicyKind, "station_id": station, "disabled": request.Disabled})
+		if err != nil {
+			return fmt.Errorf("encode policy audit payload: %w", err)
+		}
+		if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: request.OrgID, EventID: revisionID, EventType: "policy.revision.created", Payload: auditPayload, Outcome: "success"}, now); err != nil {
+			return fmt.Errorf("append policy audit event: %w", err)
 		}
 		result = apppolicy.PolicyRevision{RevisionID: revisionID, PolicyID: request.PolicyID, PolicyKind: request.PolicyKind, ValidFrom: request.ValidFrom, Disabled: request.Disabled}
 		return nil

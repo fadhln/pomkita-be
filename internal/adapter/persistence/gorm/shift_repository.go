@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -111,6 +112,13 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 		}
 		if err := tx.Create(&draft).Error; err != nil {
 			return fmt.Errorf("create shift draft: %w", err)
+		}
+		auditPayload, err := json.Marshal(map[string]any{"shift_id": shiftID.String(), "station_id": request.StationID.String(), "station_seq": sequence})
+		if err != nil {
+			return fmt.Errorf("encode shift audit payload: %w", err)
+		}
+		if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: request.OrgID, EventID: shiftID, EventType: "shift.opened", Payload: auditPayload, Outcome: "success"}, openedAt); err != nil {
+			return fmt.Errorf("append shift audit event: %w", err)
 		}
 		result = appshift.Shift{
 			ShiftID: shiftID, OrgID: request.OrgID, StationID: request.StationID, StationSeq: sequence,

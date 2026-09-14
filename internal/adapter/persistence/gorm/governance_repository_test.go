@@ -40,6 +40,13 @@ func TestGovernanceRepository_Acknowledge_LocksTheReportAndShift(t *testing.T) {
 	if shift.Status != "locked" {
 		t.Fatalf("shift status: got %q, want locked", shift.Status)
 	}
+	var auditCount int64
+	if err := store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_id = ?", orgID, result.AckID).Count(&auditCount).Error; err != nil {
+		t.Fatalf("count acknowledgement audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("acknowledgement audit count: got %d, want 1", auditCount)
+	}
 }
 
 func TestGovernanceRepository_Acknowledge_RejectsWrongRoleAndReportCreator(t *testing.T) {
@@ -120,6 +127,13 @@ func TestGovernanceRepository_RequestAmendment_CreatesPendingAllowlistedItems(t 
 	}
 	if itemCount != 1 {
 		t.Fatalf("amendment item count: got %d, want 1", itemCount)
+	}
+	var auditCount int64
+	if err := fixture.store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_id = ?", fixture.orgID, result.AmendmentID).Count(&auditCount).Error; err != nil {
+		t.Fatalf("count amendment audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("amendment audit count: got %d, want 1", auditCount)
 	}
 }
 

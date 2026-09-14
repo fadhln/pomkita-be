@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -104,6 +105,13 @@ func (r *GovernanceRepository) Acknowledge(ctx context.Context, request appgover
 		}
 		if err := tx.Model(&ShiftModel{}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).Update("status", status).Error; err != nil {
 			return fmt.Errorf("update acknowledged shift: %w", err)
+		}
+		auditPayload, err := json.Marshal(map[string]any{"ack_id": ack.AckID.String(), "report_id": request.ReportID.String(), "decision": request.Decision, "shift_status": status})
+		if err != nil {
+			return fmt.Errorf("encode acknowledgement audit payload: %w", err)
+		}
+		if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: request.OrgID, EventID: ack.AckID, EventType: "report.acknowledged", Payload: auditPayload, Outcome: request.Decision}, now); err != nil {
+			return fmt.Errorf("append acknowledgement audit event: %w", err)
 		}
 		result = appgovernance.Acknowledgement{AckID: ack.AckID, ReportID: request.ReportID, VersionNo: request.VersionNo, Decision: request.Decision, ShiftStatus: status, IsBreakGlass: request.IsBreakGlass}
 		return nil
@@ -210,6 +218,13 @@ func (r *GovernanceRepository) RequestAmendment(ctx context.Context, request app
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create amendment item: %w", err)
 			}
+		}
+		auditPayload, err := json.Marshal(map[string]any{"amendment_id": amendment.AmendmentID.String(), "base_report_id": amendment.BaseReportID.String(), "item_count": len(request.Items), "break_glass": amendment.IsBreakGlass})
+		if err != nil {
+			return fmt.Errorf("encode amendment audit payload: %w", err)
+		}
+		if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: request.OrgID, EventID: amendment.AmendmentID, EventType: "amendment.requested", Payload: auditPayload, Outcome: "success"}, now); err != nil {
+			return fmt.Errorf("append amendment audit event: %w", err)
 		}
 		result = appgovernance.Amendment{AmendmentID: amendment.AmendmentID, BaseReportID: amendment.BaseReportID, Status: amendment.Status, StaleCheckHash: append([]byte(nil), hash...), RequestedAt: now}
 		return nil

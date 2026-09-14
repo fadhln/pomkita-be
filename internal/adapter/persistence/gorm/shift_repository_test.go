@@ -58,6 +58,13 @@ func TestShiftRepository_OpenShift_PersistsSnapshotAndDraft(t *testing.T) {
 	if draft.Status != "editing" || draft.Revision != 1 || draft.OwnedBy == nil || *draft.OwnedBy != userID {
 		t.Fatalf("draft: %+v", draft)
 	}
+	var auditCount int64
+	if err := store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_id = ?", orgID, result.ShiftID).Count(&auditCount).Error; err != nil {
+		t.Fatalf("count shift audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("shift audit count: got %d, want 1", auditCount)
+	}
 }
 
 func TestDecimalAddTenth_FormatsZeroMeterMaximum(t *testing.T) {

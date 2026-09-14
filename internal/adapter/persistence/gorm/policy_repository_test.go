@@ -31,6 +31,13 @@ func TestPolicyRepository_CreateRevision_PersistsExactThresholds(t *testing.T) {
 	if revision.LossLiterThreshold.String() != "1.25" || revision.RolloverThreshold.String() != "100000.0" {
 		t.Fatalf("exact thresholds: loss=%q rollover=%q", revision.LossLiterThreshold, revision.RolloverThreshold)
 	}
+	var auditCount int64
+	if err := fixture.store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_id = ?", fixture.orgID, result.RevisionID).Count(&auditCount).Error; err != nil {
+		t.Fatalf("count policy audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("policy audit count: got %d, want 1", auditCount)
+	}
 }
 
 func TestPolicyRepository_CreateRevision_RejectsOverlapAndRequiresForwardSupersession(t *testing.T) {
