@@ -8,5 +8,3 @@ business functions, procedures, triggers, roles, or grants.
 
 The sequence is available through `internal/platform/migrations`. Production
 uses this source with the GORM repositories and Go service boundaries.
-The historical migration directory remains only for compatibility tests and
-is not part of the production bootstrap.

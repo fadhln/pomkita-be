@@ -33,11 +33,11 @@ func cleanMigrationsDirectory(value string) string {
 	return filepath.Join(value, "clean")
 }
 
-func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, modernShift httpapi.ModernShiftService, modernShiftRead httpapi.ModernShiftReadService, modernDraft httpapi.ModernDraftService, modernDraftWrites httpapi.ModernDraftWriteService, modernSubmission httpapi.ModernSubmissionService, modernGovernance httpapi.ModernGovernanceService, modernAmendment httpapi.ModernAmendmentService, modernPolicy httpapi.ModernPolicyService, modernPolicyRead httpapi.ModernPolicyReadService, modernAudit httpapi.ModernAuditService, modernAuditVerify httpapi.ModernAuditVerificationService, modernAnomalies httpapi.ModernAnomalyService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
+func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, modernShift httpapi.ModernShiftService, modernShiftRead httpapi.ModernShiftReadService, modernDraft httpapi.ModernDraftService, modernDraftWrites httpapi.ModernDraftWriteService, modernSubmission httpapi.ModernSubmissionService, modernGovernance httpapi.ModernGovernanceService, modernAmendment httpapi.ModernAmendmentService, modernPolicy httpapi.ModernPolicyService, modernPolicyRead httpapi.ModernPolicyReadService, modernAudit httpapi.ModernAuditService, modernAuditVerify httpapi.ModernAuditVerificationService, modernAnomalies httpapi.ModernAnomalyService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
-		Shifts: shifts, ModernShift: modernShift, ModernShiftRead: modernShiftRead, ModernDraft: modernDraft, ModernDraftWrites: modernDraftWrites, ModernSubmission: modernSubmission, ModernGovernance: modernGovernance, ModernAmendment: modernAmendment, ModernPolicy: modernPolicy, ModernPolicyRead: modernPolicyRead, ModernAudit: modernAudit, ModernAuditVerify: modernAuditVerify, ModernAnomalies: modernAnomalies, Governance: governance, Reporting: reporting,
-		Reports: reports, Policy: policy, LatestMigration: 11,
+		ModernShift: modernShift, ModernShiftRead: modernShiftRead, ModernDraft: modernDraft, ModernDraftWrites: modernDraftWrites, ModernSubmission: modernSubmission, ModernGovernance: modernGovernance, ModernAmendment: modernAmendment, ModernPolicy: modernPolicy, ModernPolicyRead: modernPolicyRead, ModernAudit: modernAudit, ModernAuditVerify: modernAuditVerify, ModernAnomalies: modernAnomalies,
+		Reports: reports, LatestMigration: 11,
 	}
 }
 
@@ -73,8 +73,7 @@ func main() {
 	modernPolicy := policysservice.NewService(gormstore.NewPolicyRepository(database), systemClock{})
 	modernAudit := auditservice.NewService(gormstore.NewAuditRepository(database), systemClock{})
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, composeRouterDependencies(
-		database, jwtService, sessionService, nil, modernShift, modernShift, modernDraft, modernDraft, modernSubmission, modernGovernance, modernAmendment, modernPolicy, modernPolicy, modernReporting, modernAudit, modernReporting,
-		nil, nil, nil, modernReporting,
+		database, jwtService, sessionService, modernShift, modernShift, modernDraft, modernDraft, modernSubmission, modernGovernance, modernAmendment, modernPolicy, modernPolicy, modernReporting, modernAudit, modernReporting, modernReporting,
 	))
 
 	if err := router.Run(":" + cfg.Port); err != nil {

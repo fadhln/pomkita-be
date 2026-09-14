@@ -7,8 +7,7 @@ GET /health
 GET /ready
 ```
 
-The compatibility router is available only to legacy tests. Production uses
-the versioned paths below.
+The router exposes the versioned paths below.
 
 | Resource | Method and path |
 | --- | --- |
@@ -51,7 +50,6 @@ Money and volume values are decimal strings. Every response includes
   `000001_initial_schema.up.sql` and `000001_initial_schema.down.sql`.
 - Packages use the domain or adapter name. Do not use a generic package name
   for a repository boundary.
-- HTTP code stays in `internal/httpapi` until the adapter migration moves it to
-  `internal/adapter/http`.
+- HTTP code stays in `internal/httpapi`.
 - Database code stays behind repository or persistence adapters. A handler does
   not query a table.

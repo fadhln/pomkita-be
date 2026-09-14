@@ -12,7 +12,7 @@ import (
 
 func TestRouterDependenciesIncludeTypedReportingService(t *testing.T) {
 	service := typedReportingMarker{}
-	dependencies := composeRouterDependencies(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, &service)
+	dependencies := composeRouterDependencies(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, &service)
 	if dependencies.Reports == nil {
 		t.Fatal("typed reporting service is not wired")
 	}
