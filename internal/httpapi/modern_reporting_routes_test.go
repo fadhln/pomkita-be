@@ -16,7 +16,7 @@ func TestModernReportRoute_UsesSessionScopeAndKeepsDecimalStrings(t *testing.T) 
 	orgID, stationID, reportID := uuid.New(), uuid.New(), uuid.New()
 	service := &modernReportingStub{view: appreporting.ReportView{ReportID: reportID, StationID: stationID, ShiftID: uuid.New(), VersionNo: 1, Status: "submitted", Sales: []appreporting.SalesView{{CashAmount: "100.00", CashlessAmount: "0"}}}}
 	sessions := &modernSessionStub{view: SessionView{OrgID: orgID, UserID: uuid.New(), StationIDs: []uuid.UUID{stationID}}}
-	router := NewRouterWithDependencySet("test", nil, RouterDependencies{Readiness: readyStub{current: true}, Verifier: verifierStub{}, Sessions: sessions, Reports: service, LatestMigration: 11})
+	router := NewRouterWithAllDependencies("test", nil, readyStub{current: true}, verifierStub{}, sessions, nil, service)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/reports/"+reportID.String()+"?station_id="+stationID.String(), nil)
 	request.Header.Set("Authorization", "Bearer token")

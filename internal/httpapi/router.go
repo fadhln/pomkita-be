@@ -82,6 +82,7 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 	}
 	var governance GovernanceService
 	var reporting ReportingService
+	var reports ModernReportingService
 	var policy PolicyRevisionService
 	for _, dependency := range dependencies {
 		if dependency == nil {
@@ -93,6 +94,9 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 		if candidate, ok := dependency.(ReportingService); ok {
 			reporting = candidate
 		}
+		if candidate, ok := dependency.(ModernReportingService); ok {
+			reports = candidate
+		}
 		if candidate, ok := dependency.(PolicyRevisionService); ok {
 			policy = candidate
 		}
@@ -100,7 +104,7 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 
 	return buildRouter(environment, allowedOrigins, RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions, Shifts: shifts,
-		Governance: governance, Reporting: reporting, Policy: policy, LatestMigration: 23,
+		Governance: governance, Reporting: reporting, Reports: reports, Policy: policy, LatestMigration: 23,
 	})
 }
 
