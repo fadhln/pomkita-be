@@ -51,7 +51,8 @@ func TestB0FoundationMigrationUpAndDown(t *testing.T) {
 		from pg_attrdef d
 		join pg_class c on c.oid = d.adrelid
 		join pg_attribute a on a.attrelid = d.adrelid and a.attnum = d.adnum
-		where c.relname = 'sessions' and a.attname = 'jti'
+		where c.relnamespace = 'public'::regnamespace
+		  and c.relname = 'sessions' and a.attname = 'jti'
 	`).Scan(&jtiDefault); err != nil {
 		t.Fatalf("read session JTI default: %v", err)
 	}
@@ -129,8 +130,7 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		select c.relname
 		from pg_class c
 		join pg_namespace n on n.oid = c.relnamespace
-		where n.nspname not in ('pg_catalog', 'information_schema')
-		  and n.nspname not like 'pg_toast%'
+		where n.nspname = 'public'
 		  and c.relkind in ('r', 'v', 'm', 'S')
 		  and c.relname <> 'schema_migrations'
 		order by n.nspname, c.relname
@@ -156,8 +156,7 @@ func TestB0CatalogContainsOnlyClassifiedObjects(t *testing.T) {
 		select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')'
 		from pg_proc p
 		join pg_namespace n on n.oid = p.pronamespace
-		where n.nspname not in ('pg_catalog', 'information_schema')
-		  and n.nspname not like 'pg_toast%'
+		where n.nspname = 'public'
 		  and not exists (
 			select 1
 			from pg_depend d

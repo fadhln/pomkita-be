@@ -1,5 +1,6 @@
 -- PLAN.md sections 4.1, 4.3, 5.2, 7, and 8; BE-PLAN.md Phase B1.
 
+select pg_advisory_xact_lock(hashtext('pomkita:extension:btree_gist'));
 create extension if not exists btree_gist;
 
 create table public.dispensers (

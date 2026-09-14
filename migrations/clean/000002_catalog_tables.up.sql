@@ -1,6 +1,7 @@
 -- Phase 1 catalog tables. The station is the lock scope for catalog writes.
 
-CREATE EXTENSION IF NOT EXISTS btree_gist;
+SELECT pg_advisory_xact_lock(hashtext('pomkita:extension:btree_gist'));
+CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
 
 CREATE TABLE dispensers (
     org_id uuid NOT NULL,

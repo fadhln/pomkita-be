@@ -78,8 +78,7 @@ func TestB1Catalog_ExclusionCompositeForeignKeyAndClassification(t *testing.T) {
 			select 1
 			from pg_class c
 			join pg_namespace n on n.oid = c.relnamespace
-			where n.nspname not in ('pg_catalog', 'information_schema')
-			  and n.nspname not like 'pg_toast%'
+			where n.nspname = 'public'
 			  and c.relkind in ('r', 'v', 'm', 'S')
 			  and c.relname <> 'schema_migrations'
 			  and c.relname not in ('audit_chain_locks', 'jwt_keys', 'organizations', 'procedure_registry', 'sessions', 'stations', 'user_station_roles', 'users', 'nozzles', 'dispensers', 'tanks', 'nozzle_tank_map', 'dispenser_nozzle_map', 'dispenser_prices', 'meter_reset_events', 'nozzle_baseline_revisions', 'nozzle_baseline_current')

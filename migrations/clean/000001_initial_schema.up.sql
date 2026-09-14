@@ -1,7 +1,11 @@
 -- Phase 1 clean schema. Keep business decisions in Go services.
 -- This migration contains tables and constraints only.
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- The extension is shared by the legacy and clean migration sets.
+SELECT set_config('search_path', current_schema() || ', public, app', false);
+CREATE SCHEMA IF NOT EXISTS app;
+SELECT pg_advisory_xact_lock(hashtext('pomkita:extension:pgcrypto'));
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA app;
 
 CREATE TABLE organizations (
     org_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

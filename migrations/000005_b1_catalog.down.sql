@@ -9,4 +9,4 @@ drop table if exists public.nozzle_tank_map;
 drop table if exists public.nozzles;
 drop table if exists public.tanks;
 drop table if exists public.dispensers;
-drop extension if exists btree_gist;
+-- Keep the shared extension. Other concurrent schemas can still use it.

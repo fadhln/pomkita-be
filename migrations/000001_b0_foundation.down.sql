@@ -60,5 +60,4 @@ begin
 end
 $$;
 
-drop extension if exists pgcrypto;
-drop schema if exists app;
+-- Keep the shared extension and schema. Clean-schema tables can depend on them.

@@ -1,6 +1,7 @@
 -- PLAN.md sections 4.1 and 7; BE-PLAN.md Phase B0.
 
 create schema if not exists app;
+select pg_advisory_xact_lock(hashtext('pomkita:extension:pgcrypto'));
 create extension if not exists pgcrypto with schema app;
 
 do $$
