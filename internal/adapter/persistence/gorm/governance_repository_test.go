@@ -167,6 +167,13 @@ func TestGovernanceRepository_RejectAmendment_EnforcesSeparationAndState(t *test
 	if amendment.Status != "rejected" || amendment.ApproverUserID == nil || *amendment.ApproverUserID != fixture.actorID {
 		t.Fatalf("rejected amendment: %+v", amendment)
 	}
+	var auditCount int64
+	if err := fixture.store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_type = ?", fixture.orgID, "amendment.rejected").Count(&auditCount).Error; err != nil {
+		t.Fatalf("count rejection audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("rejection audit count: got %d, want 1", auditCount)
+	}
 }
 
 func TestGovernanceRepository_ApproveAmendment_RejectsStaleBase(t *testing.T) {
@@ -243,6 +250,13 @@ func TestGovernanceRepository_ApproveAmendment_CreatesNewVersionAndSupersedesAck
 	}
 	if sale.CashAmount.String() != "110" {
 		t.Fatalf("amended cash amount: got %q, want 110", sale.CashAmount.String())
+	}
+	var auditCount int64
+	if err := fixture.store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_type = ?", fixture.orgID, "amendment.approved").Count(&auditCount).Error; err != nil {
+		t.Fatalf("count approval audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("approval audit count: got %d, want 1", auditCount)
 	}
 	var supersessionCount int64
 	if err := fixture.store.db.Model(&AckSupersessionModel{}).Where("old_report_id = ?", fixture.reportID).Count(&supersessionCount).Error; err != nil {

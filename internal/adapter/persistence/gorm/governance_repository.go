@@ -271,6 +271,13 @@ func (r *GovernanceRepository) RejectAmendment(ctx context.Context, request appg
 		if err := tx.Model(&AmendmentModel{}).Where("org_id = ? and station_id = ? and amendment_id = ?", request.OrgID, request.StationID, request.AmendmentID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("reject amendment: %w", err)
 		}
+		auditPayload, err := json.Marshal(map[string]any{"amendment_id": request.AmendmentID.String(), "reason": reason})
+		if err != nil {
+			return fmt.Errorf("encode amendment rejection audit payload: %w", err)
+		}
+		if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: request.OrgID, EventID: uuid.New(), EventType: "amendment.rejected", Payload: auditPayload, Outcome: "rejected"}, now); err != nil {
+			return fmt.Errorf("append amendment rejection audit event: %w", err)
+		}
 		return nil
 	})
 }
@@ -362,6 +369,13 @@ func (r *GovernanceRepository) ApproveAmendment(ctx context.Context, request app
 		decidedAt := now
 		if err := tx.Model(&AmendmentModel{}).Where("org_id = ? and station_id = ? and amendment_id = ?", amendment.OrgID, amendment.StationID, amendment.AmendmentID).Updates(map[string]any{"status": "approved", "approver_user_id": request.ApproverID, "decided_at": decidedAt, "applied_report_id": newReportID}).Error; err != nil {
 			return fmt.Errorf("approve amendment: %w", err)
+		}
+		auditPayload, err := json.Marshal(map[string]any{"amendment_id": amendment.AmendmentID.String(), "base_report_id": base.ReportID.String(), "applied_report_id": newReportID.String(), "version_no": newVersion})
+		if err != nil {
+			return fmt.Errorf("encode amendment approval audit payload: %w", err)
+		}
+		if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: amendment.OrgID, EventID: newReportID, EventType: "amendment.approved", Payload: auditPayload, Outcome: "approved"}, now); err != nil {
+			return fmt.Errorf("append amendment approval audit event: %w", err)
 		}
 		result = appgovernance.Amendment{AmendmentID: amendment.AmendmentID, BaseReportID: base.ReportID, AppliedReportID: newReportID, Status: "approved", VersionNo: newVersion, StaleCheckHash: append([]byte(nil), currentHash...), RequestedAt: amendment.RequestedAt, DecidedAt: now}
 		return nil
