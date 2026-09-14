@@ -1411,6 +1411,19 @@
         ],
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "sessionCookie": {
+        "description": "httpOnly session cookie",
+        "in": "cookie",
+        "name": "pomkita_session",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -1504,6 +1517,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Request an amendment"
       }
     },
@@ -1603,6 +1624,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Approve an amendment"
       }
     },
@@ -1695,6 +1724,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Reject an amendment"
       }
     },
@@ -1790,6 +1827,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Read anomalies"
       }
     },
@@ -1879,6 +1924,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Export anomalies"
       }
     },
@@ -1963,6 +2016,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Read the audit trail"
       }
     },
@@ -2041,6 +2102,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Export audit events"
       }
     },
@@ -2119,6 +2188,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Verify the audit chain"
       }
     },
@@ -2207,6 +2284,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Claim a draft"
       }
     },
@@ -2295,6 +2380,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Stage draft evidence"
       }
     },
@@ -2376,6 +2469,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Renew a draft lease"
       }
     },
@@ -2464,6 +2565,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Write a draft loss"
       }
     },
@@ -2552,6 +2661,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Write a draft reading"
       }
     },
@@ -2640,6 +2757,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Write draft sales"
       }
     },
@@ -2792,6 +2917,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Revoke a session"
       }
     },
@@ -2887,6 +3020,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Read policy history"
       }
     },
@@ -2975,6 +3116,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Create a policy revision"
       }
     },
@@ -3073,6 +3222,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Read a report"
       }
     },
@@ -3172,6 +3329,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Acknowledge a report"
       }
     },
@@ -3270,6 +3435,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Read report printout"
       }
     },
@@ -3348,6 +3521,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Read the current session"
       }
     },
@@ -3443,6 +3624,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "List shifts"
       },
       "post": {
@@ -3529,6 +3718,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Open a shift"
       }
     },
@@ -3627,6 +3824,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Read shift detail"
       }
     },
@@ -3725,6 +3930,14 @@
             "description": "Internal Server Error"
           }
         },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Submit a report"
       }
     },

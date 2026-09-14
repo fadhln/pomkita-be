@@ -21,7 +21,8 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 		Generator  string                            `json:"x-generated-by"`
 		Paths      map[string]map[string]interface{} `json:"paths"`
 		Components struct {
-			Schemas map[string]map[string]interface{} `json:"schemas"`
+			Schemas         map[string]map[string]interface{} `json:"schemas"`
+			SecuritySchemes map[string]map[string]interface{} `json:"securitySchemes"`
 		} `json:"components"`
 	}
 	if err := json.Unmarshal(contents, &document); err != nil {
@@ -32,6 +33,18 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 	}
 	if document.Generator != "huma" {
 		t.Fatalf("OpenAPI generator: got %q, want huma", document.Generator)
+	}
+	for _, scheme := range []string{"sessionCookie", "bearerAuth"} {
+		if _, ok := document.Components.SecuritySchemes[scheme]; !ok {
+			t.Fatalf("OpenAPI contract does not define %s", scheme)
+		}
+	}
+	for _, route := range []struct{ path, method string }{{"/api/v1/session", "get"}, {"/api/v1/shifts", "post"}, {"/api/v1/audit", "get"}} {
+		operation := document.Paths[route.path][route.method]
+		security, ok := operation.(map[string]interface{})["security"].([]interface{})
+		if !ok || len(security) != 2 {
+			t.Fatalf("OpenAPI route %s %s does not declare cookie and bearer security", route.method, route.path)
+		}
 	}
 	for _, path := range []string{"/api/v1/login", "/api/v1/session", "/api/v1/shifts", "/api/v1/drafts/claim", "/api/v1/drafts/heartbeat", "/api/v1/drafts/readings", "/api/v1/drafts/sales", "/api/v1/drafts/losses", "/api/v1/drafts/evidence", "/api/v1/submissions", "/api/v1/reports/{id}", "/api/v1/reports/{id}/printout", "/api/v1/reports/{id}/acknowledgement", "/api/v1/amendments", "/api/v1/amendments/{id}/approve", "/api/v1/amendments/{id}/reject", "/api/v1/policies/revisions", "/api/v1/policies/history", "/api/v1/anomalies", "/api/v1/anomalies/export", "/api/v1/audit", "/api/v1/audit/export", "/api/v1/audit/verify", "/health", "/ready"} {
 		if _, ok := document.Paths[path]; !ok {

@@ -65,6 +65,13 @@ func OpenAPIDocument() *huma.OpenAPI {
 	config.DocsPath = ""
 	config.SchemasPath = ""
 	config.OpenAPI.Extensions = map[string]any{"x-generated-by": "huma"}
+	if config.OpenAPI.Components == nil {
+		config.OpenAPI.Components = &huma.Components{}
+	}
+	config.OpenAPI.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
+		"sessionCookie": {Type: "apiKey", In: "cookie", Name: "pomkita_session", Description: "httpOnly session cookie"},
+		"bearerAuth":    {Type: "http", Scheme: "bearer", BearerFormat: "JWT"},
+	}
 
 	api := humagin.New(gin.New(), config)
 	registerOpenAPIOperations(api)
@@ -126,12 +133,17 @@ type openAPIDraftRevision struct {
 }
 
 func registerOpenAPIOperation[I, O any](api huma.API, method, path, operationID, summary string) {
+	security := []map[string][]string(nil)
+	if path != "/health" && path != "/ready" && path != "/api/v1/login" {
+		security = []map[string][]string{{"sessionCookie": {}}, {"bearerAuth": {}}}
+	}
 	huma.Register(api, huma.Operation{
 		Method:      method,
 		Path:        path,
 		OperationID: operationID,
 		Summary:     summary,
 		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusConflict, http.StatusUnprocessableEntity},
+		Security:    security,
 	}, func(context.Context, *I) (*O, error) {
 		return new(O), nil
 	})
