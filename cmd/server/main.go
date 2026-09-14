@@ -12,6 +12,7 @@ import (
 	"github.com/pomkita/pomkita-be/internal/httpapi"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	cleanmigrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
+	auditservice "github.com/pomkita/pomkita-be/internal/service/audit"
 	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
 	draftservice "github.com/pomkita/pomkita-be/internal/service/draft"
 	governanceservice "github.com/pomkita/pomkita-be/internal/service/governance"
@@ -25,10 +26,10 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, modernShift httpapi.ModernShiftService, modernDraft httpapi.ModernDraftService, modernSubmission httpapi.ModernSubmissionService, modernGovernance httpapi.ModernGovernanceService, modernPolicy httpapi.ModernPolicyService, modernAudit httpapi.ModernAuditService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
+func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, shifts httpapi.ShiftService, modernShift httpapi.ModernShiftService, modernDraft httpapi.ModernDraftService, modernSubmission httpapi.ModernSubmissionService, modernGovernance httpapi.ModernGovernanceService, modernPolicy httpapi.ModernPolicyService, modernAudit httpapi.ModernAuditService, modernAuditVerify httpapi.ModernAuditVerificationService, governance httpapi.GovernanceService, reporting httpapi.ReportingService, policy httpapi.PolicyRevisionService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
-		Shifts: shifts, ModernShift: modernShift, ModernDraft: modernDraft, ModernSubmission: modernSubmission, ModernGovernance: modernGovernance, ModernPolicy: modernPolicy, ModernAudit: modernAudit, Governance: governance, Reporting: reporting,
+		Shifts: shifts, ModernShift: modernShift, ModernDraft: modernDraft, ModernSubmission: modernSubmission, ModernGovernance: modernGovernance, ModernPolicy: modernPolicy, ModernAudit: modernAudit, ModernAuditVerify: modernAuditVerify, Governance: governance, Reporting: reporting,
 		Reports: reports, Policy: policy, LatestMigration: 11,
 	}
 }
@@ -62,8 +63,9 @@ func main() {
 	modernSubmission := submissionservice.NewService(gormstore.NewSubmissionRepository(database), systemClock{})
 	modernGovernance := governanceservice.NewService(gormstore.NewGovernanceRepository(database), systemClock{})
 	modernPolicy := policysservice.NewService(gormstore.NewPolicyRepository(database), systemClock{})
+	modernAudit := auditservice.NewService(gormstore.NewAuditRepository(database), systemClock{})
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, composeRouterDependencies(
-		database, jwtService, sessionService, nil, modernShift, modernDraft, modernSubmission, modernGovernance, modernPolicy, modernReporting,
+		database, jwtService, sessionService, nil, modernShift, modernDraft, modernSubmission, modernGovernance, modernPolicy, modernReporting, modernAudit,
 		nil, nil, nil, modernReporting,
 	))
 

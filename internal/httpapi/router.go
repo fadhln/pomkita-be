@@ -42,22 +42,23 @@ type SessionService interface {
 
 // RouterDependencies contains all services required by the HTTP adapter.
 type RouterDependencies struct {
-	Readiness        Readiness
-	Verifier         TokenVerifier
-	Sessions         SessionService
-	Shifts           ShiftService
-	ModernShift      ModernShiftService
-	ModernDraft      ModernDraftService
-	ModernSubmission ModernSubmissionService
-	ModernGovernance ModernGovernanceService
-	ModernPolicy     ModernPolicyService
-	ModernAudit      ModernAuditService
-	LegacyRoutes     bool
-	Governance       GovernanceService
-	Reporting        ReportingService
-	Reports          ModernReportingService
-	Policy           PolicyRevisionService
-	LatestMigration  int
+	Readiness         Readiness
+	Verifier          TokenVerifier
+	Sessions          SessionService
+	Shifts            ShiftService
+	ModernShift       ModernShiftService
+	ModernDraft       ModernDraftService
+	ModernSubmission  ModernSubmissionService
+	ModernGovernance  ModernGovernanceService
+	ModernPolicy      ModernPolicyService
+	ModernAudit       ModernAuditService
+	ModernAuditVerify ModernAuditVerificationService
+	LegacyRoutes      bool
+	Governance        GovernanceService
+	Reporting         ReportingService
+	Reports           ModernReportingService
+	Policy            PolicyRevisionService
+	LatestMigration   int
 }
 
 // ErrInvalidCredentials indicates that login credentials do not match an enabled user.
@@ -148,6 +149,9 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	registerModernPolicyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernPolicy)
 	if dependencies.ModernAudit != nil {
 		registerModernAuditRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAudit)
+	}
+	if dependencies.ModernAuditVerify != nil {
+		registerModernAuditVerifyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAuditVerify)
 	}
 	return router
 }

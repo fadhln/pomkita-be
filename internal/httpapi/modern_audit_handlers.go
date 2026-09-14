@@ -17,8 +17,36 @@ type ModernAuditService interface {
 	ExportAudit(context.Context, uuid.UUID) ([]appreporting.AuditRow, error)
 }
 
+// ModernAuditVerificationService is the typed audit-chain verification boundary.
+type ModernAuditVerificationService interface {
+	Verify(context.Context, uuid.UUID) error
+}
+
 func registerModernAuditRoutes(router gin.IRoutes, verifier TokenVerifier, sessions SessionService, service ModernAuditService) {
 	router.GET("/audit/export", AuthMiddleware(verifier), modernAuditExportHandler(sessions, service))
+}
+
+func registerModernAuditVerifyRoutes(router gin.IRoutes, verifier TokenVerifier, sessions SessionService, service ModernAuditVerificationService) {
+	router.GET("/audit/verify", AuthMiddleware(verifier), modernAuditVerifyHandler(sessions, service))
+}
+
+func modernAuditVerifyHandler(sessions SessionService, service ModernAuditVerificationService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if sessions == nil || service == nil {
+			writeError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		session, err := sessions.ReadSession(c.Request.Context(), c.GetString("raw_token"))
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		if err := service.Verify(c.Request.Context(), session.OrgID); err != nil {
+			_ = c.Error(err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"verified": true})
+	}
 }
 
 func modernAuditExportHandler(sessions SessionService, service ModernAuditService) gin.HandlerFunc {
