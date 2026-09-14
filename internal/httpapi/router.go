@@ -50,6 +50,7 @@ type RouterDependencies struct {
 	ModernDraft      ModernDraftService
 	ModernSubmission ModernSubmissionService
 	ModernGovernance ModernGovernanceService
+	LegacyRoutes     bool
 	Governance       GovernanceService
 	Reporting        ReportingService
 	Reports          ModernReportingService
@@ -108,7 +109,7 @@ func NewRouterWithAllDependencies(environment string, allowedOrigins []string, r
 
 	return buildRouter(environment, allowedOrigins, RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions, Shifts: shifts,
-		Governance: governance, Reporting: reporting, Reports: reports, Policy: policy, LatestMigration: 23,
+		Governance: governance, Reporting: reporting, Reports: reports, Policy: policy, LegacyRoutes: true, LatestMigration: 23,
 	})
 }
 
@@ -124,15 +125,19 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	router.GET("/health", health)
 	router.GET("/ready", readyHandler(dependencies.Readiness, dependencies.LatestMigration))
 	registerSessionRoutes(router, dependencies.Verifier, dependencies.Sessions, environment == "production")
-	registerShiftRoutes(router, dependencies.Verifier, dependencies.Shifts)
-	registerGovernanceRoutes(router, dependencies.Verifier, dependencies.Governance)
-	registerReportingRoutes(router, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
+	if dependencies.LegacyRoutes {
+		registerShiftRoutes(router, dependencies.Verifier, dependencies.Shifts)
+		registerGovernanceRoutes(router, dependencies.Verifier, dependencies.Governance)
+		registerReportingRoutes(router, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
+	}
 
 	versioned := router.Group("/api/v1")
 	registerSessionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, environment == "production")
-	registerShiftRoutes(versioned, dependencies.Verifier, dependencies.Shifts)
-	registerGovernanceRoutes(versioned, dependencies.Verifier, dependencies.Governance)
-	registerReportingRoutes(versioned, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
+	if dependencies.LegacyRoutes {
+		registerShiftRoutes(versioned, dependencies.Verifier, dependencies.Shifts)
+		registerGovernanceRoutes(versioned, dependencies.Verifier, dependencies.Governance)
+		registerReportingRoutes(versioned, dependencies.Verifier, dependencies.Reporting, dependencies.Policy)
+	}
 	registerModernReportingRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	registerModernShiftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShift)
 	registerModernDraftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernDraft)

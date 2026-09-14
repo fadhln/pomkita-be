@@ -43,6 +43,15 @@ func TestRouterWithDependencySetUsesExplicitReadinessConfiguration(t *testing.T)
 	}
 }
 
+func TestRouterWithDependencySetDoesNotRegisterLegacyRoutesByDefault(t *testing.T) {
+	router := NewRouterWithDependencySet("test", nil, RouterDependencies{})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest("GET", "/api/v1/report/11111111-1111-4111-8111-111111111111", nil))
+	if recorder.Code != 404 {
+		t.Fatalf("legacy route status: got %d, want 404", recorder.Code)
+	}
+}
+
 func TestErrorMappingMiddleware_MapsDomainConflictToStableResponse(t *testing.T) {
 	router := NewRouter("test", nil)
 	router.GET("/domain-error", func(c *gin.Context) {
