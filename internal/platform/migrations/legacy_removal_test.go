@@ -23,4 +23,27 @@ func TestLegacyProcedureSourcesAreRemoved(t *testing.T) {
 			t.Fatalf("legacy source remains at %s", relative)
 		}
 	}
+	for _, relative := range []string{
+		"internal/adapter/persistence/gorm/auth_repository.go",
+		"internal/adapter/persistence/gorm/models.go",
+	} {
+		contents, err := os.ReadFile(filepath.Join(root, relative))
+		if err != nil {
+			t.Fatalf("read source %s: %v", relative, err)
+		}
+		for _, marker := range []string{"NewLegacyAuthRepository", "legacySessionModel", "legacy  bool"} {
+			if string(contents) != "" && containsText(string(contents), marker) {
+				t.Fatalf("legacy compatibility marker %q remains in %s", marker, relative)
+			}
+		}
+	}
+}
+
+func containsText(contents, marker string) bool {
+	for index := 0; index+len(marker) <= len(contents); index++ {
+		if contents[index:index+len(marker)] == marker {
+			return true
+		}
+	}
+	return false
 }

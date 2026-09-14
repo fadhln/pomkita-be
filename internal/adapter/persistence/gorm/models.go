@@ -57,17 +57,6 @@ type SessionModel struct {
 // TableName returns the sessions table name.
 func (SessionModel) TableName() string { return "sessions" }
 
-type legacySessionModel struct {
-	JTI          uuid.UUID  `gorm:"column:jti;type:uuid;primaryKey"`
-	KID          string     `gorm:"column:kid;not null"`
-	IssuedAt     time.Time  `gorm:"column:issued_at;not null"`
-	ExpiresAt    time.Time  `gorm:"column:expires_at;not null"`
-	LastActiveAt time.Time  `gorm:"column:last_active_at;not null"`
-	RevokedAt    *time.Time `gorm:"column:revoked_at"`
-}
-
-func (legacySessionModel) TableName() string { return "sessions" }
-
 // StationModel maps the tenant-scoped stations table.
 type StationModel struct {
 	OrgID     uuid.UUID `gorm:"column:org_id;type:uuid;primaryKey"`

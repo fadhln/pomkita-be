@@ -18,7 +18,6 @@ import (
 type AuthRepository struct {
 	db      *gorm.DB
 	secrets map[string]string
-	legacy  bool
 }
 
 // NewAuthRepository creates an authentication repository. Secret values stay in process memory.
@@ -31,16 +30,6 @@ func NewAuthRepository(store *Store, secrets map[string]string) *AuthRepository 
 		return &AuthRepository{secrets: copyOfSecrets}
 	}
 	return &AuthRepository{db: store.db, secrets: copyOfSecrets}
-}
-
-// NewLegacyAuthRepository creates a GORM authentication repository for the current
-// migration shape. It does not call the legacy authentication functions.
-func NewLegacyAuthRepository(store *Store, secrets map[string]string) *AuthRepository {
-	repository := NewAuthRepository(store, secrets)
-	if repository != nil {
-		repository.legacy = true
-	}
-	return repository
 }
 
 // FindUserByEmail finds an enabled or disabled user without exposing password data to callers.
@@ -72,20 +61,11 @@ func (r *AuthRepository) ReadSession(ctx context.Context, jti, subject uuid.UUID
 		OrgID       uuid.UUID
 		DisplayName string
 	}
-	var err error
-	if r.legacy {
-		var session legacySessionModel
-		err = r.db.WithContext(ctx).Where("jti = ? and revoked_at is null", jti).Take(&session).Error
-		if err == nil {
-			err = r.db.WithContext(ctx).Table("users").Select("user_id, org_id, display_name").Where("user_id = ? and enabled = true", subject).Take(&identity).Error
-		}
-	} else {
-		err = r.db.WithContext(ctx).Table("sessions").
-			Select("users.user_id, users.org_id, users.display_name").
-			Joins("join users on users.user_id = sessions.user_id").
-			Where("sessions.jti = ? and sessions.user_id = ? and sessions.revoked_at is null and users.enabled = true", jti, subject).
-			Take(&identity).Error
-	}
+	err := r.db.WithContext(ctx).Table("sessions").
+		Select("users.user_id, users.org_id, users.display_name").
+		Joins("join users on users.user_id = sessions.user_id").
+		Where("sessions.jti = ? and sessions.user_id = ? and sessions.revoked_at is null and users.enabled = true", jti, subject).
+		Take(&identity).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return appjwt.SessionView{}, appjwt.ErrSessionNotFound
 	}
@@ -170,13 +150,6 @@ func (r *AuthRepository) CreateSession(ctx context.Context, session appjwt.Sessi
 	if r == nil || r.db == nil {
 		return appauth.ErrDependencyUnavailable
 	}
-	if r.legacy {
-		model := legacySessionModel{JTI: session.JTI, KID: session.KID, IssuedAt: session.IssuedAt, ExpiresAt: session.ExpiresAt, LastActiveAt: session.LastActiveAt, RevokedAt: session.RevokedAt}
-		if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
-			return fmt.Errorf("create JWT session: %w", err)
-		}
-		return nil
-	}
 	model := SessionModel{JTI: session.JTI, UserID: session.UserID, KID: session.KID, IssuedAt: session.IssuedAt, ExpiresAt: session.ExpiresAt, LastActiveAt: session.LastActiveAt, RevokedAt: session.RevokedAt}
 	if model.UserID == uuid.Nil {
 		return errors.New("session user ID is required")
@@ -191,16 +164,6 @@ func (r *AuthRepository) CreateSession(ctx context.Context, session appjwt.Sessi
 func (r *AuthRepository) Session(ctx context.Context, jti uuid.UUID) (appjwt.Session, error) {
 	if r == nil || r.db == nil {
 		return appjwt.Session{}, appauth.ErrDependencyUnavailable
-	}
-	if r.legacy {
-		var model legacySessionModel
-		if err := r.db.WithContext(ctx).Where("jti = ?", jti).First(&model).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return appjwt.Session{}, appjwt.ErrSessionNotFound
-			}
-			return appjwt.Session{}, fmt.Errorf("load JWT session: %w", err)
-		}
-		return r.touchLegacySession(ctx, model)
 	}
 	var model SessionModel
 	if err := r.db.WithContext(ctx).Where("jti = ?", jti).First(&model).Error; err != nil {
@@ -219,19 +182,6 @@ func (r *AuthRepository) Session(ctx context.Context, jti uuid.UUID) (appjwt.Ses
 		}
 	}
 	return appjwt.Session{JTI: model.JTI, UserID: model.UserID, KID: model.KID, IssuedAt: model.IssuedAt, ExpiresAt: model.ExpiresAt, LastActiveAt: model.LastActiveAt, RevokedAt: model.RevokedAt}, nil
-}
-
-func (r *AuthRepository) touchLegacySession(ctx context.Context, model legacySessionModel) (appjwt.Session, error) {
-	if model.RevokedAt == nil {
-		now := time.Now().UTC()
-		if model.ExpiresAt.IsZero() || !now.After(model.ExpiresAt.Add(60*time.Second)) {
-			if err := r.db.WithContext(ctx).Model(&legacySessionModel{}).Where("jti = ? and revoked_at is null", model.JTI).Updates(map[string]any{"last_active_at": now}).Error; err != nil {
-				return appjwt.Session{}, fmt.Errorf("touch JWT session: %w", err)
-			}
-			model.LastActiveAt = now
-		}
-	}
-	return appjwt.Session{JTI: model.JTI, KID: model.KID, IssuedAt: model.IssuedAt, ExpiresAt: model.ExpiresAt, LastActiveAt: model.LastActiveAt, RevokedAt: model.RevokedAt}, nil
 }
 
 // RevokeSession marks a session as revoked.
