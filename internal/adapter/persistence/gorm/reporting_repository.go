@@ -3,6 +3,7 @@ package gormstore
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -98,5 +99,45 @@ func (r *ReportingRepository) Anomalies(ctx context.Context, orgID uuid.UUID, st
 	for _, row := range rows {
 		result = append(result, appreporting.AnomalyView{EventID: row.EventID, StationID: row.StationID, RuleID: row.RuleID, SubjectKind: row.SubjectKind, SubjectID: row.SubjectID, EventType: row.EventType, SourceKind: row.SourceKind, SourceID: row.SourceID, SourceVersionNo: row.SourceVersionNo, HappenedAt: row.SourceAt.UTC().Format(time.RFC3339Nano)})
 	}
+	var decisions []AckDecisionModel
+	decisionQuery := r.db.WithContext(ctx).Where("org_id = ? and is_break_glass = ?", orgID, true)
+	if stationID != nil {
+		decisionQuery = decisionQuery.Where("station_id = ?", *stationID)
+	}
+	if err := decisionQuery.Order("decided_at, ack_id").Find(&decisions).Error; err != nil {
+		return nil, fmt.Errorf("load break-glass anomalies: %w", err)
+	}
+	for _, decision := range decisions {
+		version := decision.VersionNo
+		result = append(result, appreporting.AnomalyView{EventID: decision.AckID, StationID: decision.StationID, SubjectKind: "report", SubjectID: decision.ReportID, EventType: "fired", SourceKind: "break_glass", SourceID: decision.AckID, SourceVersionNo: &version, HappenedAt: decision.DecidedAt.UTC().Format(time.RFC3339Nano)})
+	}
+	var amendments []AmendmentModel
+	amendmentQuery := r.db.WithContext(ctx).Where("org_id = ? and is_break_glass = ?", orgID, true)
+	if stationID != nil {
+		amendmentQuery = amendmentQuery.Where("station_id = ?", *stationID)
+	}
+	if err := amendmentQuery.Order("requested_at, amendment_id").Find(&amendments).Error; err != nil {
+		return nil, fmt.Errorf("load break-glass amendment anomalies: %w", err)
+	}
+	for _, amendment := range amendments {
+		result = append(result, appreporting.AnomalyView{EventID: amendment.AmendmentID, StationID: amendment.StationID, SubjectKind: "report", SubjectID: amendment.BaseReportID, EventType: "fired", SourceKind: "break_glass", SourceID: amendment.AmendmentID, HappenedAt: amendment.RequestedAt.UTC().Format(time.RFC3339Nano)})
+	}
+	var exceptions []LossExceptionModel
+	exceptionQuery := r.db.WithContext(ctx).Where("org_id = ?", orgID)
+	if stationID != nil {
+		exceptionQuery = exceptionQuery.Where("station_id = ?", *stationID)
+	}
+	if err := exceptionQuery.Order("created_at, exception_id").Find(&exceptions).Error; err != nil {
+		return nil, fmt.Errorf("load loss exception anomalies: %w", err)
+	}
+	for _, exception := range exceptions {
+		result = append(result, appreporting.AnomalyView{EventID: exception.ExceptionID, StationID: exception.StationID, SubjectKind: "report", SubjectID: exception.ReportID, EventType: "fired", SourceKind: "loss_exception", SourceID: exception.ExceptionID, HappenedAt: exception.CreatedAt.UTC().Format(time.RFC3339Nano)})
+	}
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].HappenedAt != result[j].HappenedAt {
+			return result[i].HappenedAt < result[j].HappenedAt
+		}
+		return result[i].EventID.String() < result[j].EventID.String()
+	})
 	return result, nil
 }

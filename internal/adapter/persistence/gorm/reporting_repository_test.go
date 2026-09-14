@@ -36,4 +36,60 @@ func TestReportingRepository_ReadReportAndExportAuditUseStableOrder(t *testing.T
 	}
 }
 
+func TestReportingRepository_AnomaliesIncludesBreakGlassAndEvidenceExceptions(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+	breakGlassID := uuid.New()
+	breakGlassReason := "emergency review"
+	if err := fixture.store.db.Create(&AckDecisionModel{
+		AckID: breakGlassID, OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID,
+		ReportID: fixture.reportID, VersionNo: 1, AckSeq: 1, Decision: "acked", ActorUserID: fixture.actorID,
+		DecidedAt: fixture.now, IsSuperadmin: false, IsBreakGlass: true, BreakGlassReason: &breakGlassReason,
+	}).Error; err != nil {
+		t.Fatalf("create break-glass decision: %v", err)
+	}
+	lossID, lossRowID := uuid.New(), uuid.New()
+	nozzleID := uuid.New()
+	dispenserID := uuid.New()
+	if err := fixture.store.db.Create(&DispenserModel{OrgID: fixture.orgID, StationID: fixture.stationID, DispenserID: dispenserID}).Error; err != nil {
+		t.Fatalf("create dispenser: %v", err)
+	}
+	if err := fixture.store.db.Create(&NozzleModel{OrgID: fixture.orgID, StationID: fixture.stationID, NozzleID: nozzleID, DispenserID: dispenserID, MeterMax: Decimal("99999.9")}).Error; err != nil {
+		t.Fatalf("create nozzle: %v", err)
+	}
+	if err := fixture.store.db.Create(&LossIdentityModel{LossID: lossID, OrgID: fixture.orgID, StationID: fixture.stationID, CreatedBy: fixture.creatorID, CreatedAt: fixture.now}).Error; err != nil {
+		t.Fatalf("create loss identity: %v", err)
+	}
+	if err := fixture.store.db.Create(&LossEntryModel{
+		RowID: lossRowID, OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID,
+		ReportID: fixture.reportID, VersionNo: 1, LossID: lossID, NozzleID: nozzleID,
+		Direction: "loss", ReasonCode: "spill", Liters: Decimal("1.00"), CreatedBy: fixture.creatorID,
+	}).Error; err != nil {
+		t.Fatalf("create loss entry: %v", err)
+	}
+	exceptionID := uuid.New()
+	if err := fixture.store.db.Create(&LossExceptionModel{
+		ExceptionID: exceptionID, OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID,
+		ReportID: fixture.reportID, LossID: lossID, Reason: "evidence unavailable", ActorUserID: fixture.actorID, CreatedAt: fixture.now,
+	}).Error; err != nil {
+		t.Fatalf("create loss exception: %v", err)
+	}
+
+	rows, err := NewReportingRepository(fixture.store).Anomalies(ctx, fixture.orgID, &fixture.stationID)
+	if err != nil {
+		t.Fatalf("load anomalies: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("anomaly count: got %d, want 2 (%+v)", len(rows), rows)
+	}
+	seen := map[string]bool{}
+	for _, row := range rows {
+		seen[row.SourceKind] = true
+	}
+	if !seen["break_glass"] || !seen["loss_exception"] {
+		t.Fatalf("anomaly sources: got %+v", seen)
+	}
+}
+
 var _ = appreporting.ReportView{}
