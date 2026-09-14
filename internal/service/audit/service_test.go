@@ -33,6 +33,15 @@ func TestService_Append_RejectsIncompleteEvent(t *testing.T) {
 	}
 }
 
+func TestService_Verify_RejectsMissingOrganization(t *testing.T) {
+	repository := &auditRepositorySpy{}
+	service := NewService(repository, auditClock{value: time.Now()})
+
+	if err := service.Verify(context.Background(), uuid.Nil); err != ErrInvalidRequest {
+		t.Fatalf("verify error: got %v, want %v", err, ErrInvalidRequest)
+	}
+}
+
 type auditRepositorySpy struct {
 	event Event
 	now   time.Time

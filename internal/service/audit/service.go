@@ -63,5 +63,8 @@ func (s *Service) Verify(ctx context.Context, orgID uuid.UUID) error {
 	if s == nil || s.repository == nil {
 		return ErrDependencyUnavailable
 	}
+	if orgID == uuid.Nil {
+		return ErrInvalidRequest
+	}
 	return s.repository.Verify(ctx, orgID)
 }
