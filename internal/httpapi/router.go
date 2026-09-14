@@ -51,6 +51,7 @@ type RouterDependencies struct {
 	ModernSubmission ModernSubmissionService
 	ModernGovernance ModernGovernanceService
 	ModernPolicy     ModernPolicyService
+	ModernAudit      ModernAuditService
 	LegacyRoutes     bool
 	Governance       GovernanceService
 	Reporting        ReportingService
@@ -145,6 +146,9 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	registerModernSubmissionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernSubmission)
 	registerModernGovernanceRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernGovernance)
 	registerModernPolicyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernPolicy)
+	if dependencies.ModernAudit != nil {
+		registerModernAuditRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAudit)
+	}
 	return router
 }
 
