@@ -9,19 +9,14 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	apprelay "github.com/pomkita/pomkita-be/internal/service/relay"
 )
 
-// Event is the immutable event data sent to a relay sink.
-type Event struct {
-	EventID   uuid.UUID       `json:"event_id"`
-	EventType string          `json:"event_type"`
-	Payload   json.RawMessage `json:"payload"`
-}
+// Event is the compatibility alias for the relay service event.
+type Event = apprelay.Event
 
 // Sink receives one audit event. A sink must be idempotent by EventID.
-type Sink interface {
-	Send(context.Context, Event) error
-}
+type Sink = apprelay.Sink
 
 // LogSink writes one JSON line for each new event.
 type LogSink struct {

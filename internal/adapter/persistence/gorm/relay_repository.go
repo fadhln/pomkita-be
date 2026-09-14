@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/relay"
+	apprelay "github.com/pomkita/pomkita-be/internal/service/relay"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -25,16 +25,16 @@ func NewRelayRepository(store *Store) *RelayRepository {
 }
 
 // Claim claims one ready outbox event with a five-minute lease.
-func (r *RelayRepository) Claim(ctx context.Context, orgID, eventID uuid.UUID) (relay.Event, uuid.UUID, bool, error) {
+func (r *RelayRepository) Claim(ctx context.Context, orgID, eventID uuid.UUID) (apprelay.Event, uuid.UUID, bool, error) {
 	return r.ClaimAt(ctx, orgID, eventID, time.Now().UTC())
 }
 
 // ClaimAt claims one event at a deterministic time.
-func (r *RelayRepository) ClaimAt(ctx context.Context, orgID, eventID uuid.UUID, now time.Time) (relay.Event, uuid.UUID, bool, error) {
+func (r *RelayRepository) ClaimAt(ctx context.Context, orgID, eventID uuid.UUID, now time.Time) (apprelay.Event, uuid.UUID, bool, error) {
 	if r == nil || r.db == nil {
-		return relay.Event{}, uuid.Nil, false, fmt.Errorf("relay repository is unavailable")
+		return apprelay.Event{}, uuid.Nil, false, fmt.Errorf("relay repository is unavailable")
 	}
-	var event relay.Event
+	var event apprelay.Event
 	var lease uuid.UUID
 	var claimed bool
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -54,12 +54,12 @@ func (r *RelayRepository) ClaimAt(ctx context.Context, orgID, eventID uuid.UUID,
 		if err := tx.Model(&OutboxRelayStateModel{}).Where("org_id = ? and event_id = ?", orgID, eventID).Updates(map[string]any{"relay_status": "in_flight", "attempt_count": state.AttemptCount + 1, "lease_token": lease, "lease_expires_at": expires, "last_attempt_at": now, "last_error": nil}).Error; err != nil {
 			return fmt.Errorf("claim relay event: %w", err)
 		}
-		event = relay.Event{EventID: outbox.EventID, EventType: outbox.EventType, Payload: append([]byte(nil), outbox.Payload...)}
+		event = apprelay.Event{EventID: outbox.EventID, EventType: outbox.EventType, Payload: append([]byte(nil), outbox.Payload...)}
 		claimed = true
 		return nil
 	})
 	if err != nil {
-		return relay.Event{}, uuid.Nil, false, err
+		return apprelay.Event{}, uuid.Nil, false, err
 	}
 	return event, lease, claimed, nil
 }
