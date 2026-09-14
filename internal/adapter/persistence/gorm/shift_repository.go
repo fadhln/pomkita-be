@@ -125,6 +125,51 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 	return result, nil
 }
 
+// List reads shifts in stable sequence order within an organization scope.
+func (r *ShiftRepository) List(ctx context.Context, orgID uuid.UUID, stationID *uuid.UUID) ([]appshift.Summary, error) {
+	if r == nil || r.db == nil {
+		return nil, appshift.ErrDependencyUnavailable
+	}
+	query := r.db.WithContext(ctx).Where("org_id = ?", orgID)
+	if stationID != nil {
+		query = query.Where("station_id = ?", *stationID)
+	}
+	var rows []ShiftModel
+	if err := query.Order("station_id, station_seq").Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list shifts: %w", err)
+	}
+	result := make([]appshift.Summary, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, shiftSummary(row))
+	}
+	return result, nil
+}
+
+// Detail reads one shift and its draft revision within a tenant scope.
+func (r *ShiftRepository) Detail(ctx context.Context, orgID, stationID, shiftID uuid.UUID) (appshift.Detail, error) {
+	if r == nil || r.db == nil {
+		return appshift.Detail{}, appshift.ErrDependencyUnavailable
+	}
+	var row ShiftModel
+	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ?", orgID, stationID, shiftID).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return appshift.Detail{}, appshift.ErrInvalidRequest
+		}
+		return appshift.Detail{}, fmt.Errorf("load shift detail: %w", err)
+	}
+	result := appshift.Detail{Summary: shiftSummary(row)}
+	var draft ShiftDraftModel
+	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ?", orgID, stationID, shiftID).First(&draft).Error; err == nil {
+		result.DraftID = &draft.DraftID
+		result.Revision = &draft.Revision
+	}
+	return result, nil
+}
+
+func shiftSummary(row ShiftModel) appshift.Summary {
+	return appshift.Summary{ShiftID: row.ShiftID, StationID: row.StationID, StationSeq: row.StationSeq, SupervisorID: row.SupervisorID, OpenedAt: row.OpenedAt.UTC().Format(time.RFC3339Nano), BusinessDate: row.BusinessDate, Status: row.Status, CurrentReportID: row.CurrentReportID}
+}
+
 type catalogSnapshotItem struct {
 	DispenserID          string  `json:"dispenser_id"`
 	NozzleID             string  `json:"nozzle_id"`

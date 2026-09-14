@@ -47,6 +47,7 @@ type RouterDependencies struct {
 	Sessions          SessionService
 	Shifts            ShiftService
 	ModernShift       ModernShiftService
+	ModernShiftRead   ModernShiftReadService
 	ModernDraft       ModernDraftService
 	ModernDraftWrites ModernDraftWriteService
 	ModernSubmission  ModernSubmissionService
@@ -145,6 +146,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	}
 	registerModernReportingRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	registerModernShiftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShift)
+	registerModernShiftReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShiftRead)
 	registerModernDraftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernDraft)
 	registerModernDraftWriteRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernDraftWrites)
 	registerModernSubmissionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernSubmission)
