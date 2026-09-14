@@ -13,7 +13,7 @@ import (
 func TestModernAuditVerifyRoute_UsesSessionOrganization(t *testing.T) {
 	orgID := uuid.New()
 	service := &modernAuditVerifyStub{}
-	sessions := &modernSessionStub{view: SessionView{OrgID: orgID, UserID: uuid.New()}}
+	sessions := &modernSessionStub{view: SessionView{OrgID: orgID, UserID: uuid.New(), Roles: []string{"Owner"}}}
 	router := NewRouterWithDependencySet("test", nil, RouterDependencies{Readiness: readyStub{current: true}, Verifier: verifierStub{}, Sessions: sessions, ModernAuditVerify: service, LatestMigration: 11})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/audit/verify", nil)

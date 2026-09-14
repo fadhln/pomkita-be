@@ -33,12 +33,11 @@ func modernAuditTrailHandler(sessions SessionService, service ModernAuditService
 			writeError(c, http.StatusInternalServerError, "internal_error")
 			return
 		}
-		session, err := sessions.ReadSession(c.Request.Context(), c.GetString("raw_token"))
-		if err != nil {
-			_ = c.Error(err)
+		orgID, ok := readAuditOrganization(c, sessions)
+		if !ok {
 			return
 		}
-		rows, err := service.ExportAudit(c.Request.Context(), session.OrgID)
+		rows, err := service.ExportAudit(c.Request.Context(), orgID)
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -60,12 +59,11 @@ func modernAuditVerifyHandler(sessions SessionService, service ModernAuditVerifi
 			writeError(c, http.StatusInternalServerError, "internal_error")
 			return
 		}
-		session, err := sessions.ReadSession(c.Request.Context(), c.GetString("raw_token"))
-		if err != nil {
-			_ = c.Error(err)
+		orgID, ok := readAuditOrganization(c, sessions)
+		if !ok {
 			return
 		}
-		if err := service.Verify(c.Request.Context(), session.OrgID); err != nil {
+		if err := service.Verify(c.Request.Context(), orgID); err != nil {
 			_ = c.Error(err)
 			return
 		}
@@ -79,12 +77,11 @@ func modernAuditExportHandler(sessions SessionService, service ModernAuditServic
 			writeError(c, http.StatusInternalServerError, "internal_error")
 			return
 		}
-		session, err := sessions.ReadSession(c.Request.Context(), c.GetString("raw_token"))
-		if err != nil {
-			_ = c.Error(err)
+		orgID, ok := readAuditOrganization(c, sessions)
+		if !ok {
 			return
 		}
-		rows, err := service.ExportAudit(c.Request.Context(), session.OrgID)
+		rows, err := service.ExportAudit(c.Request.Context(), orgID)
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -106,4 +103,21 @@ func modernAuditExportHandler(sessions SessionService, service ModernAuditServic
 			_ = c.Error(err)
 		}
 	}
+}
+
+func readAuditOrganization(c *gin.Context, sessions SessionService) (uuid.UUID, bool) {
+	if sessions == nil {
+		writeError(c, http.StatusInternalServerError, "internal_error")
+		return uuid.Nil, false
+	}
+	session, err := sessions.ReadSession(c.Request.Context(), c.GetString("raw_token"))
+	if err != nil {
+		_ = c.Error(err)
+		return uuid.Nil, false
+	}
+	if !containsString(session.Roles, "Owner") && !containsString(session.Roles, "Superadmin") {
+		writeError(c, http.StatusForbidden, "audit_role_required")
+		return uuid.Nil, false
+	}
+	return session.OrgID, true
 }
