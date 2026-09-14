@@ -1810,15 +1810,9 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AnomalyView"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
+                  "type": "string"
                 }
               }
             },
@@ -1978,15 +1972,9 @@
         "responses": {
           "200": {
             "content": {
-              "application/json": {
+              "text/csv": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AuditRow"
-                  },
-                  "type": [
-                    "array",
-                    "null"
-                  ]
+                  "type": "string"
                 }
               }
             },

@@ -38,6 +38,18 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 			t.Fatalf("OpenAPI contract does not define %s", path)
 		}
 	}
+	for _, path := range []string{"/api/v1/anomalies/export", "/api/v1/audit/export"} {
+		operation := document.Paths[path]["get"]
+		responses, ok := operation.(map[string]interface{})["responses"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("CSV route %s has no responses", path)
+		}
+		success, ok := responses["200"].(map[string]interface{})
+		content, contentOK := success["content"].(map[string]interface{})
+		if !ok || !contentOK || content["text/csv"] == nil {
+			t.Fatalf("CSV route %s does not declare text/csv", path)
+		}
+	}
 	report, ok := document.Components.Schemas["ReportView"]
 	if !ok {
 		t.Fatal("OpenAPI contract does not define ReportView")

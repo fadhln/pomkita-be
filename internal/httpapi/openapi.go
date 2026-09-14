@@ -68,6 +68,8 @@ func OpenAPIDocument() *huma.OpenAPI {
 
 	api := humagin.New(gin.New(), config)
 	registerOpenAPIOperations(api)
+	setCSVResponse(api, "/api/v1/anomalies/export")
+	setCSVResponse(api, "/api/v1/audit/export")
 	return api.OpenAPI()
 }
 
@@ -133,4 +135,11 @@ func registerOpenAPIOperation[I, O any](api huma.API, method, path, operationID,
 	}, func(context.Context, *I) (*O, error) {
 		return new(O), nil
 	})
+}
+
+func setCSVResponse(api huma.API, path string) {
+	response := api.OpenAPI().Paths[path].Get.Responses["200"]
+	response.Content = map[string]*huma.MediaType{
+		"text/csv": {Schema: &huma.Schema{Type: "string"}},
+	}
 }
