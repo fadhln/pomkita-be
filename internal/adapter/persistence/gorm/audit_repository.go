@@ -46,7 +46,7 @@ func (r *AuditRepository) Append(ctx context.Context, request appaudit.AppendReq
 				return fmt.Errorf("lock audit chain: %w", err)
 			}
 			lock = AuditChainLockModel{OrgID: request.OrgID}
-			if err := tx.Create(&lock).Error; err != nil {
+			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&lock).Error; err != nil {
 				return fmt.Errorf("create audit chain lock: %w", err)
 			}
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ?", request.OrgID).First(&lock).Error; err != nil {
