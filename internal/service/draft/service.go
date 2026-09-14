@@ -39,10 +39,10 @@ type ClaimRequest struct {
 
 // ClaimResult contains the new lease and revision.
 type ClaimResult struct {
-	DraftID        uuid.UUID
-	ClaimToken     uuid.UUID
-	ClaimExpiresAt time.Time
-	Revision       int
+	DraftID        uuid.UUID `json:"draft_id"`
+	ClaimToken     uuid.UUID `json:"claim_token"`
+	ClaimExpiresAt time.Time `json:"claim_expires_at"`
+	Revision       int       `json:"revision"`
 }
 
 // HeartbeatRequest identifies an existing draft lease.
