@@ -7,35 +7,30 @@ GET /health
 GET /ready
 ```
 
-The server currently keeps the unversioned product paths as compatibility
-aliases. New clients must use the versioned paths.
+The compatibility router is available only to legacy tests. Production uses
+the versioned paths below.
 
 | Resource | Method and path |
 | --- | --- |
 | Session | `POST /api/v1/login` |
 | Session | `DELETE /api/v1/logout` |
 | Session | `GET /api/v1/session` |
-| Shift | `POST /api/v1/shift/open` |
+| Shift | `POST /api/v1/shifts` |
 | Shift | `GET /api/v1/shifts` |
 | Shift | `GET /api/v1/shifts/{id}` |
-| Draft | `POST /api/v1/draft/claim` |
-| Draft | `POST /api/v1/draft/heartbeat` |
-| Draft | `POST /api/v1/draft/reading` |
-| Draft | `POST /api/v1/draft/sales` |
-| Draft | `POST /api/v1/draft/loss` |
-| Draft | `POST /api/v1/draft/evidence` |
-| Draft | `GET /api/v1/draft` |
-| Submission | `POST /api/v1/shift/submit` |
-| Report | `GET /api/v1/report/{id}` |
-| Governance | `POST /api/v1/shift/ack` |
-| Governance | `POST /api/v1/amendment/request` |
-| Governance | `POST /api/v1/amendment/approve` |
-| Governance | `POST /api/v1/amendment/reject` |
-| Governance | `GET /api/v1/amendments` |
-| Governance | `GET /api/v1/anomalies` |
-| Reporting | `GET /api/v1/report/{id}/printout` |
-| Reporting | `GET /api/v1/anomalies/export` |
-| Reporting | `GET /api/v1/audit` |
+| Draft | `POST /api/v1/drafts/claim` |
+| Draft | `POST /api/v1/drafts/heartbeat` |
+| Draft | `POST /api/v1/drafts/readings` |
+| Draft | `POST /api/v1/drafts/sales` |
+| Draft | `POST /api/v1/drafts/losses` |
+| Draft | `POST /api/v1/drafts/evidence` |
+| Submission | `POST /api/v1/submissions` |
+| Report | `GET /api/v1/reports/{id}` |
+| Governance | `POST /api/v1/reports/{id}/acknowledgement` |
+| Governance | `POST /api/v1/amendments` |
+| Governance | `POST /api/v1/amendments/{id}/approve` |
+| Governance | `POST /api/v1/amendments/{id}/reject` |
+| Reporting | `GET /api/v1/audit/export` |
 | Reporting | `GET /api/v1/audit/export` |
 | Reporting | `GET /api/v1/audit/verify` |
 | Policy | `GET /api/v1/policy/history` |
