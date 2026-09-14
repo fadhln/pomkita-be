@@ -2,9 +2,11 @@ package gormstore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	apprecovery "github.com/pomkita/pomkita-be/internal/service/recovery"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -43,7 +45,8 @@ func (r *RecoveryRepository) RecoverStale(ctx context.Context, now time.Time, ma
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("shift_id = ?", draft.ShiftID).First(&shift).Error; err != nil {
 				return fmt.Errorf("load stale shift: %w", err)
 			}
-			if shift.CurrentReportID == nil {
+			hasReport := shift.CurrentReportID != nil
+			if !hasReport {
 				if err := tx.Model(&ShiftDraftModel{}).Where("draft_id = ?", draft.DraftID).Updates(map[string]any{"status": "editing", "updated_at": now}).Error; err != nil {
 					return fmt.Errorf("reopen draft: %w", err)
 				}
@@ -58,6 +61,19 @@ func (r *RecoveryRepository) RecoverStale(ctx context.Context, now time.Time, ma
 					return fmt.Errorf("complete recovered shift: %w", err)
 				}
 			}
+			auditPayload, err := json.Marshal(map[string]any{
+				"draft_id":       draft.DraftID.String(),
+				"shift_id":       shift.ShiftID.String(),
+				"shift_status":   recoveryShiftStatus(hasReport),
+				"draft_status":   recoveryDraftStatus(hasReport),
+				"recovery_count": draft.RecoveryCount + 1,
+			})
+			if err != nil {
+				return fmt.Errorf("encode recovery audit payload: %w", err)
+			}
+			if _, err := appendAuditInTransaction(tx, appaudit.AppendRequest{OrgID: draft.OrgID, EventID: draft.DraftID, EventType: "shift.recovered", Payload: auditPayload, Outcome: recoveryOutcome(hasReport)}, now); err != nil {
+				return fmt.Errorf("append recovery audit event: %w", err)
+			}
 			count++
 		}
 		return nil
@@ -66,4 +82,25 @@ func (r *RecoveryRepository) RecoverStale(ctx context.Context, now time.Time, ma
 		return 0, err
 	}
 	return count, nil
+}
+
+func recoveryShiftStatus(hasReport bool) string {
+	if hasReport {
+		return "awaiting_confirmation"
+	}
+	return "open"
+}
+
+func recoveryDraftStatus(hasReport bool) string {
+	if hasReport {
+		return "submitted"
+	}
+	return "editing"
+}
+
+func recoveryOutcome(hasReport bool) string {
+	if hasReport {
+		return "completed"
+	}
+	return "reopened"
 }

@@ -53,4 +53,11 @@ func TestRecoveryRepository_RecoverStale_ReopensDraftWithoutReport(t *testing.T)
 	if shift.Status != "open" {
 		t.Fatalf("shift status: got %q, want open", shift.Status)
 	}
+	var auditCount int64
+	if err := store.db.Model(&AuditLogModel{}).Where("org_id = ? and event_id = ? and event_type = ?", orgID, draftID, "shift.recovered").Count(&auditCount).Error; err != nil {
+		t.Fatalf("count recovery audit events: %v", err)
+	}
+	if auditCount != 1 {
+		t.Fatalf("recovery audit events: got %d, want 1", auditCount)
+	}
 }
