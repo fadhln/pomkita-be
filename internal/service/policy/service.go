@@ -49,11 +49,11 @@ type PolicyRevisionRequest struct {
 
 // PolicyRevision identifies a persisted revision.
 type PolicyRevision struct {
-	RevisionID uuid.UUID
-	PolicyID   uuid.UUID
-	PolicyKind string
-	ValidFrom  time.Time
-	Disabled   bool
+	RevisionID uuid.UUID `json:"revision_id"`
+	PolicyID   uuid.UUID `json:"policy_id"`
+	PolicyKind string    `json:"policy_kind"`
+	ValidFrom  time.Time `json:"valid_from"`
+	Disabled   bool      `json:"disabled"`
 }
 
 // Repository persists append-only policy revisions.
