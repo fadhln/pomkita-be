@@ -56,9 +56,32 @@ type PolicyRevision struct {
 	Disabled   bool      `json:"disabled"`
 }
 
+// RevisionView is one immutable policy history row with decimal values as strings.
+type RevisionView struct {
+	RevisionID          uuid.UUID  `json:"revision_id"`
+	PolicyID            uuid.UUID  `json:"policy_id"`
+	PolicyKind          string     `json:"policy_kind"`
+	StationID           *uuid.UUID `json:"station_id,omitempty"`
+	ValidFrom           string     `json:"valid_from"`
+	Disabled            bool       `json:"disabled"`
+	TombstoneReason     *string    `json:"tombstone_reason,omitempty"`
+	LossLiterThreshold  *string    `json:"loss_liter_threshold,omitempty"`
+	GainLiterThreshold  *string    `json:"gain_liter_threshold,omitempty"`
+	LossRupiahThreshold *string    `json:"loss_rupiah_threshold,omitempty"`
+	GainRupiahThreshold *string    `json:"gain_rupiah_threshold,omitempty"`
+	VarianceThreshold   *string    `json:"variance_rupiah_threshold,omitempty"`
+	RolloverThreshold   *string    `json:"rollover_threshold,omitempty"`
+	EvidenceMode        *string    `json:"evidence_mode,omitempty"`
+}
+
 // Repository persists append-only policy revisions.
 type Repository interface {
 	CreateRevision(context.Context, PolicyRevisionRequest, time.Time) (PolicyRevision, error)
+}
+
+// ReadRepository reads policy history within a tenant scope.
+type ReadRepository interface {
+	History(context.Context, uuid.UUID, *uuid.UUID) ([]RevisionView, error)
 }
 
 // Service owns policy validation.
@@ -104,6 +127,18 @@ func (s *Service) CreateRevision(ctx context.Context, request PolicyRevisionRequ
 		return PolicyRevision{}, ErrInvalidRequest
 	}
 	return s.repository.CreateRevision(ctx, request, s.clock.Now().UTC())
+}
+
+// History returns append-only policy revisions in valid-from order.
+func (s *Service) History(ctx context.Context, orgID uuid.UUID, stationID *uuid.UUID) ([]RevisionView, error) {
+	if s == nil || s.repository == nil || orgID == uuid.Nil || (stationID != nil && *stationID == uuid.Nil) {
+		return nil, ErrInvalidRequest
+	}
+	repository, ok := s.repository.(ReadRepository)
+	if !ok {
+		return nil, ErrInvalidRequest
+	}
+	return repository.History(ctx, orgID, stationID)
 }
 
 func nonNegativeDecimal(value string) bool {

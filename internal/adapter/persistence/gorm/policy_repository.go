@@ -3,6 +3,7 @@ package gormstore
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,42 @@ import (
 // PolicyRepository persists append-only policy revisions.
 type PolicyRepository struct {
 	db *gorm.DB
+}
+
+// History reads threshold and evidence revisions in stable valid-from order.
+func (r *PolicyRepository) History(ctx context.Context, orgID uuid.UUID, stationID *uuid.UUID) ([]apppolicy.RevisionView, error) {
+	if r == nil || r.db == nil {
+		return nil, apppolicy.ErrInvalidRequest
+	}
+	var thresholds []ThresholdPolicyRevisionModel
+	thresholdQuery := r.db.WithContext(ctx).Where("org_id = ?", orgID)
+	if stationID != nil {
+		thresholdQuery = thresholdQuery.Where("station_id = ? or station_id is null", *stationID)
+	}
+	if err := thresholdQuery.Find(&thresholds).Error; err != nil {
+		return nil, fmt.Errorf("load threshold policy history: %w", err)
+	}
+	var evidence []EvidencePolicyRevisionModel
+	evidenceQuery := r.db.WithContext(ctx).Where("org_id = ?", orgID)
+	if stationID != nil {
+		evidenceQuery = evidenceQuery.Where("station_id = ? or station_id is null", *stationID)
+	}
+	if err := evidenceQuery.Find(&evidence).Error; err != nil {
+		return nil, fmt.Errorf("load evidence policy history: %w", err)
+	}
+	result := make([]apppolicy.RevisionView, 0, len(thresholds)+len(evidence))
+	for _, row := range thresholds {
+		lossLiters, gainLiters := row.LossLiterThreshold.String(), row.GainLiterThreshold.String()
+		lossRupiah, gainRupiah := row.LossRupiahThreshold.String(), row.GainRupiahThreshold.String()
+		variance, rollover := row.VarianceThreshold.String(), row.RolloverThreshold.String()
+		result = append(result, apppolicy.RevisionView{RevisionID: row.RevID, PolicyID: row.PolicyID, PolicyKind: "threshold", StationID: row.StationID, ValidFrom: row.ValidFrom.UTC().Format(time.RFC3339Nano), Disabled: row.Disabled, TombstoneReason: row.TombstoneReason, LossLiterThreshold: &lossLiters, GainLiterThreshold: &gainLiters, LossRupiahThreshold: &lossRupiah, GainRupiahThreshold: &gainRupiah, VarianceThreshold: &variance, RolloverThreshold: &rollover})
+	}
+	for _, row := range evidence {
+		mode := row.Mode
+		result = append(result, apppolicy.RevisionView{RevisionID: row.RevID, PolicyID: row.PolicyID, PolicyKind: "evidence", StationID: row.StationID, ValidFrom: row.ValidFrom.UTC().Format(time.RFC3339Nano), Disabled: row.Disabled, TombstoneReason: row.TombstoneReason, EvidenceMode: &mode})
+	}
+	sort.SliceStable(result, func(i, j int) bool { return result[i].ValidFrom < result[j].ValidFrom })
+	return result, nil
 }
 
 // NewPolicyRepository creates a policy repository.
