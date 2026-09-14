@@ -2,6 +2,7 @@ package gormstore
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +35,19 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 	}
 	var result appsubmission.Result
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		tookOver := false
+		var station StationModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
+			return fmt.Errorf("lock station for submit: %w", err)
+		}
+		var shift ShiftModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).First(&shift).Error; err != nil {
+			return fmt.Errorf("load shift for submit: %w", err)
+		}
+		var draft ShiftDraftModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and draft_id = ? and shift_id = ?", request.OrgID, request.StationID, request.DraftID, request.ShiftID).First(&draft).Error; err != nil {
+			return fmt.Errorf("load draft for submit: %w", err)
+		}
 		var idem SubmitIdempotencyModel
 		idemErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ? and idempotency_key = ?", request.OrgID, request.StationID, request.ShiftID, request.IdempotencyKey).First(&idem).Error
 		if idemErr == nil {
@@ -47,20 +61,27 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 			if idem.Status == "in_progress" && idem.LeaseExpiresAt != nil && idem.LeaseExpiresAt.After(now) {
 				return appsubmission.ErrIdempotencyConflict
 			}
+			if idem.Status == "in_progress" {
+				if idem.ClaimToken == nil || idem.LeaseExpiresAt == nil {
+					return appsubmission.ErrIdempotencyConflict
+				}
+				oldClaimToken := *idem.ClaimToken
+				claim := tx.Model(&SubmitIdempotencyModel{}).
+					Where("idem_id = ? and claim_token = ? and lease_expires_at < ?", idem.IdemID, oldClaimToken, now).
+					Updates(map[string]any{"status": "in_progress", "claim_token": request.ClaimToken, "attempt_count": idem.AttemptCount + 1, "lease_started_at": now, "lease_expires_at": now.Add(10 * time.Minute), "updated_at": now, "error_detail": nil})
+				if claim.Error != nil {
+					return fmt.Errorf("take over submit idempotency: %w", claim.Error)
+				}
+				if claim.RowsAffected != 1 {
+					return appsubmission.ErrIdempotencyConflict
+				}
+				tookOver = true
+			}
 		} else if !errors.Is(idemErr, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("load submit idempotency: %w", idemErr)
 		}
-
-		var shift ShiftModel
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).First(&shift).Error; err != nil {
-			return fmt.Errorf("load shift for submit: %w", err)
-		}
 		if shift.Status != "open" {
 			return appsubmission.ErrIdempotencyConflict
-		}
-		var draft ShiftDraftModel
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("draft_id = ? and shift_id = ?", request.DraftID, request.ShiftID).First(&draft).Error; err != nil {
-			return fmt.Errorf("load draft for submit: %w", err)
 		}
 		if draft.ClaimToken == nil || *draft.ClaimToken != request.ClaimToken || draft.OwnedBy == nil || *draft.OwnedBy != request.ActorID || draft.ClaimExpiresAt == nil || !draft.ClaimExpiresAt.After(now) {
 			return fmt.Errorf("submit draft claim: %w", appsubmission.ErrIdempotencyConflict)
@@ -73,7 +94,7 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 			if err := tx.Create(&idem).Error; err != nil {
 				return fmt.Errorf("create submit idempotency: %w", err)
 			}
-		} else {
+		} else if !tookOver {
 			updates := map[string]any{"status": "in_progress", "claim_token": request.ClaimToken, "attempt_count": idem.AttemptCount + 1, "lease_started_at": now, "lease_expires_at": now.Add(10 * time.Minute), "updated_at": now, "error_detail": nil}
 			if err := tx.Model(&SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(updates).Error; err != nil {
 				return fmt.Errorf("take over submit idempotency: %w", err)
@@ -89,12 +110,16 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 		} else if err != nil {
 			return fmt.Errorf("load policy snapshot set: %w", err)
 		}
+		rolloverThreshold, err := r.ensureThresholdSnapshot(tx, request, policySet, now)
+		if err != nil {
+			return err
+		}
 		reportID := uuid.New()
 		report := ShiftReportModel{ReportID: reportID, OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, VersionNo: 1, Status: "submitted", SubmittedBy: request.ActorID, SubmittedAt: now, PolicySnapshot: policySet.SetID}
 		if err := tx.Create(&report).Error; err != nil {
 			return fmt.Errorf("create shift report: %w", err)
 		}
-		if err := r.promoteDraftChildren(tx, shift, draft, report, payload, now); err != nil {
+		if err := r.promoteDraftChildren(tx, shift, draft, report, payload, rolloverThreshold, now); err != nil {
 			return err
 		}
 		if err := tx.Model(&ShiftModel{}).Where("shift_id = ?", request.ShiftID).Updates(map[string]any{"status": "awaiting_confirmation", "current_report_id": reportID, "closed_at": now}).Error; err != nil {
@@ -160,7 +185,7 @@ type submitLoss struct {
 	NozzleID uuid.UUID `json:"nozzle_id"`
 }
 
-func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftModel, draft ShiftDraftModel, report ShiftReportModel, payload []byte, now time.Time) error {
+func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftModel, draft ShiftDraftModel, report ShiftReportModel, payload []byte, rolloverThreshold string, now time.Time) error {
 	var input submitPayload
 	if err := json.Unmarshal(payload, &input); err != nil {
 		return fmt.Errorf("decode submit payload: %w", appsubmission.ErrInvalidRequest)
@@ -227,7 +252,7 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 			if err := appreconciliation.ValidateMeterStart(meterStart, predecessorEnd, resetValue, baselineValue); err != nil {
 				return fmt.Errorf("validate nozzle %s meter start: %w", row.NozzleID, err)
 			}
-			delta, err := appreconciliation.CalculateMeterDelta(meterStart, meterEnd, item.Modulus, "10.0")
+			delta, err := appreconciliation.CalculateMeterDelta(meterStart, meterEnd, item.Modulus, rolloverThreshold)
 			if err != nil {
 				return fmt.Errorf("calculate nozzle %s delta: %w", row.NozzleID, err)
 			}
@@ -292,6 +317,64 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 		}
 	}
 	return nil
+}
+
+type thresholdSnapshotPayload struct {
+	HashVersion         int    `json:"hash_version"`
+	LossLiterThreshold  string `json:"loss_liter_threshold"`
+	GainLiterThreshold  string `json:"gain_liter_threshold"`
+	LossRupiahThreshold string `json:"loss_rupiah_threshold"`
+	GainRupiahThreshold string `json:"gain_rupiah_threshold"`
+	VarianceRupiah      string `json:"variance_rupiah_threshold"`
+	RolloverThreshold   string `json:"rollover_threshold"`
+}
+
+func (r *SubmissionRepository) ensureThresholdSnapshot(tx *gorm.DB, request appsubmission.Request, policySet PolicySnapshotSetModel, now time.Time) (string, error) {
+	var item PolicySnapshotItemModel
+	itemErr := tx.Where("org_id = ? and station_id = ? and shift_id = ? and set_id = ? and policy_kind = ?", request.OrgID, request.StationID, request.ShiftID, policySet.SetID, "threshold").First(&item).Error
+	if itemErr == nil {
+		var payload thresholdSnapshotPayload
+		if err := json.Unmarshal(item.Payload, &payload); err != nil || payload.RolloverThreshold == "" {
+			return "", fmt.Errorf("decode threshold policy snapshot: %w", appsubmission.ErrInvalidRequest)
+		}
+		return payload.RolloverThreshold, nil
+	}
+	if !errors.Is(itemErr, gorm.ErrRecordNotFound) {
+		return "", fmt.Errorf("load threshold policy snapshot: %w", itemErr)
+	}
+
+	var revision ThresholdPolicyRevisionModel
+	revisionErr := tx.Where("org_id = ? and disabled = false and valid_from <= ? and (station_id = ? or station_id is null)", request.OrgID, now, request.StationID).
+		Order("station_id is not null desc").Order("valid_from desc").First(&revision).Error
+	if errors.Is(revisionErr, gorm.ErrRecordNotFound) {
+		return "10.0", nil
+	}
+	if revisionErr != nil {
+		return "", fmt.Errorf("resolve threshold policy: %w", revisionErr)
+	}
+	payload := thresholdSnapshotPayload{
+		HashVersion:         1,
+		LossLiterThreshold:  revision.LossLiterThreshold.String(),
+		GainLiterThreshold:  revision.GainLiterThreshold.String(),
+		LossRupiahThreshold: revision.LossRupiahThreshold.String(),
+		GainRupiahThreshold: revision.GainRupiahThreshold.String(),
+		VarianceRupiah:      revision.VarianceThreshold.String(),
+		RolloverThreshold:   revision.RolloverThreshold.String(),
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("encode threshold policy snapshot: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	scope := "organization"
+	if revision.StationID != nil {
+		scope = "station"
+	}
+	item = PolicySnapshotItemModel{ItemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, SetID: policySet.SetID, PolicyKind: "threshold", PolicyID: revision.PolicyID, RevID: revision.RevID, Scope: scope, Payload: encoded, PayloadHash: hash[:]}
+	if err := tx.Create(&item).Error; err != nil {
+		return "", fmt.Errorf("create threshold policy snapshot: %w", err)
+	}
+	return payload.RolloverThreshold, nil
 }
 
 func (r *SubmissionRepository) meterContinuity(tx *gorm.DB, shift ShiftModel, nozzleID uuid.UUID) (string, string, string, error) {

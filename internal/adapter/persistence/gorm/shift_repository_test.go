@@ -2,6 +2,7 @@ package gormstore
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -112,5 +113,78 @@ func TestShiftRepository_OpenShift_PersistsApprovedBackfillMetadata(t *testing.T
 	}
 	if !shift.Backfilled || shift.OriginalEventDate == nil || shift.ShiftKE == nil || *shift.ShiftKE != 2 || shift.BackfillApprover == nil || *shift.BackfillApprover != approverID || shift.BackfillReason == nil || *shift.BackfillReason != "late paper report" {
 		t.Fatalf("backfill metadata: %+v", shift)
+	}
+}
+
+func TestShiftRepository_OpenShift_RejectsBackfillBeforeLaterChainedReport(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.UTC)
+	orgID, stationID, actorID, approverID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	baseShiftID, laterShiftID := uuid.New(), uuid.New()
+	baseReportID, laterReportID := uuid.New(), uuid.New()
+	baseSetID, laterSetID := uuid.New(), uuid.New()
+	dispenserID, nozzleID, baseReadingID, laterReadingID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	for _, value := range []any{
+		&OrganizationModel{OrgID: orgID, Name: "Backfill Order", CreatedAt: now},
+		&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now},
+		&UserModel{UserID: actorID, OrgID: orgID, DisplayName: "Supervisor", Email: "backfill-order-supervisor@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+		&UserModel{UserID: approverID, OrgID: orgID, DisplayName: "Owner", Email: "backfill-order-owner@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+		&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID},
+		&NozzleModel{OrgID: orgID, StationID: stationID, NozzleID: nozzleID, DispenserID: dispenserID, MeterMax: Decimal("99999.9")},
+	} {
+		if err := store.db.Create(value).Error; err != nil {
+			t.Fatalf("create fixture row: %v", err)
+		}
+	}
+	if err := store.db.Table("user_station_roles").Create(map[string]any{"org_id": orgID, "station_id": stationID, "user_id": approverID, "role": "Owner"}).Error; err != nil {
+		t.Fatalf("create approver role: %v", err)
+	}
+	if err := store.db.Exec(`insert into dispenser_nozzle_map(org_id,station_id,dispenser_id,nozzle_id,valid_period) values(?,?,?,?,tstzrange(?,?,'[)'))`, orgID, stationID, dispenserID, nozzleID, now.Add(-time.Hour), now.Add(time.Hour)).Error; err != nil {
+		t.Fatalf("create nozzle map: %v", err)
+	}
+	if err := store.db.Exec(`insert into dispenser_prices(org_id,station_id,nozzle_id,price,valid_period,created_by) values(?,?,?,?,tstzrange(?,?,'[)'),?)`, orgID, stationID, nozzleID, Decimal("10000"), now.Add(-time.Hour), now.Add(time.Hour), actorID).Error; err != nil {
+		t.Fatalf("create price: %v", err)
+	}
+	snapshot := []byte(`{"hash_version":1,"items":[{"nozzle_id":"` + nozzleID.String() + `","dispenser_id":"` + dispenserID.String() + `","meter_max":"99999.9","modulus":"100000.0","price":"10000"}]}`)
+	for _, shift := range []ShiftModel{
+		{ShiftID: baseShiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: actorID, OpenedAt: now.Add(-48 * time.Hour), TimezoneSnapshot: "UTC", BusinessDate: "2025-12-31", Status: "locked", Backfilled: false, PriceMapSnapshot: snapshot, PriceMapHash: make([]byte, 32)},
+		{ShiftID: laterShiftID, OrgID: orgID, StationID: stationID, StationSeq: 2, SupervisorID: actorID, OpenedAt: now.Add(-24 * time.Hour), TimezoneSnapshot: "UTC", BusinessDate: "2026-01-01", Status: "locked", Backfilled: false, PriceMapSnapshot: snapshot, PriceMapHash: make([]byte, 32)},
+	} {
+		if err := store.db.Create(&shift).Error; err != nil {
+			t.Fatalf("create locked shift: %v", err)
+		}
+	}
+	for _, set := range []PolicySnapshotSetModel{
+		{SetID: baseSetID, OrgID: orgID, StationID: stationID, ShiftID: &baseShiftID, CreatedAt: now},
+		{SetID: laterSetID, OrgID: orgID, StationID: stationID, ShiftID: &laterShiftID, CreatedAt: now},
+	} {
+		if err := store.db.Create(&set).Error; err != nil {
+			t.Fatalf("create policy set: %v", err)
+		}
+	}
+	if err := store.db.Create(&ShiftReportModel{ReportID: baseReportID, OrgID: orgID, StationID: stationID, ShiftID: baseShiftID, VersionNo: 1, Status: "locked", SubmittedBy: actorID, SubmittedAt: now.Add(-48 * time.Hour), PolicySnapshot: baseSetID}).Error; err != nil {
+		t.Fatalf("create base report: %v", err)
+	}
+	if err := store.db.Create(&ShiftReportModel{ReportID: laterReportID, OrgID: orgID, StationID: stationID, ShiftID: laterShiftID, VersionNo: 1, Status: "locked", SubmittedBy: actorID, SubmittedAt: now.Add(-24 * time.Hour), PolicySnapshot: laterSetID}).Error; err != nil {
+		t.Fatalf("create later report: %v", err)
+	}
+	if err := store.db.Model(&ShiftModel{}).Where("shift_id = ?", baseShiftID).Update("current_report_id", baseReportID).Error; err != nil {
+		t.Fatalf("point base report: %v", err)
+	}
+	if err := store.db.Model(&ShiftModel{}).Where("shift_id = ?", laterShiftID).Update("current_report_id", laterReportID).Error; err != nil {
+		t.Fatalf("point later report: %v", err)
+	}
+	if err := store.db.Create(&DispenserReadingModel{ReadingID: baseReadingID, OrgID: orgID, StationID: stationID, ShiftID: baseShiftID, ReportID: baseReportID, NozzleID: nozzleID, MeterStart: Decimal("10.0"), MeterEnd: Decimal("20.0"), PriceUsed: Decimal("10000"), ExpectedSale: Decimal("100000"), Observed: true, IsCarriedForward: false}).Error; err != nil {
+		t.Fatalf("create base reading: %v", err)
+	}
+	if err := store.db.Create(&DispenserReadingModel{ReadingID: laterReadingID, OrgID: orgID, StationID: stationID, ShiftID: laterShiftID, ReportID: laterReportID, NozzleID: nozzleID, MeterStart: Decimal("20.0"), MeterEnd: Decimal("30.0"), PriceUsed: Decimal("10000"), ExpectedSale: Decimal("100000"), Observed: false, IsCarriedForward: true, SourceShiftID: &baseShiftID, SourceReportID: &baseReportID, SourceReadingID: &baseReadingID}).Error; err != nil {
+		t.Fatalf("create later reading: %v", err)
+	}
+
+	_, err := NewShiftRepository(store).OpenShift(ctx, appshift.OpenRequest{OrgID: orgID, StationID: stationID, ActorID: actorID, Role: "Supervisor", OpenedAt: now, Backfilled: true, OriginalEventDate: "2025-12-30", ShiftKE: 1, BackfillApprover: approverID, BackfillReason: "late paper report"})
+	if !errors.Is(err, appshift.ErrBackfillOutOfOrder) {
+		t.Fatalf("open backfill error: got %v, want %v", err, appshift.ErrBackfillOutOfOrder)
 	}
 }

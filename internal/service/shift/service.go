@@ -28,6 +28,8 @@ var (
 	ErrUnauthorized = domain.NewError(domain.CategoryAuthorization, "shift_open_forbidden")
 	// ErrBackfillApprovalRequired identifies incomplete or unexpected backfill data.
 	ErrBackfillApprovalRequired = domain.NewError(domain.CategoryValidation, "backfill_approval_required")
+	// ErrBackfillOutOfOrder identifies a backfill that would invalidate a later meter chain.
+	ErrBackfillOutOfOrder = domain.NewError(domain.CategoryConflict, "backfill_out_of_order")
 )
 
 // Clock provides the current time to the service.

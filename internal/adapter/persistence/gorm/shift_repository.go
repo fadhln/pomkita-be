@@ -71,6 +71,17 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 			backfillReason = &reason
 			approvedAt := request.OpenedAt
 			backfillApprovedAt = &approvedAt
+			var laterChainedReadings int64
+			if err := tx.Table("shifts s").
+				Joins("join shift_reports r on r.org_id = s.org_id and r.station_id = s.station_id and r.shift_id = s.shift_id and r.report_id = s.current_report_id").
+				Joins("join dispenser_readings dr on dr.org_id = r.org_id and dr.station_id = r.station_id and dr.shift_id = r.shift_id and dr.report_id = r.report_id").
+				Where("s.org_id = ? and s.station_id = ? and s.status = ? and s.business_date > ? and dr.is_carried_forward = ?", request.OrgID, request.StationID, "locked", parsedDate.Format("2006-01-02"), true).
+				Count(&laterChainedReadings).Error; err != nil {
+				return fmt.Errorf("check backfill order: %w", err)
+			}
+			if laterChainedReadings > 0 {
+				return appshift.ErrBackfillOutOfOrder
+			}
 		} else if request.OriginalEventDate != "" || request.ShiftKE != 0 || request.BackfillApprover != uuid.Nil || strings.TrimSpace(request.BackfillReason) != "" {
 			return appshift.ErrBackfillApprovalRequired
 		}

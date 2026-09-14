@@ -2,6 +2,7 @@ package gormstore
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"testing"
 	"time"
@@ -193,6 +194,160 @@ func TestSubmissionRepository_Submit_RejectsBrokenMeterChain(t *testing.T) {
 	request := appsubmission.Request{OrgID: orgID, StationID: stationID, ShiftID: currentShiftID, DraftID: currentDraftID, ClaimToken: claimToken, ExpectedRevision: 2, ActorID: userID, IdempotencyKey: "submit-chain", Payload: []byte(`{"readings":[{"nozzle_id":"` + nozzleID.String() + `","meter_start":"21.0","meter_end":"22.0"}],"sales":[],"losses":[]}`)}
 	if _, err := service.Submit(ctx, request); !errors.Is(err, appreconciliation.ErrMeterChainConflict) {
 		t.Fatalf("chain error: got %v, want %v", err, appreconciliation.ErrMeterChainConflict)
+	}
+}
+
+func TestSubmissionRepository_Submit_UsesSnapshotRolloverThreshold(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.UTC)
+	orgID, stationID, userID := uuid.New(), uuid.New(), uuid.New()
+	shiftID, draftID, claimToken, policySetID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	dispenserID, nozzleID, draftReadingID := uuid.New(), uuid.New(), uuid.New()
+	policyID, revisionID := uuid.New(), uuid.New()
+	if err := store.db.Create(&OrganizationModel{OrgID: orgID, Name: "Policy Org", CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	if err := store.db.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create station: %v", err)
+	}
+	if err := store.db.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "policy-submit@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := store.db.Create(&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID}).Error; err != nil {
+		t.Fatalf("create dispenser: %v", err)
+	}
+	if err := store.db.Create(&NozzleModel{OrgID: orgID, StationID: stationID, NozzleID: nozzleID, DispenserID: dispenserID, MeterMax: Decimal("99999.9")}).Error; err != nil {
+		t.Fatalf("create nozzle: %v", err)
+	}
+	snapshot := []byte(`{"hash_version":1,"items":[{"nozzle_id":"` + nozzleID.String() + `","dispenser_id":"` + dispenserID.String() + `","meter_max":"99999.9","modulus":"100000.0","price":"10000","price_id":"` + uuid.NewString() + `","dispenser_nozzle_map_id":"` + uuid.NewString() + `","nozzle_tank_map_id":null}]}`)
+	if err := store.db.Create(&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: snapshot, PriceMapHash: make([]byte, 32)}).Error; err != nil {
+		t.Fatalf("create shift: %v", err)
+	}
+	if err := store.db.Create(&ShiftDraftModel{DraftID: draftID, OrgID: orgID, StationID: stationID, ShiftID: shiftID, OwnedBy: &userID, ClaimToken: &claimToken, ClaimExpiresAt: ptrTime(now.Add(time.Hour)), Status: "editing", Revision: 1, UpdatedBy: &userID, UpdatedAt: now}).Error; err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	if err := store.db.Create(&PolicySnapshotSetModel{SetID: policySetID, OrgID: orgID, StationID: stationID, ShiftID: &shiftID, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create policy snapshot set: %v", err)
+	}
+	if err := store.db.Create(&ThresholdPolicyRevisionModel{RevID: revisionID, PolicyID: policyID, OrgID: orgID, ValidFrom: now.Add(-time.Hour), LossLiterThreshold: Decimal("10.00"), GainLiterThreshold: Decimal("10.00"), LossRupiahThreshold: Decimal("0"), GainRupiahThreshold: Decimal("0"), VarianceThreshold: Decimal("0"), RolloverThreshold: Decimal("40.0"), CreatedBy: userID, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create threshold policy: %v", err)
+	}
+	if err := store.db.Create(&DraftReadingModel{RowID: draftReadingID, OrgID: orgID, StationID: stationID, DraftID: draftID, NozzleID: nozzleID, MeterStart: Decimal("99999.9"), MeterEnd: Decimal("30.0"), CreatedBy: userID}).Error; err != nil {
+		t.Fatalf("create draft reading: %v", err)
+	}
+
+	service := appsubmission.NewService(NewSubmissionRepository(store), submissionClock{value: now})
+	request := appsubmission.Request{OrgID: orgID, StationID: stationID, ShiftID: shiftID, DraftID: draftID, ClaimToken: claimToken, ExpectedRevision: 1, ActorID: userID, IdempotencyKey: "policy-rollover", Payload: []byte(`{"readings":[{"nozzle_id":"` + nozzleID.String() + `"}],"sales":[],"losses":[]}`)}
+	if _, err := service.Submit(ctx, request); err != nil {
+		t.Fatalf("submit with policy threshold: %v", err)
+	}
+}
+
+func TestSubmissionRepository_Submit_RejectsExpiredTakeoverWithoutPreviousClaim(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.UTC)
+	orgID, stationID, userID := uuid.New(), uuid.New(), uuid.New()
+	shiftID, draftID, claimToken, policySetID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	if err := store.db.Create(&OrganizationModel{OrgID: orgID, Name: "Takeover Org", CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	if err := store.db.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create station: %v", err)
+	}
+	if err := store.db.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "takeover@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := store.db.Create(&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {
+		t.Fatalf("create shift: %v", err)
+	}
+	if err := store.db.Create(&ShiftDraftModel{DraftID: draftID, OrgID: orgID, StationID: stationID, ShiftID: shiftID, OwnedBy: &userID, ClaimToken: &claimToken, ClaimExpiresAt: ptrTime(now.Add(time.Hour)), Status: "editing", Revision: 1, UpdatedBy: &userID, UpdatedAt: now}).Error; err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	if err := store.db.Create(&PolicySnapshotSetModel{SetID: policySetID, OrgID: orgID, StationID: stationID, ShiftID: &shiftID, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create policy snapshot set: %v", err)
+	}
+	payload := []byte(`{"losses":[],"readings":[],"sales":[]}`)
+	hash := sha256.Sum256(payload)
+	if err := store.db.Create(&SubmitIdempotencyModel{IdemID: uuid.New(), OrgID: orgID, StationID: stationID, ShiftID: shiftID, IdempotencyKey: "missing-old-claim", RequestHash: hash[:], Status: "in_progress", AttemptCount: 1, LeaseStartedAt: ptrTime(now.Add(-time.Hour)), LeaseExpiresAt: ptrTime(now.Add(-time.Minute)), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)}).Error; err != nil {
+		t.Fatalf("create stale idempotency row: %v", err)
+	}
+
+	service := appsubmission.NewService(NewSubmissionRepository(store), submissionClock{value: now})
+	request := appsubmission.Request{OrgID: orgID, StationID: stationID, ShiftID: shiftID, DraftID: draftID, ClaimToken: claimToken, ExpectedRevision: 1, ActorID: userID, IdempotencyKey: "missing-old-claim", Payload: payload}
+	if _, err := service.Submit(ctx, request); !errors.Is(err, appsubmission.ErrIdempotencyConflict) {
+		t.Fatalf("takeover error: got %v, want %v", err, appsubmission.ErrIdempotencyConflict)
+	}
+}
+
+func TestSubmissionRepository_Submit_TakeoverRaceCreatesOneReport(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.UTC)
+	service := NewSubmissionRepository(store)
+
+	type outcome struct {
+		result appsubmission.Result
+		err    error
+	}
+	for iteration := 0; iteration < 3; iteration++ {
+		orgID, stationID, userID := uuid.New(), uuid.New(), uuid.New()
+		shiftID, draftID, currentClaim, oldClaim, policySetID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+		for _, value := range []any{
+			&OrganizationModel{OrgID: orgID, Name: "Race Org", CreatedAt: now},
+			&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now},
+			&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "race-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+			&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)},
+			&ShiftDraftModel{DraftID: draftID, OrgID: orgID, StationID: stationID, ShiftID: shiftID, OwnedBy: &userID, ClaimToken: &currentClaim, ClaimExpiresAt: ptrTime(now.Add(time.Hour)), Status: "editing", Revision: 1, UpdatedBy: &userID, UpdatedAt: now},
+			&PolicySnapshotSetModel{SetID: policySetID, OrgID: orgID, StationID: stationID, ShiftID: &shiftID, CreatedAt: now},
+		} {
+			if err := store.db.Create(value).Error; err != nil {
+				t.Fatalf("iteration %d create fixture row: %v", iteration, err)
+			}
+		}
+		payload := []byte(`{"losses":[],"readings":[],"sales":[]}`)
+		hash := sha256.Sum256(payload)
+		if err := store.db.Create(&SubmitIdempotencyModel{IdemID: uuid.New(), OrgID: orgID, StationID: stationID, ShiftID: shiftID, IdempotencyKey: "race", RequestHash: hash[:], Status: "in_progress", ClaimToken: &oldClaim, AttemptCount: 1, LeaseStartedAt: ptrTime(now.Add(-time.Hour)), LeaseExpiresAt: ptrTime(now.Add(-time.Minute)), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)}).Error; err != nil {
+			t.Fatalf("iteration %d create stale row: %v", iteration, err)
+		}
+		request := appsubmission.Request{OrgID: orgID, StationID: stationID, ShiftID: shiftID, DraftID: draftID, ClaimToken: currentClaim, ExpectedRevision: 1, ActorID: userID, IdempotencyKey: "race", Payload: payload}
+		start := make(chan struct{})
+		results := make(chan outcome, 2)
+		for worker := 0; worker < 2; worker++ {
+			go func() {
+				<-start
+				result, err := appsubmission.NewService(service, submissionClock{value: now}).Submit(ctx, request)
+				results <- outcome{result: result, err: err}
+			}()
+		}
+		close(start)
+		var reports, replays int
+		for worker := 0; worker < 2; worker++ {
+			result := <-results
+			if result.err != nil {
+				t.Fatalf("iteration %d concurrent submit: %v", iteration, result.err)
+			}
+			if result.result.Replay {
+				replays++
+			} else {
+				reports++
+			}
+		}
+		if reports != 1 || replays != 1 {
+			t.Fatalf("iteration %d outcomes: reports=%d replays=%d, want one each", iteration, reports, replays)
+		}
+		var reportCount int64
+		if err := store.db.Model(&ShiftReportModel{}).Where("shift_id = ?", shiftID).Count(&reportCount).Error; err != nil {
+			t.Fatalf("iteration %d count reports: %v", iteration, err)
+		}
+		if reportCount != 1 {
+			t.Fatalf("iteration %d report count: got %d, want 1", iteration, reportCount)
+		}
 	}
 }
 
