@@ -31,11 +31,12 @@ the versioned paths below.
 | Governance | `POST /api/v1/amendments/{id}/approve` |
 | Governance | `POST /api/v1/amendments/{id}/reject` |
 | Reporting | `GET /api/v1/audit/export` |
-| Reporting | `GET /api/v1/audit/export` |
+| Reporting | `GET /api/v1/audit` |
 | Reporting | `GET /api/v1/audit/verify` |
-| Policy | `GET /api/v1/policy/history` |
-| Policy | `POST /api/v1/policy/revision` |
-| Policy | `POST /api/v1/policy/revision/tombstone` |
+| Reporting | `GET /api/v1/anomalies` |
+| Reporting | `GET /api/v1/anomalies/export` |
+| Policy | `GET /api/v1/policies/history` |
+| Policy | `POST /api/v1/policies/revisions` |
 
 All JSON objects use `snake_case`. Mutation payloads reject unknown fields.
 Money and volume values are decimal strings. Every response includes
