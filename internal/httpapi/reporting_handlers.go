@@ -20,6 +20,7 @@ type ModernReportingService interface {
 
 func registerModernReportingRoutes(router gin.IRoutes, verifier TokenVerifier, sessions SessionService, service ModernReportingService) {
 	router.GET("/reports/:id", AuthMiddleware(verifier), modernReportHandler(sessions, service))
+	router.GET("/reports/:id/printout", AuthMiddleware(verifier), modernReportHandler(sessions, service))
 }
 
 func modernReportHandler(sessions SessionService, service ModernReportingService) gin.HandlerFunc {

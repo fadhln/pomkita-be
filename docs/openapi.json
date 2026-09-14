@@ -57,6 +57,9 @@
     "/api/v1/reports/{id}": {
       "get": { "parameters": [{ "$ref": "#/components/parameters/ResourceID" }, { "$ref": "#/components/parameters/StationID" }], "responses": { "200": { "description": "Typed report view", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportView" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" }, "404": { "$ref": "#/components/responses/NotFound" } } }
     },
+    "/api/v1/reports/{id}/printout": {
+      "get": { "parameters": [{ "$ref": "#/components/parameters/ResourceID" }, { "$ref": "#/components/parameters/StationID" }], "responses": { "200": { "description": "Typed report printout", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportView" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" }, "404": { "$ref": "#/components/responses/NotFound" } } }
+    },
     "/api/v1/reports/{id}/acknowledgement": {
       "post": { "parameters": [{ "$ref": "#/components/parameters/ResourceID" }, { "$ref": "#/components/parameters/CSRF" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AcknowledgeRequest" } } } }, "responses": { "200": { "description": "Acknowledgement" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "409": { "$ref": "#/components/responses/Conflict" }, "422": { "$ref": "#/components/responses/ValidationError" } } }
     },
