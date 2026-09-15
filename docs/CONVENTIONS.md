@@ -113,8 +113,12 @@ Use this error shape:
 
 ```json
 {
+  "type": "about:blank",
+  "title": "Request failed",
+  "status": 422,
+  "detail": "Safe user message",
+  "instance": "/api/v1/resource",
   "code": "STABLE_MACHINE_CODE",
-  "message": "Safe user message",
   "request_id": "request identifier",
   "field_errors": {
     "field.path": "validation message"
@@ -183,7 +187,7 @@ Use the verified session JWT as the only actor identity. Do not trust an actor I
 
 Use an httpOnly cookie for the session. Apply the configured same-site and CSRF rules. Do not store a raw JWT in the database audit data or logs.
 
-Deny access when request context is missing or invalid. Apply a deny rule before an allow rule. Enforce separation of duties in the database.
+Deny access when request context is missing or invalid. Apply a deny rule before an allow rule. Enforce separation of duties in the Go service layer.
 
 Store secrets outside the repository. Commit only safe example values. Review every migration for grants and owner changes.
 
