@@ -417,17 +417,23 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 
 	if err := runner.Steps(ctx, -1); err != nil {
-		t.Fatalf("reverse paired organization migration: %v", err)
+		t.Fatalf("reverse paired station detail migration: %v", err)
 	}
-	var organizationDetailCount int
-	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'organizations' and column_name = 'legal_name'`).Scan(&organizationDetailCount); err != nil {
-		t.Fatalf("count organization detail after paired down: %v", err)
+	var stationDetailCount int
+	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'code'`).Scan(&stationDetailCount); err != nil {
+		t.Fatalf("count station detail after paired down: %v", err)
 	}
-	if organizationDetailCount != 0 {
-		t.Fatalf("organization detail remains after paired down: got %d", organizationDetailCount)
+	if stationDetailCount != 0 {
+		t.Fatalf("station detail remains after paired down: got %d", stationDetailCount)
 	}
 	if err := runner.Steps(ctx, 1); err != nil {
-		t.Fatalf("reapply paired organization migration: %v", err)
+		t.Fatalf("reapply paired station detail migration: %v", err)
+	}
+	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'code'`).Scan(&stationDetailCount); err != nil {
+		t.Fatalf("count station detail after paired up: %v", err)
+	}
+	if stationDetailCount != 1 {
+		t.Fatalf("station detail changed after paired up: got %d", stationDetailCount)
 	}
 	var stationNameCount int
 	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'name'`).Scan(&stationNameCount); err != nil {
@@ -438,10 +444,19 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 
 	if err := runner.Steps(ctx, -1); err != nil {
-		t.Fatalf("reverse paired organization migration: %v", err)
+		t.Fatalf("reverse paired station detail migration: %v", err)
 	}
 	if err := runner.Steps(ctx, -1); err != nil {
-		t.Fatalf("reverse paired station migration: %v", err)
+		t.Fatalf("reverse paired organization migration: %v", err)
+	}
+	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'name'`).Scan(&stationNameCount); err != nil {
+		t.Fatalf("count station name after paired down: %v", err)
+	}
+	if stationNameCount != 1 {
+		t.Fatalf("station name changed after organization down: got %d", stationNameCount)
+	}
+	if err := runner.Steps(ctx, -1); err != nil {
+		t.Fatalf("reverse paired station name migration: %v", err)
 	}
 	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'name'`).Scan(&stationNameCount); err != nil {
 		t.Fatalf("count station name after paired down: %v", err)
@@ -467,6 +482,9 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 	if err := runner.Steps(ctx, 1); err != nil {
 		t.Fatalf("reapply paired organization migration: %v", err)
+	}
+	if err := runner.Steps(ctx, 1); err != nil {
+		t.Fatalf("reapply paired station detail migration: %v", err)
 	}
 
 	if err := runner.Down(ctx); err != nil {

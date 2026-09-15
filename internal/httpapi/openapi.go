@@ -23,6 +23,7 @@ import (
 	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
+	appstation "github.com/pomkita/pomkita-be/internal/service/station"
 	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
 )
 
@@ -40,6 +41,26 @@ type openAPIStationInput struct {
 type openAPIIDStationInput struct {
 	ID        string `path:"id" format:"uuid"`
 	StationID string `query:"station_id" format:"uuid"`
+}
+
+type openAPIOrganizationScopeInput struct {
+	OrgID string `query:"org_id" format:"uuid"`
+}
+
+type openAPIIDOrganizationInput struct {
+	ID    string `path:"id" format:"uuid"`
+	OrgID string `query:"org_id" format:"uuid"`
+}
+
+type openAPIOrganizationBodyInput[T any] struct {
+	OrgID string `query:"org_id" format:"uuid"`
+	Body  T
+}
+
+type openAPIIDOrganizationBodyInput[T any] struct {
+	ID    string `path:"id" format:"uuid"`
+	OrgID string `query:"org_id" format:"uuid"`
+	Body  T
 }
 
 type openAPIBodyInput[T any] struct {
@@ -150,6 +171,7 @@ func decorateIdentityContract(document *huma.OpenAPI) {
 	compactAccountErrorResponses(document)
 	setProfileExample(document)
 	decorateOrganizationContract(document)
+	decorateStationContract(document)
 }
 
 func decorateOrganizationContract(document *huma.OpenAPI) {
@@ -193,6 +215,40 @@ func decorateOrganizationContract(document *huma.OpenAPI) {
 		ensureProblemResponses(item.Post, "400", "401", "403", "404", "500")
 		setMutationResponse(document, "/api/v1/organizations/{id}/disable", http.MethodPost, http.StatusNoContent)
 		trimResponses(document, "/api/v1/organizations/{id}/disable", http.MethodPost, "204", "400", "401", "403", "404", "500")
+	}
+}
+
+func decorateStationContract(document *huma.OpenAPI) {
+	if item := document.Paths["/api/v1/stations"]; item != nil {
+		if item.Get != nil {
+			decorateOperation(item.Get, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"station_administration_forbidden"}, "422": {"organization_scope_required"}}, nil, false)
+			ensureProblemResponses(item.Get, "400", "401", "403", "422", "500", "503")
+		}
+		if item.Post != nil {
+			decorateOperation(item.Post, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"station_administration_forbidden", "csrf_required"}, "409": {"station_code_conflict"}, "422": {"organization_scope_required", "invalid_station_request"}}, map[string]any{"name": "Main", "code": "JKT-01", "address": "Jakarta", "timezone": "Asia/Jakarta"}, true)
+			ensureProblemResponses(item.Post, "400", "401", "403", "409", "422", "500", "503")
+			setMutationResponse(document, "/api/v1/stations", http.MethodPost, http.StatusCreated)
+		}
+		trimResponses(document, "/api/v1/stations", http.MethodGet, "200", "400", "401", "403", "422", "500", "503")
+		trimResponses(document, "/api/v1/stations", http.MethodPost, "201", "400", "401", "403", "409", "422", "500", "503")
+	}
+	if item := document.Paths["/api/v1/stations/{id}"]; item != nil {
+		if item.Get != nil {
+			decorateOperation(item.Get, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"station_administration_forbidden"}, "404": {"station_not_found"}, "422": {"organization_scope_required"}}, nil, false)
+			ensureProblemResponses(item.Get, "400", "401", "403", "404", "422", "500", "503")
+		}
+		if item.Patch != nil {
+			decorateOperation(item.Patch, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"station_administration_forbidden", "csrf_required"}, "404": {"station_not_found"}, "409": {"station_code_conflict"}, "422": {"organization_scope_required", "invalid_station_request"}}, map[string]any{"name": "Main Updated"}, true)
+			ensureProblemResponses(item.Patch, "400", "401", "403", "404", "409", "422", "500", "503")
+		}
+		trimResponses(document, "/api/v1/stations/{id}", http.MethodGet, "200", "400", "401", "403", "404", "422", "500", "503")
+		trimResponses(document, "/api/v1/stations/{id}", http.MethodPatch, "200", "400", "401", "403", "404", "409", "422", "500", "503")
+	}
+	if item := document.Paths["/api/v1/stations/{id}/disable"]; item != nil && item.Post != nil {
+		decorateOperation(item.Post, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"station_administration_forbidden", "csrf_required"}, "404": {"station_not_found"}, "422": {"organization_scope_required"}}, nil, true)
+		ensureProblemResponses(item.Post, "400", "401", "403", "404", "422", "500", "503")
+		setMutationResponse(document, "/api/v1/stations/{id}/disable", http.MethodPost, http.StatusNoContent)
+		trimResponses(document, "/api/v1/stations/{id}/disable", http.MethodPost, "204", "400", "401", "403", "404", "422", "500", "503")
 	}
 }
 
@@ -351,6 +407,11 @@ func registerOpenAPIOperations(api huma.API) {
 	registerOpenAPIOperation[openAPIIDInput, openAPIOutput[apporganization.Organization]](api, http.MethodGet, "/api/v1/organizations/{id}", "getOrganization", "Read an organization")
 	registerOpenAPIOperation[openAPIIDBodyInput[apporganization.OrganizationUpdateRequest], openAPIOutput[apporganization.OrganizationDetail]](api, http.MethodPatch, "/api/v1/organizations/{id}", "updateOrganization", "Update an organization")
 	registerOpenAPIOperation[openAPIIDInput, openAPIEmptyOutput](api, http.MethodPost, "/api/v1/organizations/{id}/disable", "disableOrganization", "Disable an organization")
+	registerOpenAPIOperation[openAPIOrganizationScopeInput, openAPIOutput[[]appstation.StationDetail]](api, http.MethodGet, "/api/v1/stations", "listStations", "List stations")
+	registerOpenAPIOperation[openAPIOrganizationBodyInput[appstation.StationCreateRequest], openAPIOutput[appstation.StationDetail]](api, http.MethodPost, "/api/v1/stations", "createStation", "Create a station")
+	registerOpenAPIOperation[openAPIIDOrganizationInput, openAPIOutput[appstation.StationDetail]](api, http.MethodGet, "/api/v1/stations/{id}", "getStation", "Read a station")
+	registerOpenAPIOperation[openAPIIDOrganizationBodyInput[appstation.StationUpdateRequest], openAPIOutput[appstation.StationDetail]](api, http.MethodPatch, "/api/v1/stations/{id}", "updateStation", "Update a station")
+	registerOpenAPIOperation[openAPIIDOrganizationInput, openAPIEmptyOutput](api, http.MethodPost, "/api/v1/stations/{id}/disable", "disableStation", "Disable a station")
 	registerOpenAPIOperation[openAPIBodyInput[accountapi.ForgotRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/auth/password/forgot", "forgotPassword", "Request a password reset email")
 	registerOpenAPIOperation[openAPIBodyInput[accountapi.ResetRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/auth/password/reset", "resetPassword", "Reset a password with a token")
 

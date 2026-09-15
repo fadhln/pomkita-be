@@ -21,7 +21,7 @@ func TestDraftRepository_WriteReading_RejectsExpiredClaim(t *testing.T) {
 	if err := store.DB.Create(&OrganizationModel{OrgID: orgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
-	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
 	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "draft@example.com", Username: "draft", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {

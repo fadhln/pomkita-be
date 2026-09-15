@@ -15,6 +15,7 @@ import (
 	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
 	sessionapi "github.com/pomkita/pomkita-be/internal/httpapi/session"
 	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
+	stationapi "github.com/pomkita/pomkita-be/internal/httpapi/station"
 	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
 	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
 	usersapi "github.com/pomkita/pomkita-be/internal/httpapi/users"
@@ -49,6 +50,7 @@ type RouterDependencies struct {
 	Account         accountapi.Service
 	AccountLimiter  *accountapi.RateLimiter
 	Organization    organizationapi.Service
+	Station         stationapi.Service
 	LatestMigration int
 }
 
@@ -67,7 +69,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 		gin.SetMode(gin.ReleaseMode)
 	}
 	if dependencies.LatestMigration == 0 {
-		dependencies.LatestMigration = 14
+		dependencies.LatestMigration = 15
 	}
 	if dependencies.AccountLimiter == nil {
 		dependencies.AccountLimiter = accountapi.NewLimiter(5, time.Minute, time.Now)
@@ -89,6 +91,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	usersapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Users)
 	accountapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Account, dependencies.AccountLimiter)
 	organizationapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Organization)
+	stationapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Station)
 	reportingapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	shiftapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Shift)
 	shiftapi.RegisterReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ShiftRead)

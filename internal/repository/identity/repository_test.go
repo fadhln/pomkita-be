@@ -22,7 +22,7 @@ func TestIdentityRepository_CreateAndAcceptInvitationIsAtomicAndAudited(t *testi
 	if err := database.DB.Create(&store.OrganizationModel{OrgID: orgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
-	if err := database.DB.Create(&store.StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+	if err := database.DB.Create(&store.StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
 	if err := database.DB.Create(&store.UserModel{UserID: actorID, OrgID: orgID, DisplayName: "Owner", Email: "owner@example.test", Username: "owner", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
