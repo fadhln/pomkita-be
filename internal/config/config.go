@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"strings"
 )
@@ -15,19 +16,61 @@ type Config struct {
 	JWTAudience        string
 	JWTSecrets         map[string]string
 	CorsAllowedOrigins []string
+	Mailer             string
+	MailFrom           string
+	ResendAPIKey       string
+	PublicBaseURL      string
+	MailSpoolDirectory string
 }
 
 func Load() Config {
+	environment := valueOrDefault("ENVIRONMENT", "development")
+	mailerName := valueOrDefault("POMKITA_MAILER", "spool")
+	mailFrom := os.Getenv("POMKITA_MAIL_FROM")
+	if mailFrom == "" && !(environment == "production" && mailerName == "resend") {
+		mailFrom = "noreply@localhost"
+	}
+	publicBaseURL := os.Getenv("POMKITA_PUBLIC_BASE_URL")
+	if publicBaseURL == "" && environment != "production" {
+		publicBaseURL = "http://localhost:3000"
+	}
 	return Config{
 		Port:               valueOrDefault("PORT", "8080"),
-		Environment:        valueOrDefault("ENVIRONMENT", "development"),
+		Environment:        environment,
 		DatabaseURL:        valueOrDefault("DATABASE_URL", "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable"),
 		MigrationsDir:      valueOrDefault("MIGRATIONS_DIR", "migrations"),
 		JWTIssuer:          valueOrDefault("JWT_ISSUER", "pomkita"),
 		JWTAudience:        valueOrDefault("JWT_AUDIENCE", "pomkita"),
 		JWTSecrets:         jwtSecrets(),
 		CorsAllowedOrigins: corsAllowedOrigins(),
+		Mailer:             mailerName,
+		MailFrom:           mailFrom,
+		ResendAPIKey:       os.Getenv("POMKITA_RESEND_API_KEY"),
+		PublicBaseURL:      publicBaseURL,
+		MailSpoolDirectory: valueOrDefault("POMKITA_MAIL_SPOOL_DIR", "var/spool/mail"),
 	}
+}
+
+// Validate checks configuration that must be valid before process start.
+func (c Config) Validate() error {
+	if c.Mailer != "spool" && c.Mailer != "resend" {
+		return errors.New("POMKITA_MAILER must be spool or resend")
+	}
+	if c.Environment == "production" && strings.TrimSpace(c.PublicBaseURL) == "" {
+		return errors.New("POMKITA_PUBLIC_BASE_URL is required")
+	}
+	if c.Mailer == "resend" {
+		if strings.TrimSpace(c.MailFrom) == "" {
+			return errors.New("POMKITA_MAIL_FROM is required for resend")
+		}
+		if strings.TrimSpace(c.ResendAPIKey) == "" {
+			return errors.New("POMKITA_RESEND_API_KEY is required for resend")
+		}
+	}
+	if c.Mailer == "spool" && strings.TrimSpace(c.MailSpoolDirectory) == "" {
+		return errors.New("mail spool directory is required for spool")
+	}
+	return nil
 }
 
 func corsAllowedOrigins() []string {

@@ -130,7 +130,8 @@ func PathUUID(c *gin.Context, name string) (uuid.UUID, bool) {
 func ValidDecimal(value string) bool { return decimalPattern.MatchString(value) }
 func ValidationError(c *gin.Context) { WriteError(c, http.StatusBadRequest, "validation_error") }
 func WriteError(c *gin.Context, status int, code string) {
-	c.AbortWithStatusJSON(status, gin.H{"code": code, "message": safeMessage(code, status), "request_id": c.GetString("request_id"), "field_errors": nil})
+	c.Header("Content-Type", "application/problem+json")
+	c.AbortWithStatusJSON(status, gin.H{"type": "about:blank", "title": http.StatusText(status), "status": status, "detail": safeMessage(code, status), "instance": c.Request.URL.Path, "code": code, "message": safeMessage(code, status), "request_id": c.GetString("request_id"), "field_errors": nil})
 }
 func WriteDraftRevisionResult(c *gin.Context, revision int, err error) {
 	if err != nil {

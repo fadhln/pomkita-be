@@ -188,6 +188,47 @@ func TestMigrationSet_DefinesAuthenticationTablesWithoutProcedures(t *testing.T)
 	}
 }
 
+func TestMigrationSet_DefinesIdentityAdministrationTables(t *testing.T) {
+	root := repositoryRoot(t)
+	up, err := os.ReadFile(filepath.Join(root, "migrations", "000012_identity_administration.up.sql"))
+	if err != nil {
+		t.Fatalf("read identity migration: %v", err)
+	}
+	down, err := os.ReadFile(filepath.Join(root, "migrations", "000012_identity_administration.down.sql"))
+	if err != nil {
+		t.Fatalf("read identity down migration: %v", err)
+	}
+	upText := strings.ToLower(string(up))
+	for _, required := range []string{
+		"add column username text",
+		"users_username_ci",
+		"password_hash",
+		"invited_at timestamptz(6)",
+		"activated_at timestamptz(6)",
+		"updated_at timestamptz(6)",
+		"users_enabled_identity_check",
+		"create table account_tokens",
+		"purpose in ('invitation', 'password_reset')",
+		"octet_length(token_hash) = 32",
+		"foreign key (org_id, user_id)",
+		"foreign key (created_by)",
+		"account_tokens_token_hash",
+	} {
+		if !strings.Contains(upText, required) {
+			t.Fatalf("identity migration does not contain %q", required)
+		}
+	}
+	if strings.Contains(upText, "create function") || strings.Contains(upText, "grant ") {
+		t.Fatal("identity migration contains unsupported database behavior")
+	}
+	downText := strings.ToLower(string(down))
+	for _, required := range []string{"drop table if exists account_tokens", "drop column if exists username", "set not null"} {
+		if !strings.Contains(downText, required) {
+			t.Fatalf("identity down migration does not contain %q", required)
+		}
+	}
+}
+
 func TestMigrationSet_DefinesAcknowledgementTables(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000007_governance_ack.up.sql")
@@ -324,11 +365,25 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 		where n.nspname = current_schema()
 		  and c.relkind = 'r'
 		  and c.relname = any($1::text[])
-	`, []string{"organizations", "stations", "users", "user_station_roles", "policy_snapshot_sets", "shifts", "shift_drafts", "shift_reports", "dispensers", "tanks", "nozzles", "nozzle_tank_map", "dispenser_nozzle_map", "dispenser_prices", "draft_readings", "draft_sales", "draft_losses", "draft_evidence_staging", "submit_idempotency", "dispenser_readings", "sales_declared", "loss_identity", "loss_entries", "deliveries", "dip_readings", "shift_transitions", "meter_reset_events", "threshold_policy_revisions", "evidence_policy_revisions", "evidence_policy_types", "policy_snapshot_items", "delivery_snapshots", "dip_snapshots", "loss_exception", "evidence_event", "nozzle_baseline_revisions", "nozzle_baseline_current", "jwt_keys", "sessions", "ack_decisions", "ack_head", "ack_supersessions", "amendments", "amendment_items", "alert_rules", "alert_events", "audit_chain_locks", "audit_log", "audit_outbox", "audit_denied", "outbox_relay_state"}).Scan(&tableCount); err != nil {
+	`, []string{"organizations", "stations", "users", "user_station_roles", "policy_snapshot_sets", "shifts", "shift_drafts", "shift_reports", "dispensers", "tanks", "nozzles", "nozzle_tank_map", "dispenser_nozzle_map", "dispenser_prices", "draft_readings", "draft_sales", "draft_losses", "draft_evidence_staging", "submit_idempotency", "dispenser_readings", "sales_declared", "loss_identity", "loss_entries", "deliveries", "dip_readings", "shift_transitions", "meter_reset_events", "threshold_policy_revisions", "evidence_policy_revisions", "evidence_policy_types", "policy_snapshot_items", "delivery_snapshots", "dip_snapshots", "loss_exception", "evidence_event", "nozzle_baseline_revisions", "nozzle_baseline_current", "jwt_keys", "sessions", "account_tokens", "ack_decisions", "ack_head", "ack_supersessions", "amendments", "amendment_items", "alert_rules", "alert_events", "audit_chain_locks", "audit_log", "audit_outbox", "audit_denied", "outbox_relay_state"}).Scan(&tableCount); err != nil {
 		t.Fatalf("count clean tables: %v", err)
 	}
-	if tableCount != 51 {
-		t.Fatalf("clean table count: got %d, want 51", tableCount)
+	if tableCount != 52 {
+		t.Fatalf("clean table count: got %d, want 52", tableCount)
+	}
+
+	if err := runner.Steps(ctx, -1); err != nil {
+		t.Fatalf("reverse paired identity migration: %v", err)
+	}
+	var identityTableCount int
+	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname = 'account_tokens'`).Scan(&identityTableCount); err != nil {
+		t.Fatalf("count identity table after paired down: %v", err)
+	}
+	if identityTableCount != 0 {
+		t.Fatalf("account_tokens remains after paired down: got %d", identityTableCount)
+	}
+	if err := runner.Steps(ctx, 1); err != nil {
+		t.Fatalf("reapply paired identity migration: %v", err)
 	}
 
 	if err := runner.Down(ctx); err != nil {
@@ -348,8 +403,8 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname <> 'schema_migrations'`).Scan(&remaining); err != nil {
 		t.Fatalf("count clean tables after reapply: %v", err)
 	}
-	if remaining != 51 {
-		t.Fatalf("clean table count after reapply: got %d, want 51", remaining)
+	if remaining != 52 {
+		t.Fatalf("clean table count after reapply: got %d, want 52", remaining)
 	}
 	if err := runner.Down(ctx); err != nil {
 		t.Fatalf("reverse reapplied migrations: %v", err)

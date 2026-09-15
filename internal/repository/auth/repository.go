@@ -47,7 +47,26 @@ func (r *AuthRepository) FindUserByEmail(ctx context.Context, email string) (app
 	}
 	return appauth.User{
 		UserID: model.UserID, OrgID: model.OrgID, DisplayName: model.DisplayName,
-		Email: model.Email, PasswordHash: model.PasswordHash, Enabled: model.Enabled,
+		Email: model.Email, Username: model.Username, PasswordHash: model.PasswordHash, Enabled: model.Enabled,
+	}, nil
+}
+
+// FindUserByUsername finds an enabled or disabled user by case-insensitive username.
+func (r *AuthRepository) FindUserByUsername(ctx context.Context, username string) (appauth.User, error) {
+	if r == nil || r.db == nil {
+		return appauth.User{}, appauth.ErrDependencyUnavailable
+	}
+	var model UserModel
+	err := r.db.WithContext(ctx).Where("lower(username) = lower(?)", strings.TrimSpace(username)).First(&model).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return appauth.User{}, appauth.ErrUserNotFound
+	}
+	if err != nil {
+		return appauth.User{}, fmt.Errorf("find user by username: %w", err)
+	}
+	return appauth.User{
+		UserID: model.UserID, OrgID: model.OrgID, DisplayName: model.DisplayName,
+		Email: model.Email, Username: model.Username, PasswordHash: model.PasswordHash, Enabled: model.Enabled,
 	}, nil
 }
 
@@ -60,9 +79,10 @@ func (r *AuthRepository) ReadSession(ctx context.Context, jti, subject uuid.UUID
 		UserID      uuid.UUID
 		OrgID       uuid.UUID
 		DisplayName string
+		Username    string
 	}
 	err := r.db.WithContext(ctx).Table("sessions").
-		Select("users.user_id, users.org_id, users.display_name").
+		Select("users.user_id, users.org_id, users.display_name, users.username").
 		Joins("join users on users.user_id = sessions.user_id").
 		Where("sessions.jti = ? and sessions.user_id = ? and sessions.revoked_at is null and users.enabled = true", jti, subject).
 		Take(&identity).Error
@@ -104,7 +124,7 @@ func (r *AuthRepository) ReadSession(ctx context.Context, jti, subject uuid.UUID
 			seenStations[row.StationID] = struct{}{}
 		}
 	}
-	return appjwt.SessionView{UserID: identity.UserID, DisplayName: identity.DisplayName, Roles: roles, OrgID: identity.OrgID, StationIDs: stationIDs}, nil
+	return appjwt.SessionView{UserID: identity.UserID, Username: identity.Username, DisplayName: identity.DisplayName, Roles: roles, OrgID: identity.OrgID, StationIDs: stationIDs}, nil
 }
 
 // ActiveKey loads the one active signing key and resolves its secret reference.

@@ -20,17 +20,37 @@ func (OrganizationModel) TableName() string { return "organizations" }
 
 // UserModel maps credentials and account state for one user.
 type UserModel struct {
-	UserID       uuid.UUID `gorm:"column:user_id;type:uuid;primaryKey"`
-	OrgID        uuid.UUID `gorm:"column:org_id;type:uuid;not null"`
-	DisplayName  string    `gorm:"column:display_name;not null"`
-	Email        string    `gorm:"column:email;not null"`
-	PasswordHash string    `gorm:"column:password_hash;not null"`
-	Enabled      bool      `gorm:"column:enabled;not null"`
-	CreatedAt    time.Time `gorm:"column:created_at;not null"`
+	UserID       uuid.UUID  `gorm:"column:user_id;type:uuid;primaryKey"`
+	OrgID        uuid.UUID  `gorm:"column:org_id;type:uuid;not null"`
+	DisplayName  string     `gorm:"column:display_name;not null"`
+	Email        string     `gorm:"column:email;not null"`
+	Username     string     `gorm:"column:username"`
+	PasswordHash string     `gorm:"column:password_hash"`
+	Enabled      bool       `gorm:"column:enabled;not null"`
+	CreatedAt    time.Time  `gorm:"column:created_at;not null"`
+	InvitedAt    *time.Time `gorm:"column:invited_at"`
+	ActivatedAt  *time.Time `gorm:"column:activated_at"`
+	UpdatedAt    *time.Time `gorm:"column:updated_at"`
 }
 
 // TableName returns the users table name.
 func (UserModel) TableName() string { return "users" }
+
+// AccountTokenModel maps one hashed invitation or password-reset token.
+type AccountTokenModel struct {
+	TokenID    uuid.UUID  `gorm:"column:token_id;type:uuid;primaryKey"`
+	OrgID      uuid.UUID  `gorm:"column:org_id;type:uuid;not null"`
+	UserID     uuid.UUID  `gorm:"column:user_id;type:uuid;not null"`
+	Purpose    string     `gorm:"column:purpose;not null"`
+	TokenHash  []byte     `gorm:"column:token_hash;not null"`
+	ExpiresAt  time.Time  `gorm:"column:expires_at;not null"`
+	ConsumedAt *time.Time `gorm:"column:consumed_at"`
+	CreatedBy  *uuid.UUID `gorm:"column:created_by;type:uuid"`
+	CreatedAt  time.Time  `gorm:"column:created_at;not null"`
+}
+
+// TableName returns the account_tokens table name.
+func (AccountTokenModel) TableName() string { return "account_tokens" }
 
 // JWTKeyModel maps signing-key metadata. Secret values stay outside PostgreSQL.
 type JWTKeyModel struct {

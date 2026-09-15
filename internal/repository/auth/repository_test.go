@@ -25,7 +25,7 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "Asia/Jakarta", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Test User", Email: "User@Example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Test User", Email: "User@Example.com", Username: "test-user", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Table("user_station_roles").Create(map[string]any{
@@ -45,6 +45,10 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	if user.UserID != userID || user.OrgID != orgID || user.Email != "User@Example.com" {
 		t.Fatalf("user: got %+v", user)
 	}
+	byUsername, err := repository.FindUserByUsername(ctx, "TEST-USER")
+	if err != nil || byUsername.UserID != userID || byUsername.Username != "test-user" {
+		t.Fatalf("username lookup: user=%+v err=%v", byUsername, err)
+	}
 
 	tokens := appjwt.NewService(repository, appjwt.Config{Issuer: "test", Audience: "test", Now: func() time.Time { return now }})
 	_, claims, err := tokens.Issue(ctx, userID)
@@ -55,7 +59,7 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read session view: %v", err)
 	}
-	if view.UserID != userID || view.OrgID != orgID || len(view.Roles) != 1 || view.Roles[0] != "Supervisor" || len(view.StationIDs) != 1 || view.StationIDs[0] != stationID {
+	if view.UserID != userID || view.Username != "test-user" || view.OrgID != orgID || len(view.Roles) != 1 || view.Roles[0] != "Supervisor" || len(view.StationIDs) != 1 || view.StationIDs[0] != stationID {
 		t.Fatalf("session view: got %+v", view)
 	}
 	if err := tokens.Logout(ctx, claims.JTI); err != nil {

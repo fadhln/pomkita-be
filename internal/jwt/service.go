@@ -74,6 +74,7 @@ type Claims struct {
 // SessionView is the verified user identity and station scope.
 type SessionView struct {
 	UserID      uuid.UUID   `json:"user_id"`
+	Username    string      `json:"username"`
 	DisplayName string      `json:"display_name"`
 	Roles       []string    `json:"roles"`
 	OrgID       uuid.UUID   `json:"org_id"`

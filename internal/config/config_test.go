@@ -42,3 +42,17 @@ func TestLoadLeavesCORSDisabledWhenOriginsAreEmpty(t *testing.T) {
 		t.Fatalf("allowed origins: got %#v, want empty", origins)
 	}
 }
+
+func TestConfig_RejectsIncompleteResendProductionConfiguration(t *testing.T) {
+	cfg := Config{Environment: "production", Mailer: "resend", PublicBaseURL: "https://app.example.test"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate accepted missing Resend configuration")
+	}
+}
+
+func TestConfig_AcceptsSpoolDevelopmentConfiguration(t *testing.T) {
+	cfg := Config{Environment: "development", Mailer: "spool", PublicBaseURL: "http://localhost:3000", MailSpoolDirectory: "var/spool/mail"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate rejected spool configuration: %v", err)
+	}
+}
