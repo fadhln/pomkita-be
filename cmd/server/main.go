@@ -8,6 +8,7 @@ import (
 
 	"github.com/pomkita/pomkita-be/internal/config"
 	"github.com/pomkita/pomkita-be/internal/httpapi"
+	accountapi "github.com/pomkita/pomkita-be/internal/httpapi/account"
 	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
 	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
 	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
@@ -20,6 +21,7 @@ import (
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	"github.com/pomkita/pomkita-be/internal/platform/mailer"
 	migrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
+	accountrepository "github.com/pomkita/pomkita-be/internal/repository/account"
 	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
 	authrepository "github.com/pomkita/pomkita-be/internal/repository/auth"
 	draftrepository "github.com/pomkita/pomkita-be/internal/repository/draft"
@@ -30,6 +32,7 @@ import (
 	shiftrepository "github.com/pomkita/pomkita-be/internal/repository/shift"
 	store "github.com/pomkita/pomkita-be/internal/repository/store"
 	submissionrepository "github.com/pomkita/pomkita-be/internal/repository/submission"
+	accountservice "github.com/pomkita/pomkita-be/internal/service/account"
 	auditservice "github.com/pomkita/pomkita-be/internal/service/audit"
 	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
 	draftservice "github.com/pomkita/pomkita-be/internal/service/draft"
@@ -49,7 +52,7 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.T
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
 		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
-		Reports: reports, LatestMigration: 12,
+		Reports: reports, LatestMigration: 13,
 	}
 }
 
@@ -87,6 +90,7 @@ func main() {
 		messageSender = mailer.NewSpool(cfg.MailSpoolDirectory)
 	}
 	identityService := identityservice.NewService(identityrepository.NewIdentityRepository(database), messageSender, systemClock{}, cfg.PublicBaseURL)
+	accountService := accountservice.NewService(accountrepository.NewRepository(database), systemClock{}, messageSender, cfg.PublicBaseURL)
 	reportingService := appreporting.NewService(reportingrepository.NewReportingRepository(database))
 	shiftService := shiftservice.NewService(shiftrepository.NewShiftRepository(database), systemClock{})
 	draftService := draftservice.NewService(draftrepository.NewDraftRepository(database), systemClock{})
@@ -102,6 +106,8 @@ func main() {
 	)
 	dependencies.DeniedAudit = deniedAudit
 	dependencies.Users = identityService
+	dependencies.Account = accountService
+	dependencies.AccountLimiter = accountapi.NewLimiter(5, time.Minute, time.Now)
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)
 
 	if err := router.Run(":" + cfg.Port); err != nil {

@@ -3,8 +3,10 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	accountapi "github.com/pomkita/pomkita-be/internal/httpapi/account"
 	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
 	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
 	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
@@ -43,6 +45,8 @@ type RouterDependencies struct {
 	Reports         reportingapi.ReportingService
 	DeniedAudit     transport.DeniedAuditService
 	Users           usersapi.Service
+	Account         accountapi.Service
+	AccountLimiter  *accountapi.RateLimiter
 	LatestMigration int
 }
 
@@ -61,7 +65,10 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 		gin.SetMode(gin.ReleaseMode)
 	}
 	if dependencies.LatestMigration == 0 {
-		dependencies.LatestMigration = 12
+		dependencies.LatestMigration = 13
+	}
+	if dependencies.AccountLimiter == nil {
+		dependencies.AccountLimiter = accountapi.NewLimiter(5, time.Minute, time.Now)
 	}
 	router := gin.New()
 	router.Use(
@@ -78,6 +85,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 	versioned := router.Group("/api/v1")
 	sessionapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, environment == "production")
 	usersapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Users)
+	accountapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Account, dependencies.AccountLimiter)
 	reportingapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	shiftapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Shift)
 	shiftapi.RegisterReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ShiftRead)
