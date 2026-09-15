@@ -2,6 +2,8 @@ package governance
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -135,6 +137,79 @@ func TestGovernanceRepository_RequestAmendment_CreatesPendingAllowlistedItems(t 
 	if auditCount != 1 {
 		t.Fatalf("amendment audit count: got %d, want 1", auditCount)
 	}
+}
+
+func TestGovernanceRepository_ListAmendmentQueue_ScopesRowsAndMapsDiffs(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+
+	requestedAt := fixture.now.Add(-time.Minute)
+	primaryAmendmentID := uuid.New()
+	primaryItemID := uuid.New()
+	if err := fixture.store.DB.Create(&AmendmentModel{AmendmentID: primaryAmendmentID, OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, BaseReportID: fixture.reportID, Reason: "correct cash", Status: "pending", RequesterUserID: fixture.creatorID, RequestedAt: requestedAt, StaleCheckHash: bytes32(0x01)}).Error; err != nil {
+		t.Fatalf("create primary amendment: %v", err)
+	}
+	if err := fixture.store.DB.Create(&AmendmentItemModel{ItemID: primaryItemID, AmendmentID: primaryAmendmentID, OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, TargetKind: "sales_declared", TargetLogicalID: uuid.New(), Field: "cash_amount", OldValue: json.RawMessage(`"100"`), NewValue: json.RawMessage(`"110"`)}).Error; err != nil {
+		t.Fatalf("create primary amendment item: %v", err)
+	}
+
+	secondaryStationID := uuid.New()
+	secondaryShiftID := uuid.New()
+	secondaryReportID := uuid.New()
+	secondaryPolicyID := uuid.New()
+	if err := fixture.store.DB.Create(&StationModel{OrgID: fixture.orgID, StationID: secondaryStationID, Timezone: "UTC", CreatedAt: fixture.now}).Error; err != nil {
+		t.Fatalf("create secondary station: %v", err)
+	}
+	if err := fixture.store.DB.Create(&ShiftModel{ShiftID: secondaryShiftID, OrgID: fixture.orgID, StationID: secondaryStationID, StationSeq: 1, SupervisorID: fixture.creatorID, OpenedAt: fixture.now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "awaiting_confirmation", PriceMapSnapshot: []byte(`{}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {
+		t.Fatalf("create secondary shift: %v", err)
+	}
+	if err := fixture.store.DB.Create(&PolicySnapshotSetModel{SetID: secondaryPolicyID, OrgID: fixture.orgID, StationID: secondaryStationID, ShiftID: &secondaryShiftID, CreatedAt: fixture.now}).Error; err != nil {
+		t.Fatalf("create secondary policy snapshot: %v", err)
+	}
+	if err := fixture.store.DB.Create(&ShiftReportModel{ReportID: secondaryReportID, OrgID: fixture.orgID, StationID: secondaryStationID, ShiftID: secondaryShiftID, VersionNo: 3, Status: "submitted", SubmittedBy: fixture.creatorID, SubmittedAt: fixture.now, PolicySnapshot: secondaryPolicyID}).Error; err != nil {
+		t.Fatalf("create secondary report: %v", err)
+	}
+	if err := fixture.store.DB.Model(&ShiftModel{}).Where("shift_id = ?", secondaryShiftID).Update("current_report_id", secondaryReportID).Error; err != nil {
+		t.Fatalf("point secondary current report: %v", err)
+	}
+	secondaryAmendmentID := uuid.New()
+	if err := fixture.store.DB.Create(&AmendmentModel{AmendmentID: secondaryAmendmentID, OrgID: fixture.orgID, StationID: secondaryStationID, ShiftID: secondaryShiftID, BaseReportID: secondaryReportID, Reason: "secondary correction", Status: "pending", RequesterUserID: fixture.creatorID, RequestedAt: fixture.now, StaleCheckHash: bytes32(0x02)}).Error; err != nil {
+		t.Fatalf("create secondary amendment: %v", err)
+	}
+
+	if err := fixture.store.DB.Table("user_station_roles").Create(map[string]any{"org_id": fixture.orgID, "station_id": fixture.stationID, "user_id": fixture.actorID, "role": "Owner"}).Error; err != nil {
+		t.Fatalf("create owner role: %v", err)
+	}
+	repository := NewGovernanceRepository(fixture.store)
+	stationRows, err := repository.ListAmendmentQueue(ctx, appgovernance.AmendmentQueueRequest{OrgID: fixture.orgID, ActorID: fixture.actorID, Role: "Station Admin", StationIDs: []uuid.UUID{fixture.stationID}})
+	if err != nil {
+		t.Fatalf("list station admin queue: %v", err)
+	}
+	if len(stationRows) != 1 || stationRows[0].AmendmentID != primaryAmendmentID || stationRows[0].BaseVersionNo != 1 || stationRows[0].Requester.UserID != fixture.creatorID || stationRows[0].Requester.DisplayName != "creator@example.com" || stationRows[0].StaleCheckHash != hexHash(0x01) {
+		t.Fatalf("station queue: got %+v", stationRows)
+	}
+	if len(stationRows[0].Items) != 1 || string(stationRows[0].Items[0].OldValue) != `"100"` || string(stationRows[0].Items[0].NewValue) != `"110"` {
+		t.Fatalf("station queue items: got %+v", stationRows[0].Items)
+	}
+
+	ownerRows, err := repository.ListAmendmentQueue(ctx, appgovernance.AmendmentQueueRequest{OrgID: fixture.orgID, ActorID: fixture.actorID, Role: "Owner"})
+	if err != nil {
+		t.Fatalf("list owner queue: %v", err)
+	}
+	if len(ownerRows) != 2 || ownerRows[0].AmendmentID != primaryAmendmentID || ownerRows[1].AmendmentID != secondaryAmendmentID {
+		t.Fatalf("owner queue: got %+v", ownerRows)
+	}
+}
+
+func bytes32(value byte) []byte {
+	result := make([]byte, 32)
+	result[0] = value
+	return result
+}
+
+func hexHash(value byte) string {
+	return hex.EncodeToString(bytes32(value))
 }
 
 func TestGovernanceRepository_RejectAmendment_EnforcesSeparationAndState(t *testing.T) {

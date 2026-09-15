@@ -110,6 +110,7 @@ func registerOpenAPIOperations(api huma.API) {
 	registerOpenAPIOperation[openAPIIDStationInput, openAPIOutput[appreporting.ReportView]](api, http.MethodGet, "/api/v1/reports/{id}/printout", "printReport", "Read report printout")
 	registerOpenAPIOperation[openAPIIDBodyInput[governanceapi.AcknowledgeRequest], openAPIOutput[appgovernance.Acknowledgement]](api, http.MethodPost, "/api/v1/reports/{id}/acknowledgement", "acknowledgeReport", "Acknowledge a report")
 
+	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[[]appgovernance.AmendmentQueueView]](api, http.MethodGet, "/api/v1/amendments", "listAmendmentQueue", "List pending amendments")
 	registerOpenAPIOperation[openAPIBodyInput[governanceapi.AmendmentRequest], openAPIOutput[appgovernance.Amendment]](api, http.MethodPost, "/api/v1/amendments", "requestAmendment", "Request an amendment")
 	registerOpenAPIOperation[openAPIIDBodyInput[governanceapi.AmendmentDecisionRequest], openAPIOutput[appgovernance.Amendment]](api, http.MethodPost, "/api/v1/amendments/{id}/approve", "approveAmendment", "Approve an amendment")
 	registerOpenAPIOperation[openAPIIDBodyInput[governanceapi.AmendmentDecisionRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/amendments/{id}/reject", "rejectAmendment", "Reject an amendment")

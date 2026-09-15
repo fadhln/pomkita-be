@@ -203,6 +203,109 @@
         ],
         "type": "object"
       },
+      "AmendmentQueueItem": {
+        "additionalProperties": false,
+        "properties": {
+          "Field": {
+            "type": "string"
+          },
+          "ItemID": {
+            "type": "string"
+          },
+          "NewValue": {},
+          "OldValue": {},
+          "TargetKind": {
+            "type": "string"
+          },
+          "TargetLogicalID": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ItemID",
+          "TargetKind",
+          "TargetLogicalID",
+          "Field",
+          "OldValue",
+          "NewValue"
+        ],
+        "type": "object"
+      },
+      "AmendmentQueueRequester": {
+        "additionalProperties": false,
+        "properties": {
+          "DisplayName": {
+            "type": "string"
+          },
+          "UserID": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "UserID",
+          "DisplayName"
+        ],
+        "type": "object"
+      },
+      "AmendmentQueueView": {
+        "additionalProperties": false,
+        "properties": {
+          "AmendmentID": {
+            "type": "string"
+          },
+          "BaseReportID": {
+            "type": "string"
+          },
+          "BaseVersionNo": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "Items": {
+            "items": {
+              "$ref": "#/components/schemas/AmendmentQueueItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "Reason": {
+            "type": "string"
+          },
+          "RequestedAt": {
+            "type": "string"
+          },
+          "Requester": {
+            "$ref": "#/components/schemas/AmendmentQueueRequester"
+          },
+          "ShiftID": {
+            "type": "string"
+          },
+          "StaleCheckHash": {
+            "type": "string"
+          },
+          "StationID": {
+            "type": "string"
+          },
+          "Status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "AmendmentID",
+          "StationID",
+          "ShiftID",
+          "BaseReportID",
+          "BaseVersionNo",
+          "Status",
+          "Requester",
+          "Reason",
+          "RequestedAt",
+          "StaleCheckHash",
+          "Items"
+        ],
+        "type": "object"
+      },
       "AmendmentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1481,6 +1584,96 @@
   "openapi": "3.0.3",
   "paths": {
     "/api/v1/amendments": {
+      "get": {
+        "operationId": "listAmendmentQueue",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AmendmentQueueView"
+                  },
+                  "type": [
+                    "array",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorModel"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List pending amendments"
+      },
       "post": {
         "operationId": "requestAmendment",
         "requestBody": {

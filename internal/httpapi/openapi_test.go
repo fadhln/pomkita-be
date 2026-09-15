@@ -46,6 +46,9 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 			t.Fatalf("OpenAPI route %s %s does not declare cookie and bearer security", route.method, route.path)
 		}
 	}
+	if _, ok := document.Paths["/api/v1/amendments"]["get"]; !ok {
+		t.Fatal("OpenAPI contract does not define GET /api/v1/amendments")
+	}
 	for _, path := range []string{"/api/v1/login", "/api/v1/session", "/api/v1/shifts", "/api/v1/drafts/claim", "/api/v1/drafts/heartbeat", "/api/v1/drafts/readings", "/api/v1/drafts/sales", "/api/v1/drafts/losses", "/api/v1/drafts/evidence", "/api/v1/submissions", "/api/v1/reports/{id}", "/api/v1/reports/{id}/printout", "/api/v1/reports/{id}/acknowledgement", "/api/v1/amendments", "/api/v1/amendments/{id}/approve", "/api/v1/amendments/{id}/reject", "/api/v1/policies/revisions", "/api/v1/policies/history", "/api/v1/anomalies", "/api/v1/anomalies/export", "/api/v1/audit", "/api/v1/audit/export", "/api/v1/audit/verify", "/health", "/ready"} {
 		if _, ok := document.Paths[path]; !ok {
 			t.Fatalf("OpenAPI contract does not define %s", path)
@@ -73,5 +76,13 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 	properties, ok := report["properties"].(map[string]interface{})
 	if !ok || properties["sales"] == nil || properties["losses"] == nil {
 		t.Fatal("ReportView does not define report child collections")
+	}
+	queue, ok := document.Components.Schemas["AmendmentQueueView"]
+	if !ok {
+		t.Fatal("OpenAPI contract does not define AmendmentQueueView")
+	}
+	queueProperties, ok := queue["properties"].(map[string]interface{})
+	if !ok || queueProperties["StaleCheckHash"] == nil || queueProperties["Items"] == nil {
+		t.Fatal("AmendmentQueueView does not define queue fields")
 	}
 }

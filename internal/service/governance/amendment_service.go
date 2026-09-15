@@ -2,6 +2,7 @@ package governance
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -91,11 +92,55 @@ type Amendment struct {
 	RejectionReason string
 }
 
+// AmendmentQueueRequest contains the verified actor scope for a queue read.
+type AmendmentQueueRequest struct {
+	OrgID      uuid.UUID
+	ActorID    uuid.UUID
+	Role       string
+	StationIDs []uuid.UUID
+}
+
+// AmendmentQueueRequester identifies the user who requested an amendment.
+type AmendmentQueueRequester struct {
+	UserID      uuid.UUID
+	DisplayName string
+}
+
+// AmendmentQueueItem contains one requested field diff.
+type AmendmentQueueItem struct {
+	ItemID          uuid.UUID
+	TargetKind      string
+	TargetLogicalID uuid.UUID
+	Field           string
+	OldValue        json.RawMessage
+	NewValue        json.RawMessage
+}
+
+// AmendmentQueueView is one pending amendment visible to an approver.
+type AmendmentQueueView struct {
+	AmendmentID    uuid.UUID
+	StationID      uuid.UUID
+	ShiftID        uuid.UUID
+	BaseReportID   uuid.UUID
+	BaseVersionNo  int
+	Status         string
+	Requester      AmendmentQueueRequester
+	Reason         string
+	RequestedAt    string
+	StaleCheckHash string
+	Items          []AmendmentQueueItem
+}
+
 // AmendmentRepository persists amendment workflows.
 type AmendmentRepository interface {
 	RequestAmendment(context.Context, AmendmentRequest, time.Time) (Amendment, error)
 	ApproveAmendment(context.Context, ApproveAmendmentRequest, time.Time) (Amendment, error)
 	RejectAmendment(context.Context, RejectAmendmentRequest, time.Time) error
+}
+
+// AmendmentQueueRepository reads pending amendments in an actor scope.
+type AmendmentQueueRepository interface {
+	ListAmendmentQueue(context.Context, AmendmentQueueRequest) ([]AmendmentQueueView, error)
 }
 
 // AmendmentService owns amendment validation and use cases.
@@ -161,6 +206,35 @@ func (s *AmendmentService) Reject(ctx context.Context, request RejectAmendmentRe
 		return ErrAmendmentRoleRequired
 	}
 	return s.repository.RejectAmendment(ctx, request, s.clock.Now().UTC())
+}
+
+// ListQueue returns pending amendments visible to the verified actor.
+func (s *AmendmentService) ListQueue(ctx context.Context, request AmendmentQueueRequest) ([]AmendmentQueueView, error) {
+	if s == nil || s.repository == nil {
+		return nil, ErrDependencyUnavailable
+	}
+	if request.OrgID == uuid.Nil || request.ActorID == uuid.Nil {
+		return nil, ErrInvalidAmendmentRequest
+	}
+	switch request.Role {
+	case "Station Admin":
+		if len(request.StationIDs) == 0 {
+			return nil, ErrInvalidAmendmentRequest
+		}
+		for _, stationID := range request.StationIDs {
+			if stationID == uuid.Nil {
+				return nil, ErrInvalidAmendmentRequest
+			}
+		}
+	case "Owner", "Superadmin":
+	default:
+		return nil, ErrAmendmentRoleRequired
+	}
+	repository, ok := s.repository.(AmendmentQueueRepository)
+	if !ok {
+		return nil, ErrDependencyUnavailable
+	}
+	return repository.ListAmendmentQueue(ctx, request)
 }
 
 func amendmentFieldAllowed(targetKind, field string) bool {
