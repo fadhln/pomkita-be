@@ -31,10 +31,34 @@ func TestCORSMiddleware_PreflightAllowedOrigin(t *testing.T) {
 	}
 	assertHeader(t, recorder, "Access-Control-Allow-Origin", corsOrigin)
 	assertHeader(t, recorder, "Access-Control-Allow-Credentials", "true")
-	assertHeader(t, recorder, "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+	assertHeader(t, recorder, "Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 	assertHeader(t, recorder, "Access-Control-Allow-Headers", "Content-Type, X-Requested-With, X-Request-ID")
 	assertHeader(t, recorder, "Access-Control-Max-Age", "600")
 	assertHeader(t, recorder, "Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
+}
+
+func TestCORSMiddleware_PreflightAllowsPatch(t *testing.T) {
+	router := newCORSTestRouter([]string{corsOrigin})
+	executed := false
+	router.OPTIONS("/cors", func(c *gin.Context) {
+		executed = true
+		c.Status(http.StatusTeapot)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodOptions, "/cors", nil)
+	request.Header.Set("Origin", corsOrigin)
+	request.Header.Set("Access-Control-Request-Method", http.MethodPatch)
+	request.Header.Set("Access-Control-Request-Headers", "Content-Type, X-Requested-With")
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent || executed {
+		t.Fatalf("preflight: status=%d executed=%t, want 204 and no handler", recorder.Code, executed)
+	}
+	allowedMethods := recorder.Header().Get("Access-Control-Allow-Methods")
+	if !strings.Contains(allowedMethods, http.MethodPatch) {
+		t.Fatalf("preflight for PATCH: Access-Control-Allow-Methods=%q, want the value to include PATCH", allowedMethods)
+	}
 }
 
 func TestCORSMiddleware_DeniesDisallowedPreflight(t *testing.T) {

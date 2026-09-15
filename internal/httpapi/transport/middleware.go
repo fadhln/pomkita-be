@@ -71,7 +71,7 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 		c.Header("Access-Control-Allow-Credentials", "true")
 		if c.Request.Method == http.MethodOptions {
 			setRequestID(c)
-			c.Header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 			c.Header("Access-Control-Allow-Headers", "Content-Type, X-Requested-With, X-Request-ID")
 			c.Header("Access-Control-Max-Age", "600")
 			c.Header("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
