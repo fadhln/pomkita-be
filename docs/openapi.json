@@ -1,5 +1,17 @@
 {
   "components": {
+    "responses": {
+      "AccountError": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorModel"
+            }
+          }
+        },
+        "description": "RFC 7807 error"
+      }
+    },
     "schemas": {
       "AcceptRequest": {
         "additionalProperties": false,
@@ -944,6 +956,27 @@
         },
         "type": "object"
       },
+      "ForgotRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/ForgotRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "identifier": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "identifier"
+        ],
+        "type": "object"
+      },
       "InviteRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1146,6 +1179,47 @@
         ],
         "type": "object"
       },
+      "Organization": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "PasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/PasswordRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "current_password": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "type": "object"
+      },
       "PolicyRevision": {
         "additionalProperties": false,
         "properties": {
@@ -1257,6 +1331,63 @@
         ],
         "type": "object"
       },
+      "Profile": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/Profile.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "org": {
+            "$ref": "#/components/schemas/Organization"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "stations": {
+            "items": {
+              "$ref": "#/components/schemas/Station"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "username",
+          "display_name",
+          "org",
+          "roles",
+          "stations"
+        ],
+        "type": "object"
+      },
       "ReadingView": {
         "additionalProperties": false,
         "properties": {
@@ -1350,6 +1481,31 @@
           "readings",
           "sales",
           "losses"
+        ],
+        "type": "object"
+      },
+      "ResetRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/ResetRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
         ],
         "type": "object"
       },
@@ -1573,6 +1729,26 @@
         ],
         "type": "object"
       },
+      "Station": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "name",
+          "timezone"
+        ],
+        "type": "object"
+      },
       "SubmitRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1652,6 +1828,27 @@
           "status"
         ],
         "type": "object"
+      },
+      "UpdateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/UpdateRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -1674,6 +1871,208 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/api/v1/account": {
+      "get": {
+        "operationId": "account",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "examples": {
+                  "example": {
+                    "summary": "Profile example",
+                    "value": {
+                      "display_name": "Operator",
+                      "email": "operator@example.test",
+                      "org": {
+                        "id": "22222222-2222-4222-8222-222222222222",
+                        "name": "Example Org"
+                      },
+                      "roles": [
+                        "Operator"
+                      ],
+                      "stations": [
+                        {
+                          "name": "Main",
+                          "station_id": "33333333-3333-4333-8333-333333333333",
+                          "timezone": "Asia/Jakarta"
+                        }
+                      ],
+                      "user_id": "11111111-1111-4111-8111-111111111111",
+                      "username": "operator-1"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AccountError"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read the own account profile",
+        "x-permitted-roles": [
+          "Operator",
+          "Supervisor",
+          "Station Admin",
+          "Owner",
+          "Superadmin"
+        ],
+        "x-stable-error-codes": {
+          "401": [
+            "invalid_session"
+          ]
+        }
+      },
+      "patch": {
+        "operationId": "updateAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "409": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "422": {
+            "$ref": "#/components/responses/AccountError"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update the own account profile",
+        "x-csrf-required": true,
+        "x-permitted-roles": [
+          "Operator",
+          "Supervisor",
+          "Station Admin",
+          "Owner",
+          "Superadmin"
+        ],
+        "x-stable-error-codes": {
+          "401": [
+            "invalid_session"
+          ],
+          "403": [
+            "csrf_required"
+          ],
+          "409": [
+            "username_conflict"
+          ],
+          "422": [
+            "invalid_display_name",
+            "invalid_username"
+          ]
+        }
+      }
+    },
+    "/api/v1/account/password": {
+      "post": {
+        "operationId": "changeAccountPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "401": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "422": {
+            "$ref": "#/components/responses/AccountError"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Change the own account password",
+        "x-csrf-required": true,
+        "x-permitted-roles": [
+          "Operator",
+          "Supervisor",
+          "Station Admin",
+          "Owner",
+          "Superadmin"
+        ],
+        "x-stable-error-codes": {
+          "401": [
+            "invalid_session"
+          ],
+          "403": [
+            "csrf_required"
+          ],
+          "422": [
+            "current_password_incorrect",
+            "weak_password"
+          ]
+        }
+      }
+    },
     "/api/v1/amendments": {
       "get": {
         "operationId": "listAmendmentQueue",
@@ -2642,6 +3041,127 @@
           "422": [
             "invalid_username",
             "weak_password"
+          ]
+        }
+      }
+    },
+    "/api/v1/auth/password/forgot": {
+      "post": {
+        "description": "Anonymous requests are limited to 5 per minute per client address.",
+        "operationId": "forgotPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "example": {
+                  "summary": "Request example",
+                  "value": {
+                    "identifier": "operator@example.test"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ForgotRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "429": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "503": {
+            "$ref": "#/components/responses/AccountError"
+          }
+        },
+        "summary": "Request a password reset email",
+        "x-csrf-required": true,
+        "x-stable-error-codes": {
+          "400": [
+            "validation_error"
+          ],
+          "403": [
+            "csrf_required"
+          ],
+          "429": [
+            "rate_limited"
+          ],
+          "503": [
+            "internal_error"
+          ]
+        }
+      }
+    },
+    "/api/v1/auth/password/reset": {
+      "post": {
+        "description": "Anonymous requests are limited to 5 per minute per client address.",
+        "operationId": "resetPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "examples": {
+                "example": {
+                  "summary": "Request example",
+                  "value": {
+                    "password": "strong-password",
+                    "token": "raw-token-from-email"
+                  }
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "403": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "422": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "429": {
+            "$ref": "#/components/responses/AccountError"
+          },
+          "503": {
+            "$ref": "#/components/responses/AccountError"
+          }
+        },
+        "summary": "Reset a password with a token",
+        "x-csrf-required": true,
+        "x-stable-error-codes": {
+          "400": [
+            "INVALID_TOKEN"
+          ],
+          "403": [
+            "csrf_required"
+          ],
+          "422": [
+            "weak_password"
+          ],
+          "429": [
+            "rate_limited"
+          ],
+          "503": [
+            "internal_error"
           ]
         }
       }
@@ -3939,6 +4459,20 @@
           "400": {
             "content": {
               "application/problem+json": {
+                "examples": {
+                  "example": {
+                    "summary": "Error example",
+                    "value": {
+                      "code": "INVALID_TOKEN",
+                      "detail": "Request failed",
+                      "field_errors": null,
+                      "request_id": "request-id",
+                      "status": 400,
+                      "title": "Bad Request",
+                      "type": "about:blank"
+                    }
+                  }
+                },
                 "schema": {
                   "$ref": "#/components/schemas/ErrorModel"
                 }
@@ -4005,7 +4539,14 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Read the current session"
+        "summary": "Read the current session",
+        "x-permitted-roles": [
+          "Operator",
+          "Supervisor",
+          "Station Admin",
+          "Owner",
+          "Superadmin"
+        ]
       }
     },
     "/api/v1/shifts": {

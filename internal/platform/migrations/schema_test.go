@@ -373,14 +373,14 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 
 	if err := runner.Steps(ctx, -1); err != nil {
-		t.Fatalf("reverse paired identity migration: %v", err)
+		t.Fatalf("reverse paired account migration: %v", err)
 	}
-	var identityTableCount int
-	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname = 'account_tokens'`).Scan(&identityTableCount); err != nil {
-		t.Fatalf("count identity table after paired down: %v", err)
+	var stationNameCount int
+	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'name'`).Scan(&stationNameCount); err != nil {
+		t.Fatalf("count station name after paired down: %v", err)
 	}
-	if identityTableCount != 0 {
-		t.Fatalf("account_tokens remains after paired down: got %d", identityTableCount)
+	if stationNameCount != 0 {
+		t.Fatalf("station name remains after paired down: got %d", stationNameCount)
 	}
 	if err := runner.Steps(ctx, 1); err != nil {
 		t.Fatalf("reapply paired identity migration: %v", err)
