@@ -87,7 +87,7 @@ func NewGovernanceFixture(t testing.TB, ctx context.Context) GovernanceFixture {
 		t.Fatalf("create station: %v", err)
 	}
 	for id, email := range map[uuid.UUID]string{fixture.ActorID: "admin@example.com", fixture.CreatorID: "creator@example.com"} {
-		if err := database.DB.Create(&store.UserModel{UserID: id, OrgID: fixture.OrgID, DisplayName: email, Email: email, PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+		if err := database.DB.Create(&store.UserModel{UserID: id, OrgID: fixture.OrgID, DisplayName: email, Email: email, Username: strings.TrimSuffix(email, "@example.com"), PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 			t.Fatalf("create user: %v", err)
 		}
 	}

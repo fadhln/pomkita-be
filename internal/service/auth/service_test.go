@@ -19,7 +19,21 @@ type repositoryStub struct {
 	createdJTI uuid.UUID
 }
 
+type usernameRepositoryStub struct {
+	repositoryStub
+	username string
+}
+
+func (r *usernameRepositoryStub) FindUserByUsername(_ context.Context, username string) (User, error) {
+	r.username = username
+	return r.user, r.userErr
+}
+
 func (r *repositoryStub) FindUserByEmail(context.Context, string) (User, error) {
+	return r.user, r.userErr
+}
+
+func (r *repositoryStub) FindUserByUsername(context.Context, string) (User, error) {
 	return r.user, r.userErr
 }
 
@@ -80,5 +94,23 @@ func TestService_Login_InvalidCredentialsReturnsAuthenticationError(t *testing.T
 
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("login error: got %v, want invalid credentials", err)
+	}
+}
+
+func TestService_Login_UsesUsernameLookup(t *testing.T) {
+	userID := uuid.New()
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	repository := &usernameRepositoryStub{repositoryStub: repositoryStub{user: User{UserID: userID, Username: "budi", PasswordHash: string(hash), Enabled: true}}}
+	tokens := appjwt.NewService(&tokenStoreStub{key: appjwt.Key{KID: "key-1", Secret: "test-secret", Status: appjwt.KeyActive}}, appjwt.Config{Issuer: "test", Audience: "test"})
+
+	service := NewService(repository, tokens)
+	if _, _, err := service.Login(context.Background(), "Budi", "correct-password"); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if repository.username != "budi" {
+		t.Fatalf("username lookup: got %q, want budi", repository.username)
 	}
 }

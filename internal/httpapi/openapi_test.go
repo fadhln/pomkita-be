@@ -54,6 +54,27 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 			t.Fatalf("OpenAPI contract does not define %s", path)
 		}
 	}
+	for _, path := range []string{"/api/v1/users", "/api/v1/auth/invitations/accept"} {
+		operation, ok := document.Paths[path]["post"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("OpenAPI contract does not define POST %s", path)
+		}
+		if _, ok := operation["requestBody"]; !ok {
+			t.Fatalf("OpenAPI route %s has no request schema", path)
+		}
+		responses := operation["responses"].(map[string]interface{})
+		for _, status := range []string{"204", "400", "403", "409", "422", "500"} {
+			if _, ok := responses[status]; !ok {
+				t.Fatalf("OpenAPI route %s has no %s response", path, status)
+			}
+		}
+	}
+	if _, ok := document.Components.Schemas["InviteRequest"]; !ok {
+		t.Fatal("OpenAPI contract does not define InviteRequest")
+	}
+	if _, ok := document.Components.Schemas["AcceptRequest"]; !ok {
+		t.Fatal("OpenAPI contract does not define AcceptRequest")
+	}
 	for _, path := range []string{"/api/v1/anomalies/export", "/api/v1/audit/export"} {
 		operation := document.Paths[path]["get"]
 		responses, ok := operation.(map[string]interface{})["responses"].(map[string]interface{})

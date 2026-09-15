@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/pomkita/pomkita-be/internal/domain"
@@ -18,13 +19,14 @@ type User struct {
 	OrgID        uuid.UUID
 	DisplayName  string
 	Email        string
+	Username     string
 	PasswordHash string
 	Enabled      bool
 }
 
 // Repository provides user and verified-session data to the authentication service.
 type Repository interface {
-	FindUserByEmail(context.Context, string) (User, error)
+	FindUserByUsername(context.Context, string) (User, error)
 	ReadSession(context.Context, uuid.UUID, uuid.UUID) (appjwt.SessionView, error)
 }
 
@@ -49,18 +51,19 @@ func NewService(repository Repository, tokens *appjwt.Service) *Service {
 }
 
 // Login verifies an enabled user's password and creates a session token.
-func (s *Service) Login(ctx context.Context, email, password string) (string, appjwt.Claims, error) {
+func (s *Service) Login(ctx context.Context, username, password string) (string, appjwt.Claims, error) {
 	if s == nil || s.repository == nil || s.tokens == nil {
 		return "", appjwt.Claims{}, ErrDependencyUnavailable
 	}
-	user, err := s.repository.FindUserByEmail(ctx, email)
+	username = strings.ToLower(strings.TrimSpace(username))
+	user, err := s.repository.FindUserByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return "", appjwt.Claims{}, ErrInvalidCredentials
 		}
 		return "", appjwt.Claims{}, fmt.Errorf("find user for login: %w", err)
 	}
-	if !user.Enabled || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
+	if !user.Enabled || user.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
 		return "", appjwt.Claims{}, ErrInvalidCredentials
 	}
 	return s.tokens.Issue(ctx, user.UserID)

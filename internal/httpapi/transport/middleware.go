@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pomkita/pomkita-be/internal/domain"
+	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
 // ErrorMappingMiddleware maps known service and PostgreSQL errors to safe HTTP errors.
@@ -83,6 +84,9 @@ func CORSMiddleware(allowedOrigins []string) gin.HandlerFunc {
 }
 
 func domainHTTPError(err error) (int, string) {
+	if errors.Is(err, appjwt.ErrSessionNotFound) || errors.Is(err, appjwt.ErrSessionExpired) || errors.Is(err, appjwt.ErrRevokedJTI) {
+		return http.StatusUnauthorized, "invalid_session"
+	}
 	var domainErr *domain.Error
 	if !errors.As(err, &domainErr) {
 		return 0, ""
@@ -117,7 +121,9 @@ func stableDatabaseCode(status int) string {
 }
 
 func writeErrorWithFields(c *gin.Context, status int, code string, fields map[string]string) {
+	c.Header("Content-Type", "application/problem+json")
 	c.AbortWithStatusJSON(status, gin.H{
+		"type": "about:blank", "title": http.StatusText(status), "status": status, "detail": safeMessage(code, status), "instance": c.Request.URL.Path,
 		"code": code, "message": safeMessage(code, status),
 		"request_id": c.GetString("request_id"), "field_errors": fields,
 	})

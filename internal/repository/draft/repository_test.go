@@ -24,7 +24,7 @@ func TestDraftRepository_WriteReading_RejectsExpiredClaim(t *testing.T) {
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "draft@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "draft@example.com", Username: "draft", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {

@@ -40,7 +40,7 @@ func TestLoginSetsSessionCookieWithContractFlags(t *testing.T) {
 	service := &sessionServiceStub{loginToken: "jwt-token"}
 	router := testSessionRouter("production", nil, service)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
+	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"username":"demo-user","password":"secret"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Requested-With", "XMLHttpRequest")
 	router.ServeHTTP(recorder, request)
@@ -63,7 +63,7 @@ func TestLoginSetsSessionCookieWithContractFlags(t *testing.T) {
 func TestLoginRequiresCSRFHeader(t *testing.T) {
 	router := testSessionRouter("test", nil, &sessionServiceStub{loginToken: "jwt-token"})
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"secret"}`))
+	request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"username":"demo-user","password":"secret"}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"code":"csrf_required"`) {
@@ -77,7 +77,7 @@ func TestLoginReturnsSameInvalidCredentialsErrorForBadPasswordAndUnknownEmail(t 
 			service := &sessionServiceStub{loginErr: appauth.ErrInvalidCredentials}
 			router := testSessionRouter("test", nil, service)
 			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"email":"user@example.com","password":"wrong"}`))
+			request := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(`{"username":"demo-user","password":"wrong"}`))
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("X-Requested-With", "XMLHttpRequest")
 			router.ServeHTTP(recorder, request)
@@ -138,6 +138,7 @@ func TestSessionReturnsSessionPayload(t *testing.T) {
 	view := appjwt.SessionView{
 		UserID:      uuid.MustParse("33333333-3333-4333-8333-333333333333"),
 		DisplayName: "Test User",
+		Username:    "test-user",
 		Roles:       []string{"Owner"},
 		OrgID:       uuid.MustParse("11111111-1111-4111-8111-111111111111"),
 		StationIDs:  []uuid.UUID{uuid.MustParse("22222222-2222-4222-8222-222222222222")},

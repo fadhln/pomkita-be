@@ -96,7 +96,7 @@ func TestPolicyRepository_History_DoesNotCrossOrganizationForGlobalRevisions(t *
 		t.Fatalf("create other organization: %v", err)
 	}
 	otherActor := uuid.New()
-	if err := fixture.store.DB.Create(&UserModel{UserID: otherActor, OrgID: otherOrg, DisplayName: "Other owner", Email: "other-owner@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: fixture.now}).Error; err != nil {
+	if err := fixture.store.DB.Create(&UserModel{UserID: otherActor, OrgID: otherOrg, DisplayName: "Other owner", Email: "other-owner@example.com", Username: "other-owner", PasswordHash: "hash", Enabled: true, CreatedAt: fixture.now}).Error; err != nil {
 		t.Fatalf("create other user: %v", err)
 	}
 	otherRevision := ThresholdPolicyRevisionModel{RevID: uuid.New(), PolicyID: uuid.New(), OrgID: otherOrg, ValidFrom: fixture.now, LossLiterThreshold: Decimal("1"), GainLiterThreshold: Decimal("1"), LossRupiahThreshold: Decimal("1"), GainRupiahThreshold: Decimal("1"), VarianceThreshold: Decimal("1"), RolloverThreshold: Decimal("1"), CreatedBy: otherActor, CreatedAt: fixture.now}

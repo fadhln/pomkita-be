@@ -10,16 +10,16 @@ values ('11111111-1111-4111-8111-111111111111',
         '22222222-2222-4222-8222-222222222222', 'Asia/Jakarta')
 on conflict (org_id, station_id) do nothing;
 
-insert into public.users (user_id, org_id, email, display_name, password_hash)
+insert into public.users (user_id, org_id, email, username, display_name, password_hash)
 values
   ('66666666-6666-4666-8666-666666666666', '11111111-1111-4111-8111-111111111111',
-   'supervisor@demo.pomkita.test', 'Demo Supervisor',
+   'supervisor@demo.pomkita.test', 'demo-supervisor', 'Demo Supervisor',
    app.crypt('demo-password', '$2a$04$C6UzMDM.H6dfI/f/IKcEe.')),
   ('77777777-7777-4777-8777-777777777777', '11111111-1111-4111-8111-111111111111',
-   'station-admin@demo.pomkita.test', 'Demo Station Admin',
+   'station-admin@demo.pomkita.test', 'demo-station-admin', 'Demo Station Admin',
    app.crypt('demo-password', '$2a$04$C6UzMDM.H6dfI/f/IKcEe.')),
   ('88888888-8888-4888-8888-888888888888', '11111111-1111-4111-8111-111111111111',
-   'owner@demo.pomkita.test', 'Demo Owner',
+   'owner@demo.pomkita.test', 'demo-owner', 'Demo Owner',
    app.crypt('demo-password', '$2a$04$C6UzMDM.H6dfI/f/IKcEe.'))
 on conflict (user_id) do nothing;
 

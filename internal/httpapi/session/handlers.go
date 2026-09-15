@@ -23,7 +23,7 @@ type Service interface {
 
 // LoginRequest contains session login credentials.
 type LoginRequest struct {
-	Email    string `json:"email"`
+	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
@@ -44,11 +44,11 @@ func loginHandler(service Service, secure bool) gin.HandlerFunc {
 		if !transport.DecodeRequest(c, &input) {
 			return
 		}
-		if strings.TrimSpace(input.Email) == "" || input.Password == "" {
+		if strings.TrimSpace(input.Username) == "" || input.Password == "" {
 			transport.ValidationError(c)
 			return
 		}
-		token, _, err := service.Login(c.Request.Context(), input.Email, input.Password)
+		token, _, err := service.Login(c.Request.Context(), strings.ToLower(strings.TrimSpace(input.Username)), input.Password)
 		if err != nil {
 			if errors.Is(err, appauth.ErrInvalidCredentials) {
 				transport.WriteError(c, http.StatusUnauthorized, "invalid_credentials")

@@ -18,11 +18,13 @@ import (
 	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
 	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
+	"github.com/pomkita/pomkita-be/internal/platform/mailer"
 	migrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
 	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
 	authrepository "github.com/pomkita/pomkita-be/internal/repository/auth"
 	draftrepository "github.com/pomkita/pomkita-be/internal/repository/draft"
 	governancerepository "github.com/pomkita/pomkita-be/internal/repository/governance"
+	identityrepository "github.com/pomkita/pomkita-be/internal/repository/identity"
 	policyrepository "github.com/pomkita/pomkita-be/internal/repository/policy"
 	reportingrepository "github.com/pomkita/pomkita-be/internal/repository/reporting"
 	shiftrepository "github.com/pomkita/pomkita-be/internal/repository/shift"
@@ -32,6 +34,7 @@ import (
 	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
 	draftservice "github.com/pomkita/pomkita-be/internal/service/draft"
 	governanceservice "github.com/pomkita/pomkita-be/internal/service/governance"
+	identityservice "github.com/pomkita/pomkita-be/internal/service/identity"
 	policysservice "github.com/pomkita/pomkita-be/internal/service/policy"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 	shiftservice "github.com/pomkita/pomkita-be/internal/service/shift"
@@ -46,12 +49,16 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.T
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
 		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
-		Reports: reports, LatestMigration: 11,
+		Reports: reports, LatestMigration: 12,
 	}
 }
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Printf("invalid configuration: %v", err)
+		os.Exit(1)
+	}
 	ctx := context.Background()
 	migrator, err := migrations.New(cfg.DatabaseURL, cfg.MigrationsDir)
 	if err != nil {
@@ -73,6 +80,13 @@ func main() {
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
 	sessionService := authservice.NewService(authRepository, jwtService)
+	var messageSender mailer.Mailer
+	if cfg.Mailer == "resend" {
+		messageSender = mailer.NewResend(cfg.ResendAPIKey, cfg.MailFrom)
+	} else {
+		messageSender = mailer.NewSpool(cfg.MailSpoolDirectory)
+	}
+	identityService := identityservice.NewService(identityrepository.NewIdentityRepository(database), messageSender, systemClock{}, cfg.PublicBaseURL)
 	reportingService := appreporting.NewService(reportingrepository.NewReportingRepository(database))
 	shiftService := shiftservice.NewService(shiftrepository.NewShiftRepository(database), systemClock{})
 	draftService := draftservice.NewService(draftrepository.NewDraftRepository(database), systemClock{})
@@ -87,6 +101,7 @@ func main() {
 		database, jwtService, sessionService, shiftService, shiftService, draftService, draftService, submissionService, governanceService, amendmentService, policyService, policyService, reportingService, auditService, reportingService, reportingService,
 	)
 	dependencies.DeniedAudit = deniedAudit
+	dependencies.Users = identityService
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)
 
 	if err := router.Run(":" + cfg.Port); err != nil {

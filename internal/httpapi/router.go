@@ -14,6 +14,7 @@ import (
 	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
 	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
 	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
+	usersapi "github.com/pomkita/pomkita-be/internal/httpapi/users"
 )
 
 // Readiness checks database reachability and migration state.
@@ -41,6 +42,7 @@ type RouterDependencies struct {
 	Anomalies       reportingapi.AnomalyService
 	Reports         reportingapi.ReportingService
 	DeniedAudit     transport.DeniedAuditService
+	Users           usersapi.Service
 	LatestMigration int
 }
 
@@ -59,7 +61,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 		gin.SetMode(gin.ReleaseMode)
 	}
 	if dependencies.LatestMigration == 0 {
-		dependencies.LatestMigration = 11
+		dependencies.LatestMigration = 12
 	}
 	router := gin.New()
 	router.Use(
@@ -75,6 +77,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 
 	versioned := router.Group("/api/v1")
 	sessionapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, environment == "production")
+	usersapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Users)
 	reportingapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
 	shiftapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Shift)
 	shiftapi.RegisterReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ShiftRead)

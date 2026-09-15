@@ -46,6 +46,9 @@ func (m *Migrator) Up(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := EnsureSharedObjects(ctx, m.databaseURL); err != nil {
+		return err
+	}
 	runner, err := migrate.New(m.sourceURL, m.databaseURL)
 	if err != nil {
 		return fmt.Errorf("open migration runner: %w", err)
@@ -69,6 +72,27 @@ func (m *Migrator) Down(ctx context.Context) error {
 	defer closeRunner(runner)
 	if err := runner.Down(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("reverse migrations: %w", err)
+	}
+	return nil
+}
+
+// Steps applies or reverses a fixed number of migrations.
+func (m *Migrator) Steps(ctx context.Context, steps int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if steps > 0 {
+		if err := EnsureSharedObjects(ctx, m.databaseURL); err != nil {
+			return err
+		}
+	}
+	runner, err := migrate.New(m.sourceURL, m.databaseURL)
+	if err != nil {
+		return fmt.Errorf("open migration runner: %w", err)
+	}
+	defer closeRunner(runner)
+	if err := runner.Steps(steps); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("run migration steps: %w", err)
 	}
 	return nil
 }

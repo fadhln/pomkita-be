@@ -27,7 +27,7 @@ func TestSubmissionRepository_Submit_IsIdempotentByRequestHash(t *testing.T) {
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "submit@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "submit@example.com", Username: "submit", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {
@@ -96,7 +96,7 @@ func TestSubmissionRepository_Submit_PromotesDraftChildrenToReport(t *testing.T)
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "promote@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "promote@example.com", Username: "promote", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID}).Error; err != nil {
@@ -196,7 +196,7 @@ func TestSubmissionRepository_Submit_RejectsBrokenMeterChain(t *testing.T) {
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "chain@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "chain@example.com", Username: "chain", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID}).Error; err != nil {
@@ -259,7 +259,7 @@ func TestSubmissionRepository_Submit_UsesSnapshotRolloverThreshold(t *testing.T)
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "policy-submit@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "policy-submit@example.com", Username: "policy-submit", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID}).Error; err != nil {
@@ -305,7 +305,7 @@ func TestSubmissionRepository_Submit_RejectsExpiredTakeoverWithoutPreviousClaim(
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "takeover@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "takeover@example.com", Username: "takeover", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {
@@ -347,7 +347,7 @@ func TestSubmissionRepository_Submit_TakeoverRaceCreatesOneReport(t *testing.T) 
 		for _, value := range []any{
 			&OrganizationModel{OrgID: orgID, Name: "Race Org", CreatedAt: now},
 			&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now},
-			&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "race-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+			&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "race-" + uuid.NewString() + "@example.com", Username: "race-" + uuid.NewString(), PasswordHash: "hash", Enabled: true, CreatedAt: now},
 			&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)},
 			&ShiftDraftModel{DraftID: draftID, OrgID: orgID, StationID: stationID, ShiftID: shiftID, OwnedBy: &userID, ClaimToken: &currentClaim, ClaimExpiresAt: ptrTime(now.Add(time.Hour)), Status: "editing", Revision: 1, UpdatedBy: &userID, UpdatedAt: now},
 			&PolicySnapshotSetModel{SetID: policySetID, OrgID: orgID, StationID: stationID, ShiftID: &shiftID, CreatedAt: now},
@@ -409,7 +409,7 @@ func TestSubmissionRepository_Submit_FailureForcesANewIdempotencyKey(t *testing.
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "failed-submit@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "failed-submit@example.com", Username: "failed-submit", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", Backfilled: false, PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {

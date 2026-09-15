@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -363,7 +364,7 @@ func newGovernanceFixture(t *testing.T, ctx context.Context) governanceFixture {
 		t.Fatalf("create station: %v", err)
 	}
 	for id, email := range map[uuid.UUID]string{fixture.actorID: "admin@example.com", fixture.creatorID: "creator@example.com"} {
-		if err := store.DB.Create(&UserModel{UserID: id, OrgID: fixture.orgID, DisplayName: email, Email: email, PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+		if err := store.DB.Create(&UserModel{UserID: id, OrgID: fixture.orgID, DisplayName: email, Email: email, Username: strings.TrimSuffix(email, "@example.com"), PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 			t.Fatalf("create user: %v", err)
 		}
 	}
