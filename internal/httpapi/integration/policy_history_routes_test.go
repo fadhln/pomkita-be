@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -41,4 +42,4 @@ func (s *PolicyReadStub) History(_ context.Context, orgID uuid.UUID, stationID *
 	return []apppolicy.RevisionView{}, nil
 }
 
-var _ PolicyReadService = (*PolicyReadStub)(nil)
+var _ policyapi.PolicyReadService = (*PolicyReadStub)(nil)

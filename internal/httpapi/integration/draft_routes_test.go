@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,4 +42,4 @@ func (s *DraftStub) Claim(_ context.Context, request appdraft.ClaimRequest) (app
 	return s.result, nil
 }
 
-var _ DraftService = (*DraftStub)(nil)
+var _ draftapi.DraftService = (*DraftStub)(nil)

@@ -1,18 +1,13 @@
-package repository
+package auth
 
 import (
 	"context"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	cleanmigrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
+	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
 )
 
 func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
@@ -75,53 +70,4 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	}
 }
 
-func newAuthTestStore(t *testing.T, ctx context.Context) (*Store, func()) {
-	t.Helper()
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://pomkita:pomkita_dev@127.0.0.1:5432/pomkita?sslmode=disable"
-	}
-	admin, err := pgx.Connect(ctx, dsn)
-	if err != nil {
-		t.Fatalf("connect to database: %v", err)
-	}
-	schema := "phase2_auth_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err := admin.Exec(ctx, `create schema `+schema); err != nil {
-		admin.Close(ctx)
-		t.Fatalf("create isolated schema: %v", err)
-	}
-
-	scopedURL, err := url.Parse(dsn)
-	if err != nil {
-		admin.Close(ctx)
-		t.Fatalf("parse database URL: %v", err)
-	}
-	query := scopedURL.Query()
-	query.Set("options", "-c search_path="+schema)
-	scopedURL.RawQuery = query.Encode()
-	migrationsPath, err := filepath.Abs(filepath.Join(repositoryRoot(t), "migrations"))
-	if err != nil {
-		admin.Close(ctx)
-		t.Fatalf("resolve migrations: %v", err)
-	}
-	runner, err := cleanmigrations.New(scopedURL.String(), migrationsPath)
-	if err != nil {
-		admin.Close(ctx)
-		t.Fatalf("create migration runner: %v", err)
-	}
-	if err := runner.Up(ctx); err != nil {
-		admin.Close(ctx)
-		t.Fatalf("apply migrations: %v", err)
-	}
-	store, err := Open(ctx, scopedURL.String())
-	if err != nil {
-		admin.Close(ctx)
-		t.Fatalf("open GORM store: %v", err)
-	}
-	cleanup := func() {
-		_ = store.Close()
-		_, _ = admin.Exec(ctx, `drop schema if exists `+schema+` cascade`)
-		_ = admin.Close(ctx)
-	}
-	return store, cleanup
-}
+var newAuthTestStore = testsupport.NewStore

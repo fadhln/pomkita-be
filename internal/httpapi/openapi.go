@@ -7,6 +7,13 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/gin-gonic/gin"
+	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
+	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
+	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
+	sessionapi "github.com/pomkita/pomkita-be/internal/httpapi/session"
+	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
+	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
+	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
@@ -83,31 +90,31 @@ func OpenAPIDocument() *huma.OpenAPI {
 func registerOpenAPIOperations(api huma.API) {
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIStatusOutput](api, http.MethodGet, "/health", "health", "Health check")
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIStatusOutput](api, http.MethodGet, "/ready", "ready", "Readiness check")
-	registerOpenAPIOperation[openAPIBodyInput[loginRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/login", "login", "Create a session")
+	registerOpenAPIOperation[openAPIBodyInput[sessionapi.LoginRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/login", "login", "Create a session")
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIEmptyOutput](api, http.MethodDelete, "/api/v1/logout", "logout", "Revoke a session")
-	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[SessionView]](api, http.MethodGet, "/api/v1/session", "session", "Read the current session")
+	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[appjwt.SessionView]](api, http.MethodGet, "/api/v1/session", "session", "Read the current session")
 
 	registerOpenAPIOperation[openAPIStationInput, openAPIOutput[[]appshift.Summary]](api, http.MethodGet, "/api/v1/shifts", "listShifts", "List shifts")
-	registerOpenAPIOperation[openAPIBodyInput[OpenShiftRequest], openAPIOutput[appshift.Shift]](api, http.MethodPost, "/api/v1/shifts", "openShift", "Open a shift")
+	registerOpenAPIOperation[openAPIBodyInput[shiftapi.OpenShiftRequest], openAPIOutput[appshift.Shift]](api, http.MethodPost, "/api/v1/shifts", "openShift", "Open a shift")
 	registerOpenAPIOperation[openAPIIDStationInput, openAPIOutput[appshift.Detail]](api, http.MethodGet, "/api/v1/shifts/{id}", "getShift", "Read shift detail")
 
-	registerOpenAPIOperation[openAPIBodyInput[ClaimDraftRequest], openAPIOutput[appdraftClaimResult]](api, http.MethodPost, "/api/v1/drafts/claim", "claimDraft", "Claim a draft")
-	registerOpenAPIOperation[openAPIBodyInput[DraftLeaseRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/drafts/heartbeat", "heartbeatDraft", "Renew a draft lease")
-	registerOpenAPIOperation[openAPIBodyInput[DraftReadingRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/readings", "writeDraftReading", "Write a draft reading")
-	registerOpenAPIOperation[openAPIBodyInput[DraftSalesRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/sales", "writeDraftSales", "Write draft sales")
-	registerOpenAPIOperation[openAPIBodyInput[DraftLossRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/losses", "writeDraftLoss", "Write a draft loss")
-	registerOpenAPIOperation[openAPIBodyInput[DraftEvidenceRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/evidence", "stageDraftEvidence", "Stage draft evidence")
+	registerOpenAPIOperation[openAPIBodyInput[draftapi.ClaimDraftRequest], openAPIOutput[appdraftClaimResult]](api, http.MethodPost, "/api/v1/drafts/claim", "claimDraft", "Claim a draft")
+	registerOpenAPIOperation[openAPIBodyInput[draftapi.DraftLeaseRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/drafts/heartbeat", "heartbeatDraft", "Renew a draft lease")
+	registerOpenAPIOperation[openAPIBodyInput[draftapi.DraftReadingRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/readings", "writeDraftReading", "Write a draft reading")
+	registerOpenAPIOperation[openAPIBodyInput[draftapi.DraftSalesRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/sales", "writeDraftSales", "Write draft sales")
+	registerOpenAPIOperation[openAPIBodyInput[draftapi.DraftLossRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/losses", "writeDraftLoss", "Write a draft loss")
+	registerOpenAPIOperation[openAPIBodyInput[draftapi.DraftEvidenceRequest], openAPIOutput[openAPIDraftRevision]](api, http.MethodPost, "/api/v1/drafts/evidence", "stageDraftEvidence", "Stage draft evidence")
 
-	registerOpenAPIOperation[openAPIHeaderBodyInput[SubmitRequest], openAPIOutput[appsubmission.Result]](api, http.MethodPost, "/api/v1/submissions", "submitReport", "Submit a report")
+	registerOpenAPIOperation[openAPIHeaderBodyInput[submissionapi.SubmitRequest], openAPIOutput[appsubmission.Result]](api, http.MethodPost, "/api/v1/submissions", "submitReport", "Submit a report")
 	registerOpenAPIOperation[openAPIIDStationInput, openAPIOutput[appreporting.ReportView]](api, http.MethodGet, "/api/v1/reports/{id}", "getReport", "Read a report")
 	registerOpenAPIOperation[openAPIIDStationInput, openAPIOutput[appreporting.ReportView]](api, http.MethodGet, "/api/v1/reports/{id}/printout", "printReport", "Read report printout")
-	registerOpenAPIOperation[openAPIIDBodyInput[AcknowledgeRequest], openAPIOutput[appgovernance.Acknowledgement]](api, http.MethodPost, "/api/v1/reports/{id}/acknowledgement", "acknowledgeReport", "Acknowledge a report")
+	registerOpenAPIOperation[openAPIIDBodyInput[governanceapi.AcknowledgeRequest], openAPIOutput[appgovernance.Acknowledgement]](api, http.MethodPost, "/api/v1/reports/{id}/acknowledgement", "acknowledgeReport", "Acknowledge a report")
 
-	registerOpenAPIOperation[openAPIBodyInput[AmendmentRequest], openAPIOutput[appgovernance.Amendment]](api, http.MethodPost, "/api/v1/amendments", "requestAmendment", "Request an amendment")
-	registerOpenAPIOperation[openAPIIDBodyInput[AmendmentDecisionRequest], openAPIOutput[appgovernance.Amendment]](api, http.MethodPost, "/api/v1/amendments/{id}/approve", "approveAmendment", "Approve an amendment")
-	registerOpenAPIOperation[openAPIIDBodyInput[AmendmentDecisionRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/amendments/{id}/reject", "rejectAmendment", "Reject an amendment")
+	registerOpenAPIOperation[openAPIBodyInput[governanceapi.AmendmentRequest], openAPIOutput[appgovernance.Amendment]](api, http.MethodPost, "/api/v1/amendments", "requestAmendment", "Request an amendment")
+	registerOpenAPIOperation[openAPIIDBodyInput[governanceapi.AmendmentDecisionRequest], openAPIOutput[appgovernance.Amendment]](api, http.MethodPost, "/api/v1/amendments/{id}/approve", "approveAmendment", "Approve an amendment")
+	registerOpenAPIOperation[openAPIIDBodyInput[governanceapi.AmendmentDecisionRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/amendments/{id}/reject", "rejectAmendment", "Reject an amendment")
 
-	registerOpenAPIOperation[openAPIBodyInput[PolicyRevisionRequest], openAPIOutput[apppolicy.PolicyRevision]](api, http.MethodPost, "/api/v1/policies/revisions", "createPolicyRevision", "Create a policy revision")
+	registerOpenAPIOperation[openAPIBodyInput[policyapi.PolicyRevisionRequest], openAPIOutput[apppolicy.PolicyRevision]](api, http.MethodPost, "/api/v1/policies/revisions", "createPolicyRevision", "Create a policy revision")
 	registerOpenAPIOperation[openAPIStationInput, openAPIOutput[[]apppolicy.RevisionView]](api, http.MethodGet, "/api/v1/policies/history", "policyHistory", "Read policy history")
 
 	registerOpenAPIOperation[openAPIStationInput, openAPIOutput[[]appreporting.AnomalyView]](api, http.MethodGet, "/api/v1/anomalies", "anomalies", "Read anomalies")

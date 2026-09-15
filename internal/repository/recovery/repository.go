@@ -1,4 +1,4 @@
-package recoveryrepository
+package recovery
 
 import (
 	"context"

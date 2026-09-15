@@ -1,4 +1,4 @@
-package draftrepository
+package draft
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

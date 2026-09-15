@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -45,4 +46,4 @@ func (s *ShiftReadStub) Detail(context.Context, uuid.UUID, uuid.UUID, uuid.UUID)
 	return appshift.Detail{}, nil
 }
 
-var _ ShiftReadService = (*ShiftReadStub)(nil)
+var _ shiftapi.ShiftReadService = (*ShiftReadStub)(nil)

@@ -1,15 +1,19 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
+	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
 func TestVersionedSessionRoute_UsesTheV1ProductPrefix(t *testing.T) {
-	view := SessionView{DisplayName: "Test User"}
-	router := testRouter("test", nil, readyStub{}, verifierStub{}, &sessionServiceStub{view: view})
+	view := appjwt.SessionView{DisplayName: "Test User"}
+	router := testRouter("test", nil, readyStub{}, verifierStub{}, &versionedSessionStub{view: view})
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/session", nil)
@@ -22,6 +26,20 @@ func TestVersionedSessionRoute_UsesTheV1ProductPrefix(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), `"display_name":"Test User"`) {
 		t.Fatalf("response does not contain the session view: %s", recorder.Body.String())
 	}
+}
+
+type versionedSessionStub struct {
+	view appjwt.SessionView
+}
+
+func (s *versionedSessionStub) Login(context.Context, string, string) (string, appjwt.Claims, error) {
+	return "", appjwt.Claims{}, nil
+}
+
+func (s *versionedSessionStub) Logout(context.Context, uuid.UUID) error { return nil }
+
+func (s *versionedSessionStub) ReadSession(context.Context, string) (appjwt.SessionView, error) {
+	return s.view, nil
 }
 
 func TestVersionedHealthAndReadyRoutes_AreNotRegistered(t *testing.T) {

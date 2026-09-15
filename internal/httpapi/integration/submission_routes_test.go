@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,4 +42,4 @@ func (s *SubmissionStub) Submit(_ context.Context, request appsubmission.Request
 	return s.result, nil
 }
 
-var _ SubmissionService = (*SubmissionStub)(nil)
+var _ submissionapi.SubmissionService = (*SubmissionStub)(nil)

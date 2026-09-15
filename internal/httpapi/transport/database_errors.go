@@ -1,4 +1,4 @@
-package httpapi
+package transport
 
 import (
 	"errors"

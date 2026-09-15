@@ -1,4 +1,4 @@
-package repository
+package migrations
 
 import (
 	"context"
@@ -10,10 +10,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	cleanmigrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
 )
 
-func TestCleanMigrationSet_HasAReversibleProcedureFreeInitialSchema(t *testing.T) {
+func TestMigrationSet_HasAReversibleProcedureFreeInitialSchema(t *testing.T) {
 	root := repositoryRoot(t)
 	upPath := filepath.Join(root, "migrations", "000001_initial_schema.up.sql")
 	downPath := filepath.Join(root, "migrations", "000001_initial_schema.down.sql")
@@ -43,7 +42,7 @@ func TestCleanMigrationSet_HasAReversibleProcedureFreeInitialSchema(t *testing.T
 	}
 }
 
-func TestCleanMigrationSet_DefinesCatalogTablesAndTemporalConstraints(t *testing.T) {
+func TestMigrationSet_DefinesCatalogTablesAndTemporalConstraints(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000002_catalog_tables.up.sql")
 	contents, err := os.ReadFile(path)
@@ -67,7 +66,7 @@ func TestCleanMigrationSet_DefinesCatalogTablesAndTemporalConstraints(t *testing
 	}
 }
 
-func TestCleanMigrationSet_DefinesDraftChildrenAndSubmitIdempotency(t *testing.T) {
+func TestMigrationSet_DefinesDraftChildrenAndSubmitIdempotency(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000003_draft_tables.up.sql")
 	contents, err := os.ReadFile(path)
@@ -91,7 +90,7 @@ func TestCleanMigrationSet_DefinesDraftChildrenAndSubmitIdempotency(t *testing.T
 	}
 }
 
-func TestCleanMigrationSet_DefinesReportInputsAndMeterState(t *testing.T) {
+func TestMigrationSet_DefinesReportInputsAndMeterState(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000004_report_inputs.up.sql")
 	contents, err := os.ReadFile(path)
@@ -118,7 +117,7 @@ func TestCleanMigrationSet_DefinesReportInputsAndMeterState(t *testing.T) {
 	}
 }
 
-func TestCleanMigrationSet_DefinesPoliciesSnapshotsEvidenceAndBaselines(t *testing.T) {
+func TestMigrationSet_DefinesPoliciesSnapshotsEvidenceAndBaselines(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000005_policy_snapshot_tables.up.sql")
 	contents, err := os.ReadFile(path)
@@ -147,7 +146,7 @@ func TestCleanMigrationSet_DefinesPoliciesSnapshotsEvidenceAndBaselines(t *testi
 	}
 }
 
-func TestCleanMigrationSet_DefinesAuthenticationTablesWithoutProcedures(t *testing.T) {
+func TestMigrationSet_DefinesAuthenticationTablesWithoutProcedures(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000006_auth_tables.up.sql")
 	contents, err := os.ReadFile(path)
@@ -175,7 +174,7 @@ func TestCleanMigrationSet_DefinesAuthenticationTablesWithoutProcedures(t *testi
 	}
 }
 
-func TestCleanMigrationSet_DefinesAcknowledgementTables(t *testing.T) {
+func TestMigrationSet_DefinesAcknowledgementTables(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000007_governance_ack.up.sql")
 	contents, err := os.ReadFile(path)
@@ -197,7 +196,7 @@ func TestCleanMigrationSet_DefinesAcknowledgementTables(t *testing.T) {
 	}
 }
 
-func TestCleanMigrationSet_DefinesAmendmentTables(t *testing.T) {
+func TestMigrationSet_DefinesAmendmentTables(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000008_governance_amendments.up.sql")
 	contents, err := os.ReadFile(path)
@@ -219,7 +218,7 @@ func TestCleanMigrationSet_DefinesAmendmentTables(t *testing.T) {
 	}
 }
 
-func TestCleanMigrationSet_DefinesAlertTables(t *testing.T) {
+func TestMigrationSet_DefinesAlertTables(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000009_alerts.up.sql")
 	contents, err := os.ReadFile(path)
@@ -235,7 +234,7 @@ func TestCleanMigrationSet_DefinesAlertTables(t *testing.T) {
 	}
 }
 
-func TestCleanMigrationSet_DefinesAuditAndRelayTables(t *testing.T) {
+func TestMigrationSet_DefinesAuditAndRelayTables(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, name := range []string{"000010_audit.up.sql", "000011_relay.up.sql"} {
 		contents, err := os.ReadFile(filepath.Join(root, "migrations", name))
@@ -261,7 +260,7 @@ func TestCleanMigrationSet_DefinesAuditAndRelayTables(t *testing.T) {
 	}
 }
 
-func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
+func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	ctx := context.Background()
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -291,7 +290,7 @@ func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve migrations: %v", err)
 	}
-	runner, err := cleanmigrations.New(scopedURL.String(), migrationsPath)
+	runner, err := New(scopedURL.String(), migrationsPath)
 	if err != nil {
 		t.Fatalf("create migration runner: %v", err)
 	}
@@ -319,7 +318,7 @@ func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 
 	if err := runner.Down(ctx); err != nil {
-		t.Fatalf("reverse clean migration: %v", err)
+		t.Fatalf("reverse migration: %v", err)
 	}
 	var remaining int
 	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname <> 'schema_migrations'`).Scan(&remaining); err != nil {
@@ -330,7 +329,7 @@ func TestCleanMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 
 	if err := runner.Up(ctx); err != nil {
-		t.Fatalf("reapply clean migrations: %v", err)
+		t.Fatalf("reapply migrations: %v", err)
 	}
 	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname <> 'schema_migrations'`).Scan(&remaining); err != nil {
 		t.Fatalf("count clean tables after reapply: %v", err)
@@ -349,7 +348,7 @@ func repositoryRoot(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("get working directory: %v", err)
 	}
-	root, err := filepath.Abs(filepath.Join(workingDirectory, "..", ".."))
+	root, err := filepath.Abs(filepath.Join(workingDirectory, "..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
 	}

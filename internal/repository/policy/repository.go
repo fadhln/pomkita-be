@@ -1,4 +1,4 @@
-package policyrepository
+package policy
 
 import (
 	"context"

@@ -1,8 +1,10 @@
-package repository
+package store_test
 
 import (
 	"encoding/json"
 	"testing"
+
+	. "github.com/pomkita/pomkita-be/internal/repository/store"
 )
 
 func TestDecimal_PreservesExactTextAndJSONString(t *testing.T) {

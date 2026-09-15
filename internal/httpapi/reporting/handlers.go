@@ -1,4 +1,4 @@
-package reportingapi
+package reporting
 
 import (
 	"context"

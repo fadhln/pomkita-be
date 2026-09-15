@@ -1,4 +1,4 @@
-package draftrepository
+package draft
 
 import (
 	"context"

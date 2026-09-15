@@ -1,4 +1,4 @@
-package governancerepository
+package governance
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

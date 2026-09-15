@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/httpapi"
+	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
@@ -23,4 +23,4 @@ func (typedReportingMarker) ReadReport(context.Context, uuid.UUID, uuid.UUID, uu
 	return appreporting.ReportView{}, nil
 }
 
-var _ httpapi.ReportingService = (*typedReportingMarker)(nil)
+var _ reportingapi.ReportingService = (*typedReportingMarker)(nil)

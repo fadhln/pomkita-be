@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,4 +40,4 @@ func (s *GovernanceStub) Acknowledge(_ context.Context, request appgovernance.Ac
 	return appgovernance.Acknowledgement{AckID: uuid.New(), ReportID: request.ReportID, VersionNo: request.VersionNo, Decision: request.Decision}, nil
 }
 
-var _ GovernanceService = (*GovernanceStub)(nil)
+var _ governanceapi.GovernanceService = (*GovernanceStub)(nil)

@@ -1,4 +1,4 @@
-package auditapi
+package audit
 
 import (
 	"context"

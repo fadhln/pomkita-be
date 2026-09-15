@@ -1,4 +1,4 @@
-package relayrepository
+package relay
 
 import (
 	"context"

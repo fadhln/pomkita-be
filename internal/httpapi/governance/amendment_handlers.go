@@ -1,4 +1,4 @@
-package governanceapi
+package governance
 
 import (
 	"context"

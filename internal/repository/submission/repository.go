@@ -1,4 +1,4 @@
-package submissionrepository
+package submission
 
 import (
 	"context"

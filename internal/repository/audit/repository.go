@@ -1,4 +1,4 @@
-package auditrepository
+package audit
 
 import (
 	"bytes"

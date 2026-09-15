@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,4 +60,4 @@ func (s *DraftWriteStub) StageEvidence(context.Context, appdraft.StageEvidenceRe
 	return 0, nil
 }
 
-var _ DraftWriteService = (*DraftWriteStub)(nil)
+var _ draftapi.DraftWriteService = (*DraftWriteStub)(nil)

@@ -1,4 +1,4 @@
-package governancerepository
+package governance
 
 import (
 	"bytes"

@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,4 +42,4 @@ func (s *PolicyStub) CreateRevision(_ context.Context, request apppolicy.PolicyR
 	return s.result, nil
 }
 
-var _ PolicyService = (*PolicyStub)(nil)
+var _ policyapi.PolicyService = (*PolicyStub)(nil)

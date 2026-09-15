@@ -1,6 +1,10 @@
-package repository
+package store_test
 
-import "testing"
+import (
+	"testing"
+
+	. "github.com/pomkita/pomkita-be/internal/repository/store"
+)
 
 func TestPersistenceModels_UseExplicitTableNames(t *testing.T) {
 	cases := []struct {

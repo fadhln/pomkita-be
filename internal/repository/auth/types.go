@@ -1,4 +1,4 @@
-package authrepository
+package auth
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

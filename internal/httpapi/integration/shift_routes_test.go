@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -49,4 +50,4 @@ func (s *ShiftStub) OpenShift(_ context.Context, request appshift.OpenRequest) (
 	return s.result, nil
 }
 
-var _ ShiftService = (*ShiftStub)(nil)
+var _ shiftapi.ShiftService = (*ShiftStub)(nil)

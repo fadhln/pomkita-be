@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -32,4 +33,4 @@ func (s *AuditVerifyStub) Verify(_ context.Context, orgID uuid.UUID) error {
 	return nil
 }
 
-var _ AuditVerificationService = (*AuditVerifyStub)(nil)
+var _ auditapi.AuditVerificationService = (*AuditVerifyStub)(nil)

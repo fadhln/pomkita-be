@@ -170,7 +170,7 @@ Use these rules for each tenant table:
 - test cross-tenant denial in repository and service tests.
 
 Do not add business functions, procedures, triggers, RLS policies, custom
-application roles, or broad grants to the clean migration set. Keep business
+application roles, or broad grants to the migration set. Keep business
 rules in Go services and keep SQL focused on structural integrity.
 
 Follow the global lock order in `PLAN.md`. Sort rows by table name and primary key when two locks have the same rank. Append the audit event last in the same transaction.

@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -51,4 +52,4 @@ func (s *AuditStub) ExportAudit(_ context.Context, orgID uuid.UUID) ([]appreport
 	return s.rows, nil
 }
 
-var _ AuditService = (*AuditStub)(nil)
+var _ auditapi.AuditService = (*AuditStub)(nil)

@@ -1,4 +1,4 @@
-package draftapi
+package draft
 
 import (
 	"context"

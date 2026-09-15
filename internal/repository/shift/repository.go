@@ -1,4 +1,4 @@
-package shiftrepository
+package shift
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package reportingrepository
+package reporting
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

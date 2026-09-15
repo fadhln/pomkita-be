@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -48,4 +49,4 @@ func (s *AnomalyStub) Anomalies(_ context.Context, orgID uuid.UUID, _ *uuid.UUID
 	return []appreporting.AnomalyView{}, nil
 }
 
-var _ AnomalyService = (*AnomalyStub)(nil)
+var _ reportingapi.AnomalyService = (*AnomalyStub)(nil)

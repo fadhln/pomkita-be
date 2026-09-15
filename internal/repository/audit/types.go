@@ -1,4 +1,4 @@
-package auditrepository
+package audit
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

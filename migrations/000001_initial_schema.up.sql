@@ -1,7 +1,7 @@
--- Phase 1 clean schema. Keep business decisions in Go services.
+-- Phase 1 schema. Keep business decisions in Go services.
 -- This migration contains tables and constraints only.
 
--- The extension is shared by the legacy and clean migration sets.
+-- The extension supports exclusion constraints in this migration set.
 SELECT set_config('search_path', current_schema() || ', public, app', false);
 CREATE SCHEMA IF NOT EXISTS app;
 SELECT pg_advisory_xact_lock(hashtext('pomkita:extension:pgcrypto'));

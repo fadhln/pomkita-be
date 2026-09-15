@@ -1,4 +1,4 @@
-package repository
+package store_test
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	. "github.com/pomkita/pomkita-be/internal/repository/store"
 	"gorm.io/gorm"
 )
 
-func TestStoreReadinessReportsCleanMigrationState(t *testing.T) {
+func TestStoreReadinessReportsMigrationState(t *testing.T) {
 	ctx := context.Background()
 	store, cleanup := newAuthTestStore(t, ctx)
 	defer cleanup()

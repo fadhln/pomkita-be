@@ -1,4 +1,4 @@
-package submissionrepository
+package submission
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

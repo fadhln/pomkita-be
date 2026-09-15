@@ -8,8 +8,17 @@ import (
 
 	"github.com/pomkita/pomkita-be/internal/config"
 	"github.com/pomkita/pomkita-be/internal/httpapi"
+	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
+	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
+	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
+	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
+	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
+	sessionapi "github.com/pomkita/pomkita-be/internal/httpapi/session"
+	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
+	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
+	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	cleanmigrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
+	migrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
 	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
 	authrepository "github.com/pomkita/pomkita-be/internal/repository/auth"
 	draftrepository "github.com/pomkita/pomkita-be/internal/repository/draft"
@@ -33,10 +42,10 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, Shift httpapi.ShiftService, ShiftRead httpapi.ShiftReadService, Draft httpapi.DraftService, DraftWrites httpapi.DraftWriteService, Submission httpapi.SubmissionService, Governance httpapi.GovernanceService, Amendment httpapi.AmendmentService, Policy httpapi.PolicyService, PolicyRead httpapi.PolicyReadService, Audit httpapi.AuditService, AuditVerify httpapi.AuditVerificationService, Anomalies httpapi.AnomalyService, reports httpapi.ReportingService) httpapi.RouterDependencies {
+func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.TokenVerifier, sessions sessionapi.Service, shiftService shiftapi.ShiftService, shiftRead shiftapi.ShiftReadService, draftService draftapi.DraftService, draftWrites draftapi.DraftWriteService, submissionService submissionapi.SubmissionService, governanceService governanceapi.GovernanceService, amendment governanceapi.AmendmentService, policyService policyapi.PolicyService, policyRead policyapi.PolicyReadService, auditService auditapi.AuditService, auditVerify auditapi.AuditVerificationService, anomalies reportingapi.AnomalyService, reports reportingapi.ReportingService) httpapi.RouterDependencies {
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
-		Shift: Shift, ShiftRead: ShiftRead, Draft: Draft, DraftWrites: DraftWrites, Submission: Submission, Governance: Governance, Amendment: Amendment, Policy: Policy, PolicyRead: PolicyRead, Audit: Audit, AuditVerify: AuditVerify, Anomalies: Anomalies,
+		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
 		Reports: reports, LatestMigration: 11,
 	}
 }
@@ -44,7 +53,7 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.Tok
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
-	migrator, err := cleanmigrations.New(cfg.DatabaseURL, cfg.MigrationsDir)
+	migrator, err := migrations.New(cfg.DatabaseURL, cfg.MigrationsDir)
 	if err != nil {
 		log.Printf("create migration runner: %v", err)
 		os.Exit(1)
@@ -64,18 +73,18 @@ func main() {
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
 	sessionService := authservice.NewService(authRepository, jwtService)
-	Reporting := appreporting.NewService(reportingrepository.NewReportingRepository(database))
-	Shift := shiftservice.NewService(shiftrepository.NewShiftRepository(database), systemClock{})
-	Draft := draftservice.NewService(draftrepository.NewDraftRepository(database), systemClock{})
-	Submission := submissionservice.NewService(submissionrepository.NewSubmissionRepository(database), systemClock{})
-	Governance := governanceservice.NewService(governancerepository.NewGovernanceRepository(database), systemClock{})
-	Amendment := governanceservice.NewAmendmentService(governancerepository.NewGovernanceRepository(database), systemClock{})
-	Policy := policysservice.NewService(policyrepository.NewPolicyRepository(database), systemClock{})
+	reportingService := appreporting.NewService(reportingrepository.NewReportingRepository(database))
+	shiftService := shiftservice.NewService(shiftrepository.NewShiftRepository(database), systemClock{})
+	draftService := draftservice.NewService(draftrepository.NewDraftRepository(database), systemClock{})
+	submissionService := submissionservice.NewService(submissionrepository.NewSubmissionRepository(database), systemClock{})
+	governanceService := governanceservice.NewService(governancerepository.NewGovernanceRepository(database), systemClock{})
+	amendmentService := governanceservice.NewAmendmentService(governancerepository.NewGovernanceRepository(database), systemClock{})
+	policyService := policysservice.NewService(policyrepository.NewPolicyRepository(database), systemClock{})
 	auditRepository := auditrepository.NewAuditRepository(database)
-	Audit := auditservice.NewService(auditRepository, systemClock{})
+	auditService := auditservice.NewService(auditRepository, systemClock{})
 	deniedAudit := auditservice.NewDeniedService(auditRepository, systemClock{})
 	dependencies := composeRouterDependencies(
-		database, jwtService, sessionService, Shift, Shift, Draft, Draft, Submission, Governance, Amendment, Policy, Policy, Reporting, Audit, Reporting, Reporting,
+		database, jwtService, sessionService, shiftService, shiftService, draftService, draftService, submissionService, governanceService, amendmentService, policyService, policyService, reportingService, auditService, reportingService, reportingService,
 	)
 	dependencies.DeniedAudit = deniedAudit
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)

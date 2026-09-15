@@ -1,4 +1,4 @@
-package policyrepository
+package policy
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

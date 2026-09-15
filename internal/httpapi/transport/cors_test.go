@@ -1,4 +1,4 @@
-package httpapi
+package transport
 
 import (
 	"net/http"
@@ -12,7 +12,7 @@ import (
 const corsOrigin = "https://web.example"
 
 func TestCORSMiddleware_PreflightAllowedOrigin(t *testing.T) {
-	router := testRouter("test", []string{corsOrigin}, readyStub{}, nil, nil)
+	router := newCORSTestRouter([]string{corsOrigin})
 	executed := false
 	router.OPTIONS("/cors", func(c *gin.Context) {
 		executed = true
@@ -38,7 +38,7 @@ func TestCORSMiddleware_PreflightAllowedOrigin(t *testing.T) {
 }
 
 func TestCORSMiddleware_DeniesDisallowedPreflight(t *testing.T) {
-	router := testRouter("test", []string{corsOrigin}, readyStub{}, nil, nil)
+	router := newCORSTestRouter([]string{corsOrigin})
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodOptions, "/cors", nil)
 	request.Header.Set("Origin", "https://other.example")
@@ -72,7 +72,7 @@ func TestCORSMiddleware_AllowedActualAndNoOriginRequests(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			router := testRouter("test", tc.origins, readyStub{}, nil, nil)
+			router := newCORSTestRouter(tc.origins)
 			router.Handle(tc.method, "/cors", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(tc.method, "/cors", nil)
@@ -102,4 +102,10 @@ func assertHeader(t *testing.T, recorder *httptest.ResponseRecorder, name, want 
 	if got := recorder.Header().Get(name); got != want {
 		t.Fatalf("%s: got %q, want %q", name, got, want)
 	}
+}
+
+func newCORSTestRouter(origins []string) *gin.Engine {
+	router := gin.New()
+	router.Use(RequestID(), CORSMiddleware(origins))
+	return router
 }

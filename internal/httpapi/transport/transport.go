@@ -27,6 +27,16 @@ type DeniedAuditService interface {
 	RecordDenied(context.Context, appaudit.DeniedRequest) error
 }
 
+// DeniedAuditContext makes the denied-audit service available to middleware.
+func DeniedAuditContext(service DeniedAuditService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if service != nil {
+			c.Set("denied_audit", service)
+		}
+		c.Next()
+	}
+}
+
 var decimalPattern = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?$`)
 
 func AuthMiddleware(verifier TokenVerifier) gin.HandlerFunc {

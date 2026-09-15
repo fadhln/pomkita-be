@@ -1,4 +1,4 @@
-package shiftapi
+package shift
 
 import (
 	"context"

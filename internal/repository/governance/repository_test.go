@@ -1,4 +1,4 @@
-package repository
+package governance
 
 import (
 	"context"

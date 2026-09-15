@@ -1,4 +1,4 @@
-package submissionapi
+package submission
 
 import (
 	"context"

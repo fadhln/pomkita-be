@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,4 +51,4 @@ func (s *AmendmentStub) Reject(context.Context, appgovernance.RejectAmendmentReq
 	return nil
 }
 
-var _ AmendmentService = (*AmendmentStub)(nil)
+var _ governanceapi.AmendmentService = (*AmendmentStub)(nil)

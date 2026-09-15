@@ -1,4 +1,4 @@
-package relayrepository
+package relay
 
 import store "github.com/pomkita/pomkita-be/internal/repository/store"
 

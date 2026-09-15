@@ -7,6 +7,8 @@ import (
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
+type SessionView = appjwt.SessionView
+
 type readyStub struct {
 	current bool
 	pingErr error
