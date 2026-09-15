@@ -36,6 +36,7 @@ type Key struct {
 // Session is a database session record for one issued token.
 type Session struct {
 	JTI          uuid.UUID
+	UserID       uuid.UUID
 	KID          string
 	IssuedAt     time.Time
 	ExpiresAt    time.Time
@@ -171,7 +172,7 @@ func (s *Service) Issue(ctx context.Context, subject uuid.UUID) (string, Claims,
 	if err != nil {
 		return "", Claims{}, fmt.Errorf("sign JWT: %w", err)
 	}
-	if err := s.store.CreateSession(ctx, Session{JTI: jti, KID: key.KID, IssuedAt: now, ExpiresAt: expires, LastActiveAt: now}); err != nil {
+	if err := s.store.CreateSession(ctx, Session{JTI: jti, UserID: subject, KID: key.KID, IssuedAt: now, ExpiresAt: expires, LastActiveAt: now}); err != nil {
 		return "", Claims{}, fmt.Errorf("create JWT session: %w", err)
 	}
 	return signed, claims, nil
@@ -245,7 +246,13 @@ func (s *Service) Verify(ctx context.Context, raw string) (Claims, error) {
 	if session.RevokedAt != nil {
 		return Claims{}, ErrRevokedJTI
 	}
+	if !session.ExpiresAt.IsZero() && now.After(session.ExpiresAt.Add(60*time.Second)) {
+		return Claims{}, ErrSessionExpired
+	}
 	if session.KID != kid {
+		return Claims{}, ErrSessionNotFound
+	}
+	if session.UserID != uuid.Nil && session.UserID != subject {
 		return Claims{}, ErrSessionNotFound
 	}
 	if session.LastActiveAt.IsZero() || now.After(session.LastActiveAt.Add(15*time.Minute)) {

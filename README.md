@@ -1,10 +1,10 @@
 # PomKita Backend
 
-Gin and Go backend for the PomKita SPBU reconciliation application. PostgreSQL is the enforcement layer. The application role will call allowlisted procedures and will not receive table DML grants.
+Gin and Go backend for the PomKita SPBU reconciliation application. PostgreSQL stores and protects the data. Go services own business decisions and GORM repositories own database access.
 
 ## Bootstrap
 
-Requirements: Go 1.23 or newer. PostgreSQL and Docker are needed for later integration phases.
+Requirements: Go 1.23 or newer. PostgreSQL is required for repository integration tests and local operation.
 
 ```sh
 cp .env.example .env
@@ -26,7 +26,9 @@ make run       # run the server
 make tidy      # update Go module metadata
 ```
 
-The implementation follows the phases in `../BE-PLAN.md`. API contract artifacts will be published from this repository and pinned by the frontend.
+The implementation uses the service and GORM repository boundaries documented in
+[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md). API contract artifacts are
+published from this repository and pinned by the frontend.
 
 ## Development conventions
 

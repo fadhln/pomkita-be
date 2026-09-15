@@ -6,7 +6,7 @@ This document defines the backend conventions for people and AI agents. Use ASD-
 
 This repository contains the PomKita backend service.
 
-The service uses Go and Gin for HTTP transport. The service uses PostgreSQL for business rules and data control. The Go service validates request shape, starts a transaction, sets request context, calls an allowlisted procedure, and maps the result to HTTP.
+The service uses Go and Gin for HTTP transport. The service uses PostgreSQL for data integrity and transaction control. Go services validate business rules, repository adapters perform database work, and HTTP adapters map typed results to the public contract.
 
 The backend owns the API contract. The frontend must not define backend behavior.
 
@@ -17,22 +17,29 @@ Use these directories:
 ```text
 cmd/server/           Process start and graceful shutdown
 internal/config/      Environment configuration
-internal/httpapi/     Router, middleware, handlers, and HTTP errors
-internal/db/          pgx pool, transactions, and procedure calls
+internal/httpapi/     Router, middleware, HTTP errors, and transport support
+internal/httpapi/<module>/  Module handlers and request DTOs
+internal/service/     Module use cases and business rules
+internal/repository/  Module GORM repositories and shared database store
 internal/jwt/         Token issue and verification support
 internal/canonical/   Canonical JSON and schema validation
-internal/money/       Decimal-string and numeric boundary support
 migrations/           Ordered SQL migrations
-seed/                 Deterministic development and test data
-test/                 Cross-package integration and concurrency tests
 docs/                 Repository conventions and decisions
 ```
 
 Create a package only when the package has one clear purpose. Do not create a package for one function. Keep an interface near the code that uses the interface.
 
+For one module, the dependency direction is `httpapi -> service -> repository`.
+HTTP handlers map requests and responses. Services own business rules.
+Repositories own database queries and transactions. Keep GORM models in
+`internal/repository/store` and do not return them from a repository.
+
+Keep a handler unit test beside its module. Put tests that construct the root
+router in `internal/httpapi/integration`.
+
 ## 3. Change design
 
-Use one vertical slice for one behavior. A slice includes the database rule, procedure, HTTP endpoint, contract, authorization cases, and tests.
+Use one vertical slice for one behavior. A slice includes the service rule, repository operation, HTTP endpoint, contract, authorization cases, and tests.
 
 Before implementation, record these items in the task or handoff:
 
@@ -91,7 +98,7 @@ A documentation-only change has no production behavior. Run `git diff --check` a
 - Compare known errors with `errors.Is` or `errors.As`.
 - Accept dependencies through constructors. Do not use mutable package globals.
 - Put an interface in the consumer package.
-- Keep a handler small. Move transaction and procedure work to `internal/db`.
+- Keep a handler small. Move transaction and repository work to the persistence adapter.
 - Use structured logs. Include `request_id`, action, outcome, and duration.
 
 Use typed configuration. Reject a missing required production value at process start. Do not read environment variables from business code.
@@ -158,13 +165,13 @@ Each migration must have an up file and a down file. The up file must apply to a
 Use these rules for each tenant table:
 
 - include all applicable tenant columns in foreign keys;
-- enable and force row-level security;
-- revoke default privileges;
-- classify the object in the required catalog;
-- add the table lock rank;
-- test cross-tenant denial.
+- enforce lifecycle and uniqueness rules with constraints and indexes;
+- add the table lock rank where a transaction spans several aggregates;
+- test cross-tenant denial in repository and service tests.
 
-Use `SECURITY DEFINER` only for an allowlisted function. Set a fixed `search_path`. Validate request context inside the function. Do not accept a table name, column name, or SQL text as input.
+Do not add business functions, procedures, triggers, RLS policies, custom
+application roles, or broad grants to the migration set. Keep business
+rules in Go services and keep SQL focused on structural integrity.
 
 Follow the global lock order in `PLAN.md`. Sort rows by table name and primary key when two locks have the same rank. Append the audit event last in the same transaction.
 

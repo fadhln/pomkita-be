@@ -4,25 +4,56 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/pomkita/pomkita-be/internal/config"
-	appdb "github.com/pomkita/pomkita-be/internal/db"
 	"github.com/pomkita/pomkita-be/internal/httpapi"
+	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
+	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
+	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
+	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
+	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
+	sessionapi "github.com/pomkita/pomkita-be/internal/httpapi/session"
+	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
+	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
+	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
+	migrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
+	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
+	authrepository "github.com/pomkita/pomkita-be/internal/repository/auth"
+	draftrepository "github.com/pomkita/pomkita-be/internal/repository/draft"
+	governancerepository "github.com/pomkita/pomkita-be/internal/repository/governance"
+	policyrepository "github.com/pomkita/pomkita-be/internal/repository/policy"
+	reportingrepository "github.com/pomkita/pomkita-be/internal/repository/reporting"
+	shiftrepository "github.com/pomkita/pomkita-be/internal/repository/shift"
+	store "github.com/pomkita/pomkita-be/internal/repository/store"
+	submissionrepository "github.com/pomkita/pomkita-be/internal/repository/submission"
+	auditservice "github.com/pomkita/pomkita-be/internal/service/audit"
+	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
+	draftservice "github.com/pomkita/pomkita-be/internal/service/draft"
+	governanceservice "github.com/pomkita/pomkita-be/internal/service/governance"
+	policysservice "github.com/pomkita/pomkita-be/internal/service/policy"
+	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
+	shiftservice "github.com/pomkita/pomkita-be/internal/service/shift"
+	submissionservice "github.com/pomkita/pomkita-be/internal/service/submission"
 )
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time { return time.Now().UTC() }
+
+func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.TokenVerifier, sessions sessionapi.Service, shiftService shiftapi.ShiftService, shiftRead shiftapi.ShiftReadService, draftService draftapi.DraftService, draftWrites draftapi.DraftWriteService, submissionService submissionapi.SubmissionService, governanceService governanceapi.GovernanceService, amendment governanceapi.AmendmentService, policyService policyapi.PolicyService, policyRead policyapi.PolicyReadService, auditService auditapi.AuditService, auditVerify auditapi.AuditVerificationService, anomalies reportingapi.AnomalyService, reports reportingapi.ReportingService) httpapi.RouterDependencies {
+	return httpapi.RouterDependencies{
+		Readiness: readiness, Verifier: verifier, Sessions: sessions,
+		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
+		Reports: reports, LatestMigration: 11,
+	}
+}
 
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
-	database, err := appdb.New(ctx, cfg.DatabaseURL)
-	if err != nil {
-		log.Printf("open database: %v", err)
-		os.Exit(1)
-	}
-	defer database.Close()
-	database.SetJWTSecrets(cfg.JWTSecrets)
-	database.SetJWTAudience(cfg.JWTAudience)
-	migrator, err := appdb.NewMigrator(cfg.DatabaseURL, cfg.MigrationsDir)
+	migrator, err := migrations.New(cfg.DatabaseURL, cfg.MigrationsDir)
 	if err != nil {
 		log.Printf("create migration runner: %v", err)
 		os.Exit(1)
@@ -31,11 +62,32 @@ func main() {
 		log.Printf("apply migrations: %v", err)
 		os.Exit(1)
 	}
-	jwtService := appjwt.NewService(database.JWTStore(cfg.JWTSecrets), appjwt.Config{
+	database, err := store.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Printf("open GORM database: %v", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+	authRepository := authrepository.NewAuthRepository(database, cfg.JWTSecrets)
+	jwtService := appjwt.NewService(authRepository, appjwt.Config{
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
-	sessionManager := appdb.NewSessionManager(database, jwtService)
-	router := httpapi.NewRouterWithAllDependencies(cfg.Environment, cfg.CorsAllowedOrigins, database, jwtService, sessionManager, appdb.NewShiftManager(database), appdb.NewGovernanceManager(database), appdb.NewReportingManager(database), appdb.NewPolicyManager(database))
+	sessionService := authservice.NewService(authRepository, jwtService)
+	reportingService := appreporting.NewService(reportingrepository.NewReportingRepository(database))
+	shiftService := shiftservice.NewService(shiftrepository.NewShiftRepository(database), systemClock{})
+	draftService := draftservice.NewService(draftrepository.NewDraftRepository(database), systemClock{})
+	submissionService := submissionservice.NewService(submissionrepository.NewSubmissionRepository(database), systemClock{})
+	governanceService := governanceservice.NewService(governancerepository.NewGovernanceRepository(database), systemClock{})
+	amendmentService := governanceservice.NewAmendmentService(governancerepository.NewGovernanceRepository(database), systemClock{})
+	policyService := policysservice.NewService(policyrepository.NewPolicyRepository(database), systemClock{})
+	auditRepository := auditrepository.NewAuditRepository(database)
+	auditService := auditservice.NewService(auditRepository, systemClock{})
+	deniedAudit := auditservice.NewDeniedService(auditRepository, systemClock{})
+	dependencies := composeRouterDependencies(
+		database, jwtService, sessionService, shiftService, shiftService, draftService, draftService, submissionService, governanceService, amendmentService, policyService, policyService, reportingService, auditService, reportingService, reportingService,
+	)
+	dependencies.DeniedAudit = deniedAudit
+	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)
 
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Printf("server stopped: %v", err)
