@@ -19,6 +19,7 @@ import (
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	appaccount "github.com/pomkita/pomkita-be/internal/service/account"
 	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
+	apporganization "github.com/pomkita/pomkita-be/internal/service/organization"
 	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
@@ -148,6 +149,69 @@ func decorateIdentityContract(document *huma.OpenAPI) {
 	trimResponses(document, "/api/v1/auth/password/reset", http.MethodPost, "204", "400", "403", "422", "429", "503")
 	compactAccountErrorResponses(document)
 	setProfileExample(document)
+	decorateOrganizationContract(document)
+}
+
+func decorateOrganizationContract(document *huma.OpenAPI) {
+	metadata := map[string]struct {
+		roles   []string
+		errors  map[string][]string
+		csrf    bool
+		example any
+	}{
+		"/api/v1/organizations":      {roles: []string{"Owner", "Superadmin"}, errors: map[string][]string{"401": {"invalid_session"}, "403": {"organization_administration_forbidden", "csrf_required"}, "422": {"first_station_required", "invalid_organization_request"}}, csrf: true, example: map[string]any{"name": "Pom Org", "legal_name": "Pom Org PT", "address": "Jakarta", "contact_email": "admin@example.test", "timezone": "Asia/Jakarta", "first_station": map[string]any{"name": "Main", "timezone": "Asia/Jakarta"}}},
+		"/api/v1/organizations/{id}": {roles: []string{"Owner", "Superadmin"}, errors: map[string][]string{"401": {"invalid_session"}, "403": {"organization_administration_forbidden", "organization_enabled_change_forbidden", "csrf_required"}, "404": {"organization_not_found"}, "422": {"invalid_organization_request"}}, csrf: true, example: map[string]any{"name": "Pom Org Updated", "enabled": true}},
+	}
+	if item := document.Paths["/api/v1/organizations"]; item != nil {
+		if item.Get != nil {
+			decorateOperation(item.Get, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"organization_administration_forbidden"}}, nil, false)
+			ensureProblemResponses(item.Get, "400", "401", "403", "500")
+		}
+		if item.Post != nil {
+			decorateOperation(item.Post, []string{"Superadmin"}, metadata["/api/v1/organizations"].errors, metadata["/api/v1/organizations"].example, true)
+			ensureProblemResponses(item.Post, "400", "401", "403", "422", "500")
+		}
+		trimResponses(document, "/api/v1/organizations", http.MethodGet, "200", "400", "401", "403", "500")
+		setMutationResponse(document, "/api/v1/organizations", http.MethodPost, http.StatusCreated)
+		trimResponses(document, "/api/v1/organizations", http.MethodPost, "201", "400", "401", "403", "422", "500")
+	}
+	if item := document.Paths["/api/v1/organizations/{id}"]; item != nil {
+		m := metadata["/api/v1/organizations/{id}"]
+		if item.Get != nil {
+			decorateOperation(item.Get, m.roles, map[string][]string{"401": {"invalid_session"}, "403": {"organization_administration_forbidden"}, "404": {"organization_not_found"}}, nil, false)
+			ensureProblemResponses(item.Get, "400", "401", "403", "404", "500")
+		}
+		if item.Patch != nil {
+			decorateOperation(item.Patch, m.roles, m.errors, m.example, true)
+			ensureProblemResponses(item.Patch, "400", "401", "403", "404", "422", "500")
+		}
+		trimResponses(document, "/api/v1/organizations/{id}", http.MethodGet, "200", "400", "401", "403", "404", "500")
+		trimResponses(document, "/api/v1/organizations/{id}", http.MethodPatch, "200", "400", "401", "403", "404", "422", "500")
+	}
+	if item := document.Paths["/api/v1/organizations/{id}/disable"]; item != nil && item.Post != nil {
+		decorateOperation(item.Post, []string{"Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"organization_administration_forbidden", "csrf_required"}, "404": {"organization_not_found"}}, nil, true)
+		ensureProblemResponses(item.Post, "400", "401", "403", "404", "500")
+		setMutationResponse(document, "/api/v1/organizations/{id}/disable", http.MethodPost, http.StatusNoContent)
+		trimResponses(document, "/api/v1/organizations/{id}/disable", http.MethodPost, "204", "400", "401", "403", "404", "500")
+	}
+}
+
+func ensureProblemResponses(operation *huma.Operation, statuses ...string) {
+	for _, status := range statuses {
+		if _, exists := operation.Responses[status]; exists {
+			continue
+		}
+		operation.Responses[status] = &huma.Response{Description: http.StatusText(statusCode(status)), Content: map[string]*huma.MediaType{"application/problem+json": {Schema: &huma.Schema{Ref: "#/components/schemas/ErrorModel"}}}}
+	}
+}
+
+func statusCode(status string) int {
+	for code := 400; code <= 599; code++ {
+		if fmt.Sprint(code) == status {
+			return code
+		}
+	}
+	return http.StatusInternalServerError
 }
 
 func setMutationResponse(document *huma.OpenAPI, path, method string, status int) {
@@ -282,6 +346,11 @@ func registerOpenAPIOperations(api huma.API) {
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[appaccount.Profile]](api, http.MethodGet, "/api/v1/account", "account", "Read the own account profile")
 	registerOpenAPIOperation[openAPIBodyInput[appaccount.UpdateRequest], openAPIOutput[appaccount.Profile]](api, http.MethodPatch, "/api/v1/account", "updateAccount", "Update the own account profile")
 	registerOpenAPIOperation[openAPIBodyInput[appaccount.PasswordRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/account/password", "changeAccountPassword", "Change the own account password")
+	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[[]apporganization.Organization]](api, http.MethodGet, "/api/v1/organizations", "listOrganizations", "List organizations")
+	registerOpenAPIOperation[openAPIBodyInput[apporganization.CreateRequest], openAPIOutput[apporganization.Organization]](api, http.MethodPost, "/api/v1/organizations", "createOrganization", "Create an organization")
+	registerOpenAPIOperation[openAPIIDInput, openAPIOutput[apporganization.Organization]](api, http.MethodGet, "/api/v1/organizations/{id}", "getOrganization", "Read an organization")
+	registerOpenAPIOperation[openAPIIDBodyInput[apporganization.OrganizationUpdateRequest], openAPIOutput[apporganization.OrganizationDetail]](api, http.MethodPatch, "/api/v1/organizations/{id}", "updateOrganization", "Update an organization")
+	registerOpenAPIOperation[openAPIIDInput, openAPIEmptyOutput](api, http.MethodPost, "/api/v1/organizations/{id}/disable", "disableOrganization", "Disable an organization")
 	registerOpenAPIOperation[openAPIBodyInput[accountapi.ForgotRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/auth/password/forgot", "forgotPassword", "Request a password reset email")
 	registerOpenAPIOperation[openAPIBodyInput[accountapi.ResetRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/auth/password/reset", "resetPassword", "Reset a password with a token")
 

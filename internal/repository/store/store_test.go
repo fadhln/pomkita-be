@@ -19,7 +19,7 @@ func TestStoreReadinessReportsMigrationState(t *testing.T) {
 	if err := store.Ping(ctx); err != nil {
 		t.Fatalf("ping store: %v", err)
 	}
-	current, err := store.MigrationsCurrent(ctx, 13)
+	current, err := store.MigrationsCurrent(ctx, 14)
 	if err != nil || !current {
 		t.Fatalf("current migration: current=%t err=%v", current, err)
 	}
