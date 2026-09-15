@@ -56,7 +56,7 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.T
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
 		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
-		Reports: reports, LatestMigration: 15,
+		Reports: reports, LatestMigration: 16,
 	}
 }
 

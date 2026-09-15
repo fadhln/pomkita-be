@@ -18,6 +18,7 @@ type serviceStub struct {
 	inviteErr error
 	acceptErr error
 	invite    appidentity.InvitationRequest
+	adminErr  error
 }
 
 func (s *serviceStub) Invite(_ context.Context, request appidentity.InvitationRequest) error {
@@ -27,6 +28,29 @@ func (s *serviceStub) Invite(_ context.Context, request appidentity.InvitationRe
 func (s *serviceStub) Accept(_ context.Context, _ appidentity.AcceptanceRequest) error {
 	return s.acceptErr
 }
+func (s *serviceStub) ListUsers(context.Context, appidentity.Actor, uuid.UUID) ([]appidentity.UserView, error) {
+	return []appidentity.UserView{}, s.adminErr
+}
+func (s *serviceStub) ReadUser(context.Context, appidentity.Actor, uuid.UUID) (appidentity.UserView, error) {
+	return appidentity.UserView{}, s.adminErr
+}
+func (s *serviceStub) UpdateUser(context.Context, appidentity.Actor, uuid.UUID, appidentity.UserUpdateRequest) (appidentity.UserView, error) {
+	return appidentity.UserView{}, s.adminErr
+}
+func (s *serviceStub) AssignRole(context.Context, appidentity.Actor, uuid.UUID, appidentity.RoleRequest) ([]appidentity.RoleView, error) {
+	return []appidentity.RoleView{}, s.adminErr
+}
+func (s *serviceStub) RemoveRole(context.Context, appidentity.Actor, uuid.UUID, appidentity.RoleRequest) error {
+	return s.adminErr
+}
+func (s *serviceStub) RoleHistory(context.Context, appidentity.Actor, uuid.UUID) ([]appidentity.RoleHistoryEvent, error) {
+	return []appidentity.RoleHistoryEvent{}, s.adminErr
+}
+func (s *serviceStub) IssuePasswordReset(context.Context, appidentity.Actor, uuid.UUID) (appidentity.PasswordResetResult, error) {
+	return appidentity.PasswordResetResult{}, s.adminErr
+}
+
+var _ AdminService = (*serviceStub)(nil)
 
 type sessionStub struct {
 	view appjwt.SessionView
@@ -79,6 +103,41 @@ func TestAcceptHandler_MapsInvalidTokenToBadRequest(t *testing.T) {
 	request.Header.Set("X-Requested-With", "XMLHttpRequest")
 	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), `"code":"INVALID_TOKEN"`) {
+		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestAdminUserRoutesRequireAdministrationRole(t *testing.T) {
+	service := &serviceStub{adminErr: appidentity.ErrForbidden}
+	router := testRouter(verifier{}, sessionStub{view: appjwt.SessionView{UserID: uuid.New(), OrgID: uuid.New(), Roles: []string{"Supervisor"}}}, service)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/users", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"code":"user_administration_forbidden"`) {
+		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestAdminUserRoutesRequireSession(t *testing.T) {
+	router := testRouter(verifier{err: appjwt.ErrSessionNotFound}, sessionStub{}, &serviceStub{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/users", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status: got %d, want 401", recorder.Code)
+	}
+}
+
+func TestAdminUserRoutesReturnBareList(t *testing.T) {
+	service := &serviceStub{}
+	router := testRouter(verifier{}, sessionStub{view: appjwt.SessionView{UserID: uuid.New(), OrgID: uuid.New(), Roles: []string{"Owner"}}}, service)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/users", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "[]" {
 		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

@@ -71,19 +71,24 @@ var (
 	ErrWeakPassword = domain.NewError(domain.CategoryValidation, "weak_password")
 	// ErrDependencyUnavailable identifies a missing identity dependency.
 	ErrDependencyUnavailable = domain.NewError(domain.CategoryDependency, "dependency_unavailable")
+	// ErrUserNotFound identifies a user outside the permitted organization scope.
+	ErrUserNotFound = domain.NewError(domain.CategoryNotFound, "user_not_found")
 )
 
 // Service owns invitation and activation rules.
 type Service struct {
-	repository Repository
-	mailer     mailer.Mailer
-	clock      Clock
-	baseURL    string
+	repository      Repository
+	adminRepository AdminRepository
+	mailer          mailer.Mailer
+	clock           Clock
+	baseURL         string
 }
 
 // NewService creates an identity service.
-func NewService(repository Repository, sender mailer.Mailer, clock Clock, publicBaseURL string) *Service {
-	return &Service{repository: repository, mailer: sender, clock: clock, baseURL: strings.TrimRight(strings.TrimSpace(publicBaseURL), "/")}
+func NewService(repository any, sender mailer.Mailer, clock Clock, publicBaseURL string) *Service {
+	identityRepository, _ := repository.(Repository)
+	adminRepository, _ := repository.(AdminRepository)
+	return &Service{repository: identityRepository, adminRepository: adminRepository, mailer: sender, clock: clock, baseURL: strings.TrimRight(strings.TrimSpace(publicBaseURL), "/")}
 }
 
 // Invite creates an invitation and sends its activation message.

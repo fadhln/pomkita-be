@@ -417,7 +417,29 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 
 	if err := runner.Steps(ctx, -1); err != nil {
+		t.Fatalf("reverse paired role history index migration: %v", err)
+	}
+	var roleHistoryIndexCount int
+	if err := connection.QueryRow(ctx, `select count(*) from pg_indexes where schemaname = current_schema() and indexname = 'audit_log_role_history_target'`).Scan(&roleHistoryIndexCount); err != nil {
+		t.Fatalf("count role history index after paired down: %v", err)
+	}
+	if roleHistoryIndexCount != 0 {
+		t.Fatalf("role history index remains after paired down: got %d", roleHistoryIndexCount)
+	}
+	if err := runner.Steps(ctx, 1); err != nil {
+		t.Fatalf("reapply paired role history index migration: %v", err)
+	}
+	if err := connection.QueryRow(ctx, `select count(*) from pg_indexes where schemaname = current_schema() and indexname = 'audit_log_role_history_target'`).Scan(&roleHistoryIndexCount); err != nil {
+		t.Fatalf("count role history index after paired up: %v", err)
+	}
+	if roleHistoryIndexCount != 1 {
+		t.Fatalf("role history index missing after paired up: got %d", roleHistoryIndexCount)
+	}
+	if err := runner.Steps(ctx, -1); err != nil {
 		t.Fatalf("reverse paired station detail migration: %v", err)
+	}
+	if err := runner.Steps(ctx, -1); err != nil {
+		t.Fatalf("reverse paired station detail migration after role index round trip: %v", err)
 	}
 	var stationDetailCount int
 	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'code'`).Scan(&stationDetailCount); err != nil {

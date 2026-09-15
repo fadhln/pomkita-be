@@ -40,6 +40,8 @@ type AcceptRequest struct {
 func RegisterRoutes(router gin.IRoutes, verifier transport.TokenVerifier, sessions transport.SessionService, service Service) {
 	router.POST("/users", transport.AuthMiddleware(verifier), transport.RequireCSRF, inviteHandler(sessions, service))
 	router.POST("/auth/invitations/accept", transport.RequireCSRF, acceptHandler(service))
+	adminService, _ := service.(AdminService)
+	RegisterAdminRoutes(router, verifier, sessions, adminService)
 }
 
 func inviteHandler(sessions transport.SessionService, service Service) gin.HandlerFunc {
