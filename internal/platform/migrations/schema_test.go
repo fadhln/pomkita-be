@@ -42,6 +42,20 @@ func TestMigrationSet_HasAReversibleProcedureFreeInitialSchema(t *testing.T) {
 	}
 }
 
+func TestMigrationSet_SerializesSharedExtensionSchemaCreation(t *testing.T) {
+	root := repositoryRoot(t)
+	path := filepath.Join(root, "migrations", "000001_initial_schema.up.sql")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read initial migration: %v", err)
+	}
+	migration := strings.ToLower(string(contents))
+	lock := "pg_advisory_xact_lock(hashtext('pomkita:app-schema'))"
+	if !strings.Contains(migration, lock) {
+		t.Fatalf("initial migration does not serialize app schema creation with %q", lock)
+	}
+}
+
 func TestMigrationSet_DefinesCatalogTablesAndTemporalConstraints(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000002_catalog_tables.up.sql")

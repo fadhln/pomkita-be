@@ -3,6 +3,7 @@
 
 -- The extension supports exclusion constraints in this migration set.
 SELECT set_config('search_path', current_schema() || ', public, app', false);
+SELECT pg_advisory_xact_lock(hashtext('pomkita:app-schema'));
 CREATE SCHEMA IF NOT EXISTS app;
 SELECT pg_advisory_xact_lock(hashtext('pomkita:extension:pgcrypto'));
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA app;
