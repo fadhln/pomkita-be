@@ -31,6 +31,7 @@ import (
 	policyrepository "github.com/pomkita/pomkita-be/internal/repository/policy"
 	reportingrepository "github.com/pomkita/pomkita-be/internal/repository/reporting"
 	shiftrepository "github.com/pomkita/pomkita-be/internal/repository/shift"
+	stationrepository "github.com/pomkita/pomkita-be/internal/repository/station"
 	store "github.com/pomkita/pomkita-be/internal/repository/store"
 	submissionrepository "github.com/pomkita/pomkita-be/internal/repository/submission"
 	accountservice "github.com/pomkita/pomkita-be/internal/service/account"
@@ -43,6 +44,7 @@ import (
 	policysservice "github.com/pomkita/pomkita-be/internal/service/policy"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 	shiftservice "github.com/pomkita/pomkita-be/internal/service/shift"
+	stationservice "github.com/pomkita/pomkita-be/internal/service/station"
 	submissionservice "github.com/pomkita/pomkita-be/internal/service/submission"
 )
 
@@ -54,7 +56,7 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.T
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
 		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
-		Reports: reports, LatestMigration: 14,
+		Reports: reports, LatestMigration: 15,
 	}
 }
 
@@ -94,6 +96,7 @@ func main() {
 	identityService := identityservice.NewService(identityrepository.NewIdentityRepository(database), messageSender, systemClock{}, cfg.PublicBaseURL)
 	accountService := accountservice.NewService(accountrepository.NewRepository(database), systemClock{}, messageSender, cfg.PublicBaseURL)
 	organizationService := organizationservice.NewService(organizationrepository.NewRepository(database), systemClock{})
+	stationService := stationservice.NewService(stationrepository.NewRepository(database), systemClock{})
 	reportingService := appreporting.NewService(reportingrepository.NewReportingRepository(database))
 	shiftService := shiftservice.NewService(shiftrepository.NewShiftRepository(database), systemClock{})
 	draftService := draftservice.NewService(draftrepository.NewDraftRepository(database), systemClock{})
@@ -111,6 +114,7 @@ func main() {
 	dependencies.Users = identityService
 	dependencies.Account = accountService
 	dependencies.Organization = organizationService
+	dependencies.Station = stationService
 	dependencies.AccountLimiter = accountapi.NewLimiter(5, time.Minute, time.Now)
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)
 

@@ -86,11 +86,15 @@ func (SessionModel) TableName() string { return "sessions" }
 
 // StationModel maps the tenant-scoped stations table.
 type StationModel struct {
-	OrgID     uuid.UUID `gorm:"column:org_id;type:uuid;primaryKey"`
-	StationID uuid.UUID `gorm:"column:station_id;type:uuid;primaryKey"`
-	Name      string    `gorm:"column:name;not null;default:Station"`
-	Timezone  string    `gorm:"column:timezone;not null"`
-	CreatedAt time.Time `gorm:"column:created_at;not null"`
+	OrgID     uuid.UUID  `gorm:"column:org_id;type:uuid;primaryKey"`
+	StationID uuid.UUID  `gorm:"column:station_id;type:uuid;primaryKey"`
+	Name      string     `gorm:"column:name;not null"`
+	Code      *string    `gorm:"column:code"`
+	Address   *string    `gorm:"column:address"`
+	Enabled   bool       `gorm:"column:enabled;not null;default:true"`
+	UpdatedAt *time.Time `gorm:"column:updated_at"`
+	Timezone  string     `gorm:"column:timezone;not null"`
+	CreatedAt time.Time  `gorm:"column:created_at;not null"`
 }
 
 // TableName returns the stations table name.

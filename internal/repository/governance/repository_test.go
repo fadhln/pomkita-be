@@ -159,7 +159,7 @@ func TestGovernanceRepository_ListAmendmentQueue_ScopesRowsAndMapsDiffs(t *testi
 	secondaryShiftID := uuid.New()
 	secondaryReportID := uuid.New()
 	secondaryPolicyID := uuid.New()
-	if err := fixture.store.DB.Create(&StationModel{OrgID: fixture.orgID, StationID: secondaryStationID, Timezone: "UTC", CreatedAt: fixture.now}).Error; err != nil {
+	if err := fixture.store.DB.Create(&StationModel{Name: "Station", OrgID: fixture.orgID, StationID: secondaryStationID, Timezone: "UTC", CreatedAt: fixture.now}).Error; err != nil {
 		t.Fatalf("create secondary station: %v", err)
 	}
 	if err := fixture.store.DB.Create(&ShiftModel{ShiftID: secondaryShiftID, OrgID: fixture.orgID, StationID: secondaryStationID, StationSeq: 1, SupervisorID: fixture.creatorID, OpenedAt: fixture.now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "awaiting_confirmation", PriceMapSnapshot: []byte(`{}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {
@@ -360,7 +360,7 @@ func newGovernanceFixture(t *testing.T, ctx context.Context) governanceFixture {
 	if err := store.DB.Create(&OrganizationModel{OrgID: fixture.orgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
-	if err := store.DB.Create(&StationModel{OrgID: fixture.orgID, StationID: fixture.stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&StationModel{Name: "Station", OrgID: fixture.orgID, StationID: fixture.stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
 	for id, email := range map[uuid.UUID]string{fixture.actorID: "admin@example.com", fixture.creatorID: "creator@example.com"} {

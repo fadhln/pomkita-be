@@ -83,7 +83,7 @@ func NewGovernanceFixture(t testing.TB, ctx context.Context) GovernanceFixture {
 	if err := database.DB.Create(&store.OrganizationModel{OrgID: fixture.OrgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
-	if err := database.DB.Create(&store.StationModel{OrgID: fixture.OrgID, StationID: fixture.StationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+	if err := database.DB.Create(&store.StationModel{Name: "Station", OrgID: fixture.OrgID, StationID: fixture.StationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
 	for id, email := range map[uuid.UUID]string{fixture.ActorID: "admin@example.com", fixture.CreatorID: "creator@example.com"} {

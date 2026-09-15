@@ -22,7 +22,7 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	if err := store.DB.Create(&OrganizationModel{OrgID: orgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
-	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "Asia/Jakarta", CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "Asia/Jakarta", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
 	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Test User", Email: "User@Example.com", Username: "test-user", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {

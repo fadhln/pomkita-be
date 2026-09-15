@@ -21,7 +21,7 @@ func TestShiftRepository_OpenShift_PersistsSnapshotAndDraft(t *testing.T) {
 	if err := store.DB.Create(&OrganizationModel{OrgID: orgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
-	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "Asia/Jakarta", CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "Asia/Jakarta", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
 	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "supervisor@example.com", Username: "supervisor", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
@@ -83,7 +83,7 @@ func TestShiftRepository_OpenShift_PersistsApprovedBackfillMetadata(t *testing.T
 	if err := store.DB.Create(&OrganizationModel{OrgID: orgID, Name: "Test Org", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create organization: %v", err)
 	}
-	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
 	for _, user := range []UserModel{
@@ -135,7 +135,7 @@ func TestShiftRepository_OpenShift_RejectsBackfillBeforeLaterChainedReport(t *te
 	dispenserID, nozzleID, baseReadingID, laterReadingID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	for _, value := range []any{
 		&OrganizationModel{OrgID: orgID, Name: "Backfill Order", CreatedAt: now},
-		&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now},
+		&StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now},
 		&UserModel{UserID: actorID, OrgID: orgID, DisplayName: "Supervisor", Email: "backfill-order-supervisor@example.com", Username: "backfill-order-supervisor", PasswordHash: "hash", Enabled: true, CreatedAt: now},
 		&UserModel{UserID: approverID, OrgID: orgID, DisplayName: "Owner", Email: "backfill-order-owner@example.com", Username: "backfill-order-owner", PasswordHash: "hash", Enabled: true, CreatedAt: now},
 		&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID},
