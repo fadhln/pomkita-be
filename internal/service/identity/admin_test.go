@@ -49,7 +49,7 @@ func (s *adminRepositoryStub) IssuePasswordReset(context.Context, Actor, uuid.UU
 
 func TestAdminService_RejectsWrongRoleBeforeRepository(t *testing.T) {
 	repository := &adminRepositoryStub{}
-	service := NewService(repository, nil, fixedClock{value: time.Now()}, "https://app.example.test")
+	service := NewService(nil, repository, nil, fixedClock{value: time.Now()}, "https://app.example.test")
 	actor := Actor{UserID: uuid.New(), OrgID: uuid.New(), Roles: []string{"Supervisor"}}
 
 	_, err := service.AssignRole(context.Background(), actor, uuid.New(), RoleRequest{StationID: uuid.New(), Role: "Operator"})
@@ -63,7 +63,7 @@ func TestAdminService_RejectsWrongRoleBeforeRepository(t *testing.T) {
 
 func TestAdminService_OwnerCannotAssignOwnerOrChangeOwnRole(t *testing.T) {
 	repository := &adminRepositoryStub{}
-	service := NewService(repository, nil, fixedClock{value: time.Now()}, "https://app.example.test")
+	service := NewService(nil, repository, nil, fixedClock{value: time.Now()}, "https://app.example.test")
 	actor := Actor{UserID: uuid.New(), OrgID: uuid.New(), Roles: []string{"Owner"}}
 
 	if _, err := service.AssignRole(context.Background(), actor, uuid.New(), RoleRequest{StationID: uuid.New(), Role: "Owner"}); !errors.Is(err, ErrForbidden) {
@@ -78,7 +78,7 @@ func TestAdminService_OwnerCannotAssignOwnerOrChangeOwnRole(t *testing.T) {
 }
 
 func TestAdminService_OwnerCannotListAnotherOrganization(t *testing.T) {
-	service := NewService(&adminRepositoryStub{}, nil, fixedClock{value: time.Now()}, "https://app.example.test")
+	service := NewService(nil, &adminRepositoryStub{}, nil, fixedClock{value: time.Now()}, "https://app.example.test")
 	actor := Actor{UserID: uuid.New(), OrgID: uuid.New(), Roles: []string{"Owner"}}
 	if _, err := service.ListUsers(context.Background(), actor, uuid.New()); !errors.Is(err, ErrWrongOrganization) {
 		t.Fatalf("wrong organization error: got %v, want %v", err, ErrWrongOrganization)
@@ -88,7 +88,7 @@ func TestAdminService_OwnerCannotListAnotherOrganization(t *testing.T) {
 func TestAdminService_IssuesOneTimeResetLinkForOwnerTarget(t *testing.T) {
 	repository := &adminRepositoryStub{}
 	clock := fixedClock{value: time.Date(2026, 9, 15, 10, 0, 0, 0, time.UTC)}
-	service := NewService(repository, nil, clock, "https://app.example.test/")
+	service := NewService(nil, repository, nil, clock, "https://app.example.test/")
 	actor := Actor{UserID: uuid.New(), OrgID: uuid.New(), Roles: []string{"Owner"}}
 
 	result, err := service.IssuePasswordReset(context.Background(), actor, uuid.New())

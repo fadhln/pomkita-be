@@ -85,10 +85,8 @@ type Service struct {
 }
 
 // NewService creates an identity service.
-func NewService(repository any, sender mailer.Mailer, clock Clock, publicBaseURL string) *Service {
-	identityRepository, _ := repository.(Repository)
-	adminRepository, _ := repository.(AdminRepository)
-	return &Service{repository: identityRepository, adminRepository: adminRepository, mailer: sender, clock: clock, baseURL: strings.TrimRight(strings.TrimSpace(publicBaseURL), "/")}
+func NewService(repository Repository, adminRepository AdminRepository, sender mailer.Mailer, clock Clock, publicBaseURL string) *Service {
+	return &Service{repository: repository, adminRepository: adminRepository, mailer: sender, clock: clock, baseURL: strings.TrimRight(strings.TrimSpace(publicBaseURL), "/")}
 }
 
 // Invite creates an invitation and sends its activation message.
