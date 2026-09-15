@@ -1,6 +1,52 @@
 {
   "components": {
     "schemas": {
+      "AcknowledgeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/AcknowledgeRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "break_glass_reason": {
+            "type": "string"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "is_break_glass": {
+            "type": "boolean"
+          },
+          "rejection_reason": {
+            "type": "string"
+          },
+          "shift_id": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          },
+          "version_no": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "station_id",
+          "shift_id",
+          "version_no",
+          "decision",
+          "rejection_reason",
+          "is_break_glass",
+          "break_glass_reason"
+        ],
+        "type": "object"
+      },
       "Acknowledgement": {
         "additionalProperties": false,
         "properties": {
@@ -97,6 +143,118 @@
           "RequestedAt",
           "DecidedAt",
           "RejectionReason"
+        ],
+        "type": "object"
+      },
+      "AmendmentDecisionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/AmendmentDecisionRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "rejection_reason": {
+            "type": "string"
+          },
+          "stale_check_hash": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "stale_check_hash",
+          "rejection_reason"
+        ],
+        "type": "object"
+      },
+      "AmendmentItem": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "new_value": {
+            "type": "string"
+          },
+          "old_value": {
+            "type": "string"
+          },
+          "target_kind": {
+            "type": "string"
+          },
+          "target_logical_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_kind",
+          "target_logical_id",
+          "field",
+          "old_value",
+          "new_value"
+        ],
+        "type": "object"
+      },
+      "AmendmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/AmendmentRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "base_report_id": {
+            "type": "string"
+          },
+          "break_glass_reason": {
+            "type": "string"
+          },
+          "is_break_glass": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AmendmentItem"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "shift_id": {
+            "type": "string"
+          },
+          "stale_check_hash": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "shift_id",
+          "base_report_id",
+          "reason",
+          "stale_check_hash",
+          "is_break_glass",
+          "break_glass_reason",
+          "items"
         ],
         "type": "object"
       },
@@ -229,6 +387,35 @@
         ],
         "type": "object"
       },
+      "ClaimDraftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/ClaimDraftRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "shift_id": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "shift_id",
+          "draft_id"
+        ],
+        "type": "object"
+      },
       "Detail": {
         "additionalProperties": false,
         "properties": {
@@ -282,6 +469,244 @@
           "opened_at",
           "business_date",
           "status"
+        ],
+        "type": "object"
+      },
+      "DraftEvidenceRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/DraftEvidenceRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "claim_token": {
+            "type": "string"
+          },
+          "content_hash": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "evidence_type": {
+            "type": "string"
+          },
+          "loss_row_id": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "object_key": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "size_bytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "loss_row_id",
+          "evidence_type",
+          "object_key",
+          "content_hash",
+          "size_bytes",
+          "mime",
+          "station_id",
+          "draft_id",
+          "claim_token"
+        ],
+        "type": "object"
+      },
+      "DraftLeaseRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/DraftLeaseRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "claim_token": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "draft_id",
+          "claim_token"
+        ],
+        "type": "object"
+      },
+      "DraftLossRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/DraftLossRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "cash_amount": {
+            "type": "string"
+          },
+          "claim_token": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "liters": {
+            "type": "string"
+          },
+          "loss_id": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "reason_code": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "loss_id",
+          "direction",
+          "reason_code",
+          "liters",
+          "cash_amount",
+          "note",
+          "station_id",
+          "draft_id",
+          "claim_token"
+        ],
+        "type": "object"
+      },
+      "DraftReadingRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/DraftReadingRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "claim_token": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "meter_end": {
+            "type": "string"
+          },
+          "meter_start": {
+            "type": "string"
+          },
+          "nozzle_id": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "nozzle_id",
+          "meter_start",
+          "meter_end",
+          "station_id",
+          "draft_id",
+          "claim_token"
+        ],
+        "type": "object"
+      },
+      "DraftSalesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/DraftSalesRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "cash_amount": {
+            "type": "string"
+          },
+          "cashless_amount": {
+            "type": "string"
+          },
+          "claim_token": {
+            "type": "string"
+          },
+          "dispenser_id": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "dispenser_id",
+          "cash_amount",
+          "cashless_amount",
+          "station_id",
+          "draft_id",
+          "claim_token"
         ],
         "type": "object"
       },
@@ -421,542 +846,6 @@
         ],
         "type": "object"
       },
-      "ModernAcknowledgeRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernAcknowledgeRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "break_glass_reason": {
-            "type": "string"
-          },
-          "decision": {
-            "type": "string"
-          },
-          "is_break_glass": {
-            "type": "boolean"
-          },
-          "rejection_reason": {
-            "type": "string"
-          },
-          "shift_id": {
-            "type": "string"
-          },
-          "station_id": {
-            "type": "string"
-          },
-          "version_no": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "station_id",
-          "shift_id",
-          "version_no",
-          "decision",
-          "rejection_reason",
-          "is_break_glass",
-          "break_glass_reason"
-        ],
-        "type": "object"
-      },
-      "ModernAmendmentDecisionRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernAmendmentDecisionRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "rejection_reason": {
-            "type": "string"
-          },
-          "stale_check_hash": {
-            "type": "string"
-          },
-          "station_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "station_id",
-          "stale_check_hash",
-          "rejection_reason"
-        ],
-        "type": "object"
-      },
-      "ModernAmendmentItem": {
-        "additionalProperties": false,
-        "properties": {
-          "field": {
-            "type": "string"
-          },
-          "new_value": {
-            "type": "string"
-          },
-          "old_value": {
-            "type": "string"
-          },
-          "target_kind": {
-            "type": "string"
-          },
-          "target_logical_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_kind",
-          "target_logical_id",
-          "field",
-          "old_value",
-          "new_value"
-        ],
-        "type": "object"
-      },
-      "ModernAmendmentRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernAmendmentRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "base_report_id": {
-            "type": "string"
-          },
-          "break_glass_reason": {
-            "type": "string"
-          },
-          "is_break_glass": {
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/ModernAmendmentItem"
-            },
-            "type": [
-              "array",
-              "null"
-            ]
-          },
-          "reason": {
-            "type": "string"
-          },
-          "shift_id": {
-            "type": "string"
-          },
-          "stale_check_hash": {
-            "type": "string"
-          },
-          "station_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "station_id",
-          "shift_id",
-          "base_report_id",
-          "reason",
-          "stale_check_hash",
-          "is_break_glass",
-          "break_glass_reason",
-          "items"
-        ],
-        "type": "object"
-      },
-      "ModernClaimDraftRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernClaimDraftRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "draft_id": {
-            "type": "string"
-          },
-          "shift_id": {
-            "type": "string"
-          },
-          "station_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "station_id",
-          "shift_id",
-          "draft_id"
-        ],
-        "type": "object"
-      },
-      "ModernDraftEvidenceRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernDraftEvidenceRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "content_hash": {
-            "type": "string"
-          },
-          "evidence_type": {
-            "type": "string"
-          },
-          "loss_row_id": {
-            "type": "string"
-          },
-          "mime": {
-            "type": "string"
-          },
-          "object_key": {
-            "type": "string"
-          },
-          "revision": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "size_bytes": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "revision",
-          "loss_row_id",
-          "evidence_type",
-          "object_key",
-          "content_hash",
-          "size_bytes",
-          "mime"
-        ],
-        "type": "object"
-      },
-      "ModernDraftLeaseRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernDraftLeaseRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "claim_token": {
-            "type": "string"
-          },
-          "draft_id": {
-            "type": "string"
-          },
-          "station_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "station_id",
-          "draft_id",
-          "claim_token"
-        ],
-        "type": "object"
-      },
-      "ModernDraftLossRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernDraftLossRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "cash_amount": {
-            "type": "string"
-          },
-          "direction": {
-            "type": "string"
-          },
-          "liters": {
-            "type": "string"
-          },
-          "loss_id": {
-            "type": "string"
-          },
-          "note": {
-            "type": "string"
-          },
-          "reason_code": {
-            "type": "string"
-          },
-          "revision": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "revision",
-          "loss_id",
-          "direction",
-          "reason_code",
-          "liters",
-          "cash_amount",
-          "note"
-        ],
-        "type": "object"
-      },
-      "ModernDraftReadingRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernDraftReadingRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "meter_end": {
-            "type": "string"
-          },
-          "meter_start": {
-            "type": "string"
-          },
-          "nozzle_id": {
-            "type": "string"
-          },
-          "revision": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "revision",
-          "nozzle_id",
-          "meter_start",
-          "meter_end"
-        ],
-        "type": "object"
-      },
-      "ModernDraftSalesRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernDraftSalesRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "cash_amount": {
-            "type": "string"
-          },
-          "cashless_amount": {
-            "type": "string"
-          },
-          "dispenser_id": {
-            "type": "string"
-          },
-          "revision": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "revision",
-          "dispenser_id",
-          "cash_amount",
-          "cashless_amount"
-        ],
-        "type": "object"
-      },
-      "ModernOpenShiftRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernOpenShiftRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "backfill_approver": {
-            "type": "string"
-          },
-          "backfill_reason": {
-            "type": "string"
-          },
-          "backfilled": {
-            "type": "boolean"
-          },
-          "opened_at": {
-            "type": "string"
-          },
-          "original_event_date": {
-            "type": "string"
-          },
-          "shift_ke": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "station_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "station_id",
-          "opened_at",
-          "backfilled",
-          "original_event_date",
-          "shift_ke",
-          "backfill_approver",
-          "backfill_reason"
-        ],
-        "type": "object"
-      },
-      "ModernPolicyRevisionRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernPolicyRevisionRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "disabled": {
-            "type": "boolean"
-          },
-          "evidence_mode": {
-            "type": "string"
-          },
-          "gain_liter_threshold": {
-            "type": "string"
-          },
-          "gain_rupiah_threshold": {
-            "type": "string"
-          },
-          "loss_liter_threshold": {
-            "type": "string"
-          },
-          "loss_rupiah_threshold": {
-            "type": "string"
-          },
-          "policy_id": {
-            "type": "string"
-          },
-          "policy_kind": {
-            "type": "string"
-          },
-          "rollover_threshold": {
-            "type": "string"
-          },
-          "station_id": {
-            "type": "string"
-          },
-          "supersedes_revision_id": {
-            "type": "string"
-          },
-          "tombstone_reason": {
-            "type": "string"
-          },
-          "valid_from": {
-            "type": "string"
-          },
-          "variance_rupiah_threshold": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "policy_kind",
-          "policy_id",
-          "station_id",
-          "valid_from",
-          "supersedes_revision_id",
-          "disabled",
-          "tombstone_reason",
-          "loss_liter_threshold",
-          "gain_liter_threshold",
-          "loss_rupiah_threshold",
-          "gain_rupiah_threshold",
-          "variance_rupiah_threshold",
-          "rollover_threshold",
-          "evidence_mode"
-        ],
-        "type": "object"
-      },
-      "ModernSubmitRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "$schema": {
-            "description": "A URL to the JSON Schema for this object.",
-            "examples": [
-              "https://example.com/ModernSubmitRequest.json"
-            ],
-            "format": "uri",
-            "readOnly": true,
-            "type": "string"
-          },
-          "claim_token": {
-            "type": "string"
-          },
-          "draft_id": {
-            "type": "string"
-          },
-          "payload": {},
-          "revision": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "shift_id": {
-            "type": "string"
-          },
-          "station_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "station_id",
-          "shift_id",
-          "draft_id",
-          "claim_token",
-          "revision",
-          "payload"
-        ],
-        "type": "object"
-      },
       "OpenAPIDraftRevision": {
         "additionalProperties": false,
         "properties": {
@@ -1021,6 +910,52 @@
         ],
         "type": "object"
       },
+      "OpenShiftRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/OpenShiftRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "backfill_approver": {
+            "type": "string"
+          },
+          "backfill_reason": {
+            "type": "string"
+          },
+          "backfilled": {
+            "type": "boolean"
+          },
+          "opened_at": {
+            "type": "string"
+          },
+          "original_event_date": {
+            "type": "string"
+          },
+          "shift_ke": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "opened_at",
+          "backfilled",
+          "original_event_date",
+          "shift_ke",
+          "backfill_approver",
+          "backfill_reason"
+        ],
+        "type": "object"
+      },
       "PolicyRevision": {
         "additionalProperties": false,
         "properties": {
@@ -1056,6 +991,79 @@
           "policy_kind",
           "valid_from",
           "disabled"
+        ],
+        "type": "object"
+      },
+      "PolicyRevisionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/PolicyRevisionRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "evidence_mode": {
+            "type": "string"
+          },
+          "gain_liter_threshold": {
+            "type": "string"
+          },
+          "gain_rupiah_threshold": {
+            "type": "string"
+          },
+          "loss_liter_threshold": {
+            "type": "string"
+          },
+          "loss_rupiah_threshold": {
+            "type": "string"
+          },
+          "policy_id": {
+            "type": "string"
+          },
+          "policy_kind": {
+            "type": "string"
+          },
+          "rollover_threshold": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          },
+          "supersedes_revision_id": {
+            "type": "string"
+          },
+          "tombstone_reason": {
+            "type": "string"
+          },
+          "valid_from": {
+            "type": "string"
+          },
+          "variance_rupiah_threshold": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_kind",
+          "policy_id",
+          "station_id",
+          "valid_from",
+          "supersedes_revision_id",
+          "disabled",
+          "tombstone_reason",
+          "loss_liter_threshold",
+          "gain_liter_threshold",
+          "loss_rupiah_threshold",
+          "gain_rupiah_threshold",
+          "variance_rupiah_threshold",
+          "rollover_threshold",
+          "evidence_mode"
         ],
         "type": "object"
       },
@@ -1371,6 +1379,46 @@
         ],
         "type": "object"
       },
+      "SubmitRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "$schema": {
+            "description": "A URL to the JSON Schema for this object.",
+            "examples": [
+              "https://example.com/SubmitRequest.json"
+            ],
+            "format": "uri",
+            "readOnly": true,
+            "type": "string"
+          },
+          "claim_token": {
+            "type": "string"
+          },
+          "draft_id": {
+            "type": "string"
+          },
+          "payload": {},
+          "revision": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "shift_id": {
+            "type": "string"
+          },
+          "station_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "shift_id",
+          "draft_id",
+          "claim_token",
+          "revision",
+          "payload"
+        ],
+        "type": "object"
+      },
       "Summary": {
         "additionalProperties": false,
         "properties": {
@@ -1439,7 +1487,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernAmendmentRequest"
+                "$ref": "#/components/schemas/AmendmentRequest"
               }
             }
           },
@@ -1546,7 +1594,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernAmendmentDecisionRequest"
+                "$ref": "#/components/schemas/AmendmentDecisionRequest"
               }
             }
           },
@@ -1653,7 +1701,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernAmendmentDecisionRequest"
+                "$ref": "#/components/schemas/AmendmentDecisionRequest"
               }
             }
           },
@@ -2206,7 +2254,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernClaimDraftRequest"
+                "$ref": "#/components/schemas/ClaimDraftRequest"
               }
             }
           },
@@ -2302,7 +2350,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernDraftEvidenceRequest"
+                "$ref": "#/components/schemas/DraftEvidenceRequest"
               }
             }
           },
@@ -2398,7 +2446,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernDraftLeaseRequest"
+                "$ref": "#/components/schemas/DraftLeaseRequest"
               }
             }
           },
@@ -2487,7 +2535,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernDraftLossRequest"
+                "$ref": "#/components/schemas/DraftLossRequest"
               }
             }
           },
@@ -2583,7 +2631,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernDraftReadingRequest"
+                "$ref": "#/components/schemas/DraftReadingRequest"
               }
             }
           },
@@ -2679,7 +2727,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernDraftSalesRequest"
+                "$ref": "#/components/schemas/DraftSalesRequest"
               }
             }
           },
@@ -3038,7 +3086,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernPolicyRevisionRequest"
+                "$ref": "#/components/schemas/PolicyRevisionRequest"
               }
             }
           },
@@ -3251,7 +3299,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernAcknowledgeRequest"
+                "$ref": "#/components/schemas/AcknowledgeRequest"
               }
             }
           },
@@ -3640,7 +3688,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernOpenShiftRequest"
+                "$ref": "#/components/schemas/OpenShiftRequest"
               }
             }
           },
@@ -3852,7 +3900,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ModernSubmitRequest"
+                "$ref": "#/components/schemas/SubmitRequest"
               }
             }
           },

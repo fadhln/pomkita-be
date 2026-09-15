@@ -4,14 +4,21 @@ import (
 	"context"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
-	gormstore "github.com/pomkita/pomkita-be/internal/adapter/persistence/gorm"
 	"github.com/pomkita/pomkita-be/internal/config"
 	"github.com/pomkita/pomkita-be/internal/httpapi"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	cleanmigrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
+	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
+	authrepository "github.com/pomkita/pomkita-be/internal/repository/auth"
+	draftrepository "github.com/pomkita/pomkita-be/internal/repository/draft"
+	governancerepository "github.com/pomkita/pomkita-be/internal/repository/governance"
+	policyrepository "github.com/pomkita/pomkita-be/internal/repository/policy"
+	reportingrepository "github.com/pomkita/pomkita-be/internal/repository/reporting"
+	shiftrepository "github.com/pomkita/pomkita-be/internal/repository/shift"
+	store "github.com/pomkita/pomkita-be/internal/repository/store"
+	submissionrepository "github.com/pomkita/pomkita-be/internal/repository/submission"
 	auditservice "github.com/pomkita/pomkita-be/internal/service/audit"
 	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
 	draftservice "github.com/pomkita/pomkita-be/internal/service/draft"
@@ -26,17 +33,10 @@ type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-func cleanMigrationsDirectory(value string) string {
-	if filepath.Base(filepath.Clean(value)) == "clean" {
-		return value
-	}
-	return filepath.Join(value, "clean")
-}
-
-func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, modernShift httpapi.ModernShiftService, modernShiftRead httpapi.ModernShiftReadService, modernDraft httpapi.ModernDraftService, modernDraftWrites httpapi.ModernDraftWriteService, modernSubmission httpapi.ModernSubmissionService, modernGovernance httpapi.ModernGovernanceService, modernAmendment httpapi.ModernAmendmentService, modernPolicy httpapi.ModernPolicyService, modernPolicyRead httpapi.ModernPolicyReadService, modernAudit httpapi.ModernAuditService, modernAuditVerify httpapi.ModernAuditVerificationService, modernAnomalies httpapi.ModernAnomalyService, reports httpapi.ModernReportingService) httpapi.RouterDependencies {
+func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.TokenVerifier, sessions httpapi.SessionService, Shift httpapi.ShiftService, ShiftRead httpapi.ShiftReadService, Draft httpapi.DraftService, DraftWrites httpapi.DraftWriteService, Submission httpapi.SubmissionService, Governance httpapi.GovernanceService, Amendment httpapi.AmendmentService, Policy httpapi.PolicyService, PolicyRead httpapi.PolicyReadService, Audit httpapi.AuditService, AuditVerify httpapi.AuditVerificationService, Anomalies httpapi.AnomalyService, reports httpapi.ReportingService) httpapi.RouterDependencies {
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
-		ModernShift: modernShift, ModernShiftRead: modernShiftRead, ModernDraft: modernDraft, ModernDraftWrites: modernDraftWrites, ModernSubmission: modernSubmission, ModernGovernance: modernGovernance, ModernAmendment: modernAmendment, ModernPolicy: modernPolicy, ModernPolicyRead: modernPolicyRead, ModernAudit: modernAudit, ModernAuditVerify: modernAuditVerify, ModernAnomalies: modernAnomalies,
+		Shift: Shift, ShiftRead: ShiftRead, Draft: Draft, DraftWrites: DraftWrites, Submission: Submission, Governance: Governance, Amendment: Amendment, Policy: Policy, PolicyRead: PolicyRead, Audit: Audit, AuditVerify: AuditVerify, Anomalies: Anomalies,
 		Reports: reports, LatestMigration: 11,
 	}
 }
@@ -44,7 +44,7 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier httpapi.Tok
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
-	migrator, err := cleanmigrations.New(cfg.DatabaseURL, cleanMigrationsDirectory(cfg.MigrationsDir))
+	migrator, err := cleanmigrations.New(cfg.DatabaseURL, cfg.MigrationsDir)
 	if err != nil {
 		log.Printf("create migration runner: %v", err)
 		os.Exit(1)
@@ -53,29 +53,29 @@ func main() {
 		log.Printf("apply migrations: %v", err)
 		os.Exit(1)
 	}
-	database, err := gormstore.Open(ctx, cfg.DatabaseURL)
+	database, err := store.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Printf("open GORM database: %v", err)
 		os.Exit(1)
 	}
 	defer database.Close()
-	authRepository := gormstore.NewAuthRepository(database, cfg.JWTSecrets)
+	authRepository := authrepository.NewAuthRepository(database, cfg.JWTSecrets)
 	jwtService := appjwt.NewService(authRepository, appjwt.Config{
 		Issuer: cfg.JWTIssuer, Audience: cfg.JWTAudience,
 	})
 	sessionService := authservice.NewService(authRepository, jwtService)
-	modernReporting := appreporting.NewService(gormstore.NewReportingRepository(database))
-	modernShift := shiftservice.NewService(gormstore.NewShiftRepository(database), systemClock{})
-	modernDraft := draftservice.NewService(gormstore.NewDraftRepository(database), systemClock{})
-	modernSubmission := submissionservice.NewService(gormstore.NewSubmissionRepository(database), systemClock{})
-	modernGovernance := governanceservice.NewService(gormstore.NewGovernanceRepository(database), systemClock{})
-	modernAmendment := governanceservice.NewAmendmentService(gormstore.NewGovernanceRepository(database), systemClock{})
-	modernPolicy := policysservice.NewService(gormstore.NewPolicyRepository(database), systemClock{})
-	auditRepository := gormstore.NewAuditRepository(database)
-	modernAudit := auditservice.NewService(auditRepository, systemClock{})
+	Reporting := appreporting.NewService(reportingrepository.NewReportingRepository(database))
+	Shift := shiftservice.NewService(shiftrepository.NewShiftRepository(database), systemClock{})
+	Draft := draftservice.NewService(draftrepository.NewDraftRepository(database), systemClock{})
+	Submission := submissionservice.NewService(submissionrepository.NewSubmissionRepository(database), systemClock{})
+	Governance := governanceservice.NewService(governancerepository.NewGovernanceRepository(database), systemClock{})
+	Amendment := governanceservice.NewAmendmentService(governancerepository.NewGovernanceRepository(database), systemClock{})
+	Policy := policysservice.NewService(policyrepository.NewPolicyRepository(database), systemClock{})
+	auditRepository := auditrepository.NewAuditRepository(database)
+	Audit := auditservice.NewService(auditRepository, systemClock{})
 	deniedAudit := auditservice.NewDeniedService(auditRepository, systemClock{})
 	dependencies := composeRouterDependencies(
-		database, jwtService, sessionService, modernShift, modernShift, modernDraft, modernDraft, modernSubmission, modernGovernance, modernAmendment, modernPolicy, modernPolicy, modernReporting, modernAudit, modernReporting, modernReporting,
+		database, jwtService, sessionService, Shift, Shift, Draft, Draft, Submission, Governance, Amendment, Policy, Policy, Reporting, Audit, Reporting, Reporting,
 	)
 	dependencies.DeniedAudit = deniedAudit
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)

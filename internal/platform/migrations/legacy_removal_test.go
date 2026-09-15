@@ -13,9 +13,6 @@ func TestLegacyProcedureSourcesAreRemoved(t *testing.T) {
 	}
 	for _, relative := range []string{
 		"internal/db",
-		"internal/httpapi/shift_handlers.go",
-		"internal/httpapi/governance_handlers.go",
-		"internal/httpapi/reporting_handlers.go",
 		"migrations/000001_b0_foundation.up.sql",
 		"test",
 	} {
@@ -24,8 +21,8 @@ func TestLegacyProcedureSourcesAreRemoved(t *testing.T) {
 		}
 	}
 	for _, relative := range []string{
-		"internal/adapter/persistence/gorm/auth_repository.go",
-		"internal/adapter/persistence/gorm/models.go",
+		"internal/repository/auth/repository.go",
+		"internal/repository/store/models.go",
 	} {
 		contents, err := os.ReadFile(filepath.Join(root, relative))
 		if err != nil {

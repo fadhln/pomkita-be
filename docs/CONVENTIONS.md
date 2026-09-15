@@ -17,16 +17,25 @@ Use these directories:
 ```text
 cmd/server/           Process start and graceful shutdown
 internal/config/      Environment configuration
-internal/httpapi/     Router, middleware, handlers, and HTTP errors
-internal/adapter/     GORM repositories and external adapters
+internal/httpapi/     Router, middleware, HTTP errors, and transport support
+internal/httpapi/<module>/  Module handlers and request DTOs
+internal/service/     Module use cases and business rules
+internal/repository/  Module GORM repositories and shared database store
 internal/jwt/         Token issue and verification support
 internal/canonical/   Canonical JSON and schema validation
-internal/money/       Decimal-string and numeric boundary support
 migrations/           Ordered SQL migrations
 docs/                 Repository conventions and decisions
 ```
 
 Create a package only when the package has one clear purpose. Do not create a package for one function. Keep an interface near the code that uses the interface.
+
+For one module, the dependency direction is `httpapi -> service -> repository`.
+HTTP handlers map requests and responses. Services own business rules.
+Repositories own database queries and transactions. Keep GORM models in
+`internal/repository/store` and do not return them from a repository.
+
+Keep a handler unit test beside its module. Put tests that construct the root
+router in `internal/httpapi/integration`.
 
 ## 3. Change design
 

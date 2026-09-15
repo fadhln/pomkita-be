@@ -14,6 +14,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/pomkita/pomkita-be/internal/domain"
+	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
+	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
+	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
+	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
+	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
+	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
+	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	appauth "github.com/pomkita/pomkita-be/internal/service/auth"
@@ -47,24 +54,24 @@ type DeniedAuditService interface {
 
 // RouterDependencies contains all services required by the HTTP adapter.
 type RouterDependencies struct {
-	Readiness         Readiness
-	Verifier          TokenVerifier
-	Sessions          SessionService
-	ModernShift       ModernShiftService
-	ModernShiftRead   ModernShiftReadService
-	ModernDraft       ModernDraftService
-	ModernDraftWrites ModernDraftWriteService
-	ModernSubmission  ModernSubmissionService
-	ModernGovernance  ModernGovernanceService
-	ModernAmendment   ModernAmendmentService
-	ModernPolicy      ModernPolicyService
-	ModernPolicyRead  ModernPolicyReadService
-	ModernAudit       ModernAuditService
-	ModernAuditVerify ModernAuditVerificationService
-	ModernAnomalies   ModernAnomalyService
-	Reports           ModernReportingService
-	DeniedAudit       DeniedAuditService
-	LatestMigration   int
+	Readiness       Readiness
+	Verifier        TokenVerifier
+	Sessions        SessionService
+	Shift           ShiftService
+	ShiftRead       ShiftReadService
+	Draft           DraftService
+	DraftWrites     DraftWriteService
+	Submission      SubmissionService
+	Governance      GovernanceService
+	Amendment       AmendmentService
+	Policy          PolicyService
+	PolicyRead      PolicyReadService
+	Audit           AuditService
+	AuditVerify     AuditVerificationService
+	Anomalies       AnomalyService
+	Reports         ReportingService
+	DeniedAudit     DeniedAuditService
+	LatestMigration int
 }
 
 // ErrInvalidCredentials indicates that login credentials do not match an enabled user.
@@ -95,23 +102,23 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 
 	versioned := router.Group("/api/v1")
 	registerSessionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, environment == "production")
-	registerModernReportingRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
-	registerModernShiftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShift)
-	registerModernShiftReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernShiftRead)
-	registerModernDraftRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernDraft)
-	registerModernDraftWriteRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernDraftWrites)
-	registerModernSubmissionRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernSubmission)
-	registerModernGovernanceRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernGovernance)
-	registerModernAmendmentRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAmendment)
-	registerModernPolicyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernPolicy)
-	registerModernPolicyReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernPolicyRead)
-	if dependencies.ModernAudit != nil {
-		registerModernAuditRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAudit)
+	reportingapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Reports)
+	shiftapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Shift)
+	shiftapi.RegisterReadRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ShiftRead)
+	draftapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Draft)
+	draftapi.RegisterWriteRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.DraftWrites)
+	submissionapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Submission)
+	governanceapi.RegisterAcknowledgementRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Governance)
+	governanceapi.RegisterAmendmentRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Amendment)
+	policyapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Policy)
+	policyapi.RegisterHistoryRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.PolicyRead)
+	if dependencies.Audit != nil {
+		auditapi.RegisterRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Audit)
 	}
-	if dependencies.ModernAuditVerify != nil {
-		registerModernAuditVerifyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAuditVerify)
+	if dependencies.AuditVerify != nil {
+		auditapi.RegisterVerifyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.AuditVerify)
 	}
-	registerModernAnomalyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.ModernAnomalies)
+	reportingapi.RegisterAnomalyRoutes(versioned, dependencies.Verifier, dependencies.Sessions, dependencies.Anomalies)
 	return router
 }
 

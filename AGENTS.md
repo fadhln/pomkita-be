@@ -23,7 +23,7 @@ If two instructions conflict, use this order:
 - Do not write production code before you observe the applicable test fail for the expected reason.
 - Keep the PostgreSQL database as the enforcement layer.
 - Keep HTTP code in `internal/httpapi`.
-- Keep database calls in `internal/db`.
+- Keep database calls in `internal/repository`.
 - Do not query a table from an HTTP handler.
 - Do not give table DML privileges to the application role.
 - Do not use `float32` or `float64` for money or volume.

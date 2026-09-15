@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/google/uuid"
@@ -18,19 +17,10 @@ func TestRouterDependenciesIncludeTypedReportingService(t *testing.T) {
 	}
 }
 
-func TestCleanMigrationsDirectory_AcceptsRootAndCleanPaths(t *testing.T) {
-	if got := cleanMigrationsDirectory("migrations"); got != filepath.Join("migrations", "clean") {
-		t.Fatalf("root path: got %q", got)
-	}
-	if got := cleanMigrationsDirectory(filepath.Join("migrations", "clean")); got != filepath.Join("migrations", "clean") {
-		t.Fatalf("clean path: got %q", got)
-	}
-}
-
 type typedReportingMarker struct{}
 
 func (typedReportingMarker) ReadReport(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) (appreporting.ReportView, error) {
 	return appreporting.ReportView{}, nil
 }
 
-var _ httpapi.ModernReportingService = (*typedReportingMarker)(nil)
+var _ httpapi.ReportingService = (*typedReportingMarker)(nil)

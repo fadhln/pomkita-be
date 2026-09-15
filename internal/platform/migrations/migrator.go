@@ -1,4 +1,4 @@
-// Package migrations applies the clean SQL migration sequence.
+// Package migrations applies the SQL migration sequence.
 package migrations
 
 import (
