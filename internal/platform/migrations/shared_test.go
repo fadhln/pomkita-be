@@ -114,7 +114,9 @@ func TestMigrator_AppliesIsolatedSchemasOnAFreshDatabaseConcurrently(t *testing.
 		t.Fatalf("resolve migrations: %v", err)
 	}
 
-	const workers = 6
+	// Three processes are sufficient to race on the first schema creation, and
+	// the test stays cheap because each worker applies the complete migration set.
+	const workers = 3
 	waitGroup := sync.WaitGroup{}
 	errs := make([]error, workers)
 	for worker := 0; worker < workers; worker++ {
