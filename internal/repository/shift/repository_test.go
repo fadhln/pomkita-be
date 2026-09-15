@@ -24,7 +24,7 @@ func TestShiftRepository_OpenShift_PersistsSnapshotAndDraft(t *testing.T) {
 	if err := store.DB.Create(&StationModel{OrgID: orgID, StationID: stationID, Timezone: "Asia/Jakarta", CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create station: %v", err)
 	}
-	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "supervisor@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "supervisor@example.com", Username: "supervisor", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 	if err := store.DB.Create(&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID}).Error; err != nil {
@@ -87,8 +87,8 @@ func TestShiftRepository_OpenShift_PersistsApprovedBackfillMetadata(t *testing.T
 		t.Fatalf("create station: %v", err)
 	}
 	for _, user := range []UserModel{
-		{UserID: actorID, OrgID: orgID, DisplayName: "Supervisor", Email: "backfill-supervisor@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
-		{UserID: approverID, OrgID: orgID, DisplayName: "Owner", Email: "backfill-owner@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+		{UserID: actorID, OrgID: orgID, DisplayName: "Supervisor", Email: "backfill-supervisor@example.com", Username: "backfill-supervisor", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+		{UserID: approverID, OrgID: orgID, DisplayName: "Owner", Email: "backfill-owner@example.com", Username: "backfill-owner", PasswordHash: "hash", Enabled: true, CreatedAt: now},
 	} {
 		if err := store.DB.Create(&user).Error; err != nil {
 			t.Fatalf("create user: %v", err)
@@ -136,8 +136,8 @@ func TestShiftRepository_OpenShift_RejectsBackfillBeforeLaterChainedReport(t *te
 	for _, value := range []any{
 		&OrganizationModel{OrgID: orgID, Name: "Backfill Order", CreatedAt: now},
 		&StationModel{OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now},
-		&UserModel{UserID: actorID, OrgID: orgID, DisplayName: "Supervisor", Email: "backfill-order-supervisor@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
-		&UserModel{UserID: approverID, OrgID: orgID, DisplayName: "Owner", Email: "backfill-order-owner@example.com", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+		&UserModel{UserID: actorID, OrgID: orgID, DisplayName: "Supervisor", Email: "backfill-order-supervisor@example.com", Username: "backfill-order-supervisor", PasswordHash: "hash", Enabled: true, CreatedAt: now},
+		&UserModel{UserID: approverID, OrgID: orgID, DisplayName: "Owner", Email: "backfill-order-owner@example.com", Username: "backfill-order-owner", PasswordHash: "hash", Enabled: true, CreatedAt: now},
 		&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID},
 		&NozzleModel{OrgID: orgID, StationID: stationID, NozzleID: nozzleID, DispenserID: dispenserID, MeterMax: Decimal("99999.9")},
 	} {
