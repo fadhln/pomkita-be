@@ -47,7 +47,7 @@ func validInvite(role string) InvitationRequest {
 }
 
 func TestService_Invite_OwnerCannotCreateOwner(t *testing.T) {
-	service := NewService(&repositoryStub{userID: uuid.New()}, &mailerStub{}, fixedClock{value: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)}, "https://app.example.test")
+	service := NewService(&repositoryStub{userID: uuid.New()}, nil, &mailerStub{}, fixedClock{value: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)}, "https://app.example.test")
 	if err := service.Invite(context.Background(), validInvite("Owner")); err != ErrForbidden {
 		t.Fatalf("error: got %v, want %v", err, ErrForbidden)
 	}
@@ -57,7 +57,7 @@ func TestService_Invite_SuperadminRequiresTargetOrganization(t *testing.T) {
 	request := validInvite("Owner")
 	request.ActorRole = "Superadmin"
 	request.TargetOrgID = uuid.Nil
-	service := NewService(&repositoryStub{userID: uuid.New()}, &mailerStub{}, fixedClock{value: time.Now()}, "https://app.example.test")
+	service := NewService(&repositoryStub{userID: uuid.New()}, nil, &mailerStub{}, fixedClock{value: time.Now()}, "https://app.example.test")
 	if err := service.Invite(context.Background(), request); err != ErrInvalidRequest {
 		t.Fatalf("error: got %v, want %v", err, ErrInvalidRequest)
 	}
@@ -66,7 +66,7 @@ func TestService_Invite_SuperadminRequiresTargetOrganization(t *testing.T) {
 func TestService_Invite_RejectsWrongRoleAndOrganization(t *testing.T) {
 	request := validInvite("Operator")
 	request.ActorRole = "Supervisor"
-	service := NewService(&repositoryStub{userID: uuid.New()}, &mailerStub{}, fixedClock{value: time.Now()}, "https://app.example.test")
+	service := NewService(&repositoryStub{userID: uuid.New()}, nil, &mailerStub{}, fixedClock{value: time.Now()}, "https://app.example.test")
 	if err := service.Invite(context.Background(), request); err != ErrForbidden {
 		t.Fatalf("wrong role error: got %v, want %v", err, ErrForbidden)
 	}
@@ -78,7 +78,7 @@ func TestService_Invite_RejectsWrongRoleAndOrganization(t *testing.T) {
 }
 
 func TestService_Accept_RejectsInvalidUsernameAndWeakPassword(t *testing.T) {
-	service := NewService(&repositoryStub{}, nil, fixedClock{value: time.Now()}, "https://app.example.test")
+	service := NewService(&repositoryStub{}, nil, nil, fixedClock{value: time.Now()}, "https://app.example.test")
 	request := AcceptanceRequest{Token: "token", Username: "bad name", Password: "strong-password", DisplayName: "User"}
 	if err := service.Accept(context.Background(), request); err != ErrInvalidUsername {
 		t.Fatalf("username error: got %v, want %v", err, ErrInvalidUsername)
@@ -93,7 +93,7 @@ func TestService_Accept_RejectsInvalidUsernameAndWeakPassword(t *testing.T) {
 func TestService_Invite_SendsActivationLinkWithoutPersistingRawToken(t *testing.T) {
 	repository := &repositoryStub{userID: uuid.New()}
 	sender := &mailerStub{}
-	service := NewService(repository, sender, fixedClock{value: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)}, "https://app.example.test")
+	service := NewService(repository, nil, sender, fixedClock{value: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)}, "https://app.example.test")
 	if err := service.Invite(context.Background(), validInvite("Operator")); err != nil {
 		t.Fatalf("invite: %v", err)
 	}

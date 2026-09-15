@@ -56,7 +56,7 @@ func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.T
 	return httpapi.RouterDependencies{
 		Readiness: readiness, Verifier: verifier, Sessions: sessions,
 		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
-		Reports: reports, LatestMigration: 15,
+		Reports: reports, LatestMigration: 16,
 	}
 }
 
@@ -93,7 +93,8 @@ func main() {
 	} else {
 		messageSender = mailer.NewSpool(cfg.MailSpoolDirectory)
 	}
-	identityService := identityservice.NewService(identityrepository.NewIdentityRepository(database), messageSender, systemClock{}, cfg.PublicBaseURL)
+	identityRepository := identityrepository.NewIdentityRepository(database)
+	identityService := identityservice.NewService(identityRepository, identityRepository, messageSender, systemClock{}, cfg.PublicBaseURL)
 	accountService := accountservice.NewService(accountrepository.NewRepository(database), systemClock{}, messageSender, cfg.PublicBaseURL)
 	organizationService := organizationservice.NewService(organizationrepository.NewRepository(database), systemClock{})
 	stationService := stationservice.NewService(stationrepository.NewRepository(database), systemClock{})

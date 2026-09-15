@@ -69,7 +69,7 @@ func buildRouter(environment string, allowedOrigins []string, dependencies Route
 		gin.SetMode(gin.ReleaseMode)
 	}
 	if dependencies.LatestMigration == 0 {
-		dependencies.LatestMigration = 15
+		dependencies.LatestMigration = 16
 	}
 	if dependencies.AccountLimiter == nil {
 		dependencies.AccountLimiter = accountapi.NewLimiter(5, time.Minute, time.Now)

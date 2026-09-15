@@ -54,6 +54,29 @@ func TestOpenAPIContract_ContainsVersionedRoutes(t *testing.T) {
 			t.Fatalf("OpenAPI contract does not define %s", path)
 		}
 	}
+	for _, route := range []struct{ path, method string }{
+		{"/api/v1/users", "get"}, {"/api/v1/users/{id}", "get"}, {"/api/v1/users/{id}", "patch"},
+		{"/api/v1/users/{id}/roles", "post"}, {"/api/v1/users/{id}/roles", "delete"},
+		{"/api/v1/users/{id}/role-history", "get"}, {"/api/v1/users/{id}/password-reset", "post"},
+	} {
+		operation, ok := document.Paths[route.path][route.method].(map[string]interface{})
+		needsBody := route.method == "patch" || route.method == "post" || route.method == "delete"
+		needsBody = needsBody && route.path != "/api/v1/users/{id}/password-reset"
+		if !ok || needsBody && operation["requestBody"] == nil {
+			t.Fatalf("OpenAPI contract does not define request schema for %s %s", route.method, route.path)
+		}
+		if len(operation["security"].([]interface{})) != 2 {
+			t.Fatalf("OpenAPI route %s %s does not define both session security schemes", route.method, route.path)
+		}
+		if operation["x-permitted-roles"] == nil {
+			t.Fatalf("OpenAPI route %s %s does not define permitted roles", route.method, route.path)
+		}
+	}
+	for _, schema := range []string{"UserView", "RoleView", "StationView", "RoleHistoryEvent", "PasswordResetResult", "UpdateUserRequest"} {
+		if _, ok := document.Components.Schemas[schema]; !ok {
+			t.Fatalf("OpenAPI contract does not define %s", schema)
+		}
+	}
 	for _, path := range []string{"/api/v1/users", "/api/v1/auth/invitations/accept"} {
 		operation, ok := document.Paths[path]["post"].(map[string]interface{})
 		if !ok {

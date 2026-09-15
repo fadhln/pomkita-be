@@ -62,6 +62,15 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	if view.UserID != userID || view.Username != "test-user" || view.OrgID != orgID || len(view.Roles) != 1 || view.Roles[0] != "Supervisor" || len(view.StationIDs) != 1 || view.StationIDs[0] != stationID {
 		t.Fatalf("session view: got %+v", view)
 	}
+	if err := store.DB.Table("user_station_roles").Create(map[string]any{
+		"org_id": orgID, "station_id": stationID, "user_id": userID, "role": "Owner",
+	}).Error; err != nil {
+		t.Fatalf("change user role: %v", err)
+	}
+	nextRequest, err := repository.ReadSession(ctx, claims.JTI, userID)
+	if err != nil || len(nextRequest.Roles) != 2 || nextRequest.Roles[0] != "Owner" || nextRequest.Roles[1] != "Supervisor" {
+		t.Fatalf("next request session roles: view=%+v err=%v", nextRequest, err)
+	}
 	if err := tokens.Logout(ctx, claims.JTI); err != nil {
 		t.Fatalf("logout: %v", err)
 	}

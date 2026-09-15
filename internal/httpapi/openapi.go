@@ -19,6 +19,7 @@ import (
 	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	appaccount "github.com/pomkita/pomkita-be/internal/service/account"
 	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
+	appidentity "github.com/pomkita/pomkita-be/internal/service/identity"
 	apporganization "github.com/pomkita/pomkita-be/internal/service/organization"
 	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
@@ -172,6 +173,65 @@ func decorateIdentityContract(document *huma.OpenAPI) {
 	setProfileExample(document)
 	decorateOrganizationContract(document)
 	decorateStationContract(document)
+	decorateAdminUsersContract(document)
+}
+
+func decorateAdminUsersContract(document *huma.OpenAPI) {
+	if item := document.Paths["/api/v1/users"]; item != nil && item.Get != nil {
+		decorateOperation(item.Get, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"user_administration_forbidden", "organization_scope_forbidden"}, "422": {"invalid_user_administration_request"}}, nil, false)
+		ensureProblemResponses(item.Get, "400", "401", "403", "422", "500")
+		trimResponses(document, "/api/v1/users", http.MethodGet, "200", "400", "401", "403", "422", "500")
+	}
+	type userContract struct {
+		roles   []string
+		errors  map[string][]string
+		csrf    bool
+		example any
+	}
+	metadata := map[string]userContract{}
+	metadata["/api/v1/users/{id}"] = userContract{roles: []string{"Owner", "Superadmin"}, errors: map[string][]string{"401": {"invalid_session"}, "403": {"user_administration_forbidden", "protected_user_forbidden", "csrf_required"}, "404": {"user_not_found"}, "422": {"invalid_user_administration_request"}}, csrf: true, example: map[string]any{"display_name": "Updated user", "enabled": true}}
+	metadata["/api/v1/users/{id}/roles"] = userContract{roles: []string{"Owner", "Superadmin"}, errors: map[string][]string{"401": {"invalid_session"}, "403": {"user_administration_forbidden", "self_role_change_forbidden", "role_separation_forbidden", "csrf_required"}, "404": {"user_not_found", "role_not_found"}, "409": {"role_exists"}, "422": {"last_owner_forbidden", "invalid_user_administration_request"}}, csrf: true, example: map[string]any{"station_id": "33333333-3333-4333-8333-333333333333", "role": "Supervisor"}}
+	metadata["/api/v1/users/{id}/role-history"] = userContract{roles: []string{"Owner", "Superadmin"}, errors: map[string][]string{"401": {"invalid_session"}, "403": {"user_administration_forbidden"}, "404": {"user_not_found"}}}
+	metadata["/api/v1/users/{id}/password-reset"] = userContract{roles: []string{"Owner", "Superadmin"}, errors: map[string][]string{"401": {"invalid_session"}, "403": {"user_administration_forbidden", "protected_user_forbidden", "csrf_required"}, "404": {"user_not_found"}, "422": {"disabled_user_forbidden", "invalid_user_administration_request"}}, csrf: true}
+	if item := document.Paths["/api/v1/users/{id}"]; item != nil {
+		if item.Get != nil {
+			decorateOperation(item.Get, metadata["/api/v1/users/{id}"].roles, metadata["/api/v1/users/{id}"].errors, nil, false)
+			ensureProblemResponses(item.Get, "400", "401", "403", "404", "500")
+			trimResponses(document, "/api/v1/users/{id}", http.MethodGet, "200", "400", "401", "403", "404", "500")
+		}
+		if item.Patch != nil {
+			m := metadata["/api/v1/users/{id}"]
+			decorateOperation(item.Patch, m.roles, m.errors, m.example, true)
+			ensureProblemResponses(item.Patch, "400", "401", "403", "404", "422", "500")
+			trimResponses(document, "/api/v1/users/{id}", http.MethodPatch, "200", "400", "401", "403", "404", "422", "500")
+		}
+	}
+	if item := document.Paths["/api/v1/users/{id}/roles"]; item != nil {
+		m := metadata["/api/v1/users/{id}/roles"]
+		if item.Post != nil {
+			decorateOperation(item.Post, m.roles, m.errors, m.example, true)
+			ensureProblemResponses(item.Post, "400", "401", "403", "404", "409", "422", "500")
+			trimResponses(document, "/api/v1/users/{id}/roles", http.MethodPost, "200", "400", "401", "403", "404", "409", "422", "500")
+		}
+		if item.Delete != nil {
+			decorateOperation(item.Delete, m.roles, m.errors, m.example, true)
+			ensureProblemResponses(item.Delete, "204", "400", "401", "403", "404", "422", "500")
+			setMutationResponse(document, "/api/v1/users/{id}/roles", http.MethodDelete, http.StatusNoContent)
+			trimResponses(document, "/api/v1/users/{id}/roles", http.MethodDelete, "204", "400", "401", "403", "404", "422", "500")
+		}
+	}
+	if item := document.Paths["/api/v1/users/{id}/role-history"]; item != nil && item.Get != nil {
+		m := metadata["/api/v1/users/{id}/role-history"]
+		decorateOperation(item.Get, m.roles, m.errors, nil, false)
+		ensureProblemResponses(item.Get, "400", "401", "403", "404", "500")
+		trimResponses(document, "/api/v1/users/{id}/role-history", http.MethodGet, "200", "400", "401", "403", "404", "500")
+	}
+	if item := document.Paths["/api/v1/users/{id}/password-reset"]; item != nil && item.Post != nil {
+		m := metadata["/api/v1/users/{id}/password-reset"]
+		decorateOperation(item.Post, m.roles, m.errors, nil, true)
+		ensureProblemResponses(item.Post, "200", "400", "401", "403", "404", "422", "500")
+		trimResponses(document, "/api/v1/users/{id}/password-reset", http.MethodPost, "200", "400", "401", "403", "404", "422", "500")
+	}
 }
 
 func decorateOrganizationContract(document *huma.OpenAPI) {
@@ -278,6 +338,8 @@ func setMutationResponse(document *huma.OpenAPI, path, method string, status int
 	var operation *huma.Operation
 	if method == http.MethodPost {
 		operation = item.Post
+	} else if method == http.MethodDelete {
+		operation = item.Delete
 	}
 	if operation == nil {
 		return
@@ -398,6 +460,13 @@ func registerOpenAPIOperations(api huma.API) {
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIEmptyOutput](api, http.MethodDelete, "/api/v1/logout", "logout", "Revoke a session")
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[appjwt.SessionView]](api, http.MethodGet, "/api/v1/session", "session", "Read the current session")
 	registerOpenAPIOperation[openAPIBodyInput[usersapi.InviteRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/users", "inviteUser", "Invite a user")
+	registerOpenAPIOperation[openAPIOrganizationScopeInput, openAPIOutput[[]appidentity.UserView]](api, http.MethodGet, "/api/v1/users", "listUsers", "List users")
+	registerOpenAPIOperation[openAPIIDInput, openAPIOutput[appidentity.UserView]](api, http.MethodGet, "/api/v1/users/{id}", "getUser", "Read a user")
+	registerOpenAPIOperation[openAPIIDBodyInput[usersapi.UpdateUserRequest], openAPIOutput[appidentity.UserView]](api, http.MethodPatch, "/api/v1/users/{id}", "updateUser", "Update a user")
+	registerOpenAPIOperation[openAPIIDBodyInput[usersapi.RoleRequest], openAPIOutput[[]appidentity.RoleView]](api, http.MethodPost, "/api/v1/users/{id}/roles", "assignUserRole", "Assign a user role")
+	registerOpenAPIOperation[openAPIIDBodyInput[usersapi.RoleRequest], openAPIEmptyOutput](api, http.MethodDelete, "/api/v1/users/{id}/roles", "removeUserRole", "Remove a user role")
+	registerOpenAPIOperation[openAPIIDInput, openAPIOutput[[]appidentity.RoleHistoryEvent]](api, http.MethodGet, "/api/v1/users/{id}/role-history", "userRoleHistory", "Read user role history")
+	registerOpenAPIOperation[openAPIIDInput, openAPIOutput[appidentity.PasswordResetResult]](api, http.MethodPost, "/api/v1/users/{id}/password-reset", "resetUserPassword", "Issue a user password reset")
 	registerOpenAPIOperation[openAPIBodyInput[usersapi.AcceptRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/auth/invitations/accept", "acceptInvitation", "Accept an invitation")
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[appaccount.Profile]](api, http.MethodGet, "/api/v1/account", "account", "Read the own account profile")
 	registerOpenAPIOperation[openAPIBodyInput[appaccount.UpdateRequest], openAPIOutput[appaccount.Profile]](api, http.MethodPatch, "/api/v1/account", "updateAccount", "Update the own account profile")
