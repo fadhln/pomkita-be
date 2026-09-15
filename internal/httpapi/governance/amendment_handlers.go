@@ -15,6 +15,7 @@ import (
 // AmendmentService is the typed amendment governance boundary.
 type AmendmentService interface {
 	Request(context.Context, appgovernance.AmendmentRequest) (appgovernance.Amendment, error)
+	ListQueue(context.Context, appgovernance.AmendmentQueueRequest) ([]appgovernance.AmendmentQueueView, error)
 	Approve(context.Context, appgovernance.ApproveAmendmentRequest) (appgovernance.Amendment, error)
 	Reject(context.Context, appgovernance.RejectAmendmentRequest) error
 }
@@ -48,9 +49,35 @@ func RegisterAmendmentRoutes(router gin.IRoutes, verifier transport.TokenVerifie
 	if service == nil {
 		return
 	}
+	router.GET("/amendments", transport.AuthMiddleware(verifier), AmendmentQueueHandler(sessions, service))
 	router.POST("/amendments", transport.AuthMiddleware(verifier), transport.RequireCSRF, AmendmentRequestHandler(sessions, service))
 	router.POST("/amendments/:id/approve", transport.AuthMiddleware(verifier), transport.RequireCSRF, AmendmentApproveHandler(sessions, service))
 	router.POST("/amendments/:id/reject", transport.AuthMiddleware(verifier), transport.RequireCSRF, AmendmentRejectHandler(sessions, service))
+}
+
+// AmendmentQueueHandler returns pending amendments visible to the actor.
+func AmendmentQueueHandler(sessions transport.SessionService, service AmendmentService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if sessions == nil || service == nil {
+			transport.WriteError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		session, err := sessions.ReadSession(c.Request.Context(), c.GetString("raw_token"))
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		role := firstRole(session.Roles, "Station Admin", "Owner", "Superadmin")
+		result, err := service.ListQueue(c.Request.Context(), appgovernance.AmendmentQueueRequest{OrgID: session.OrgID, ActorID: session.UserID, Role: role, StationIDs: session.StationIDs})
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		if result == nil {
+			result = []appgovernance.AmendmentQueueView{}
+		}
+		c.JSON(http.StatusOK, result)
+	}
 }
 
 func AmendmentRequestHandler(sessions transport.SessionService, service AmendmentService) gin.HandlerFunc {

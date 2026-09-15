@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"context"
+	"encoding/json"
 	. "github.com/pomkita/pomkita-be/internal/httpapi"
 	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
 	"net/http"
@@ -34,8 +35,38 @@ func TestAmendmentRequestRoute_UsesVerifiedSessionScope(t *testing.T) {
 	}
 }
 
+func TestAmendmentQueueRoute_UsesVerifiedApproverScope(t *testing.T) {
+	orgID, stationID, actorID := uuid.New(), uuid.New(), uuid.New()
+	amendmentID := uuid.New()
+	service := &AmendmentStub{queue: []appgovernance.AmendmentQueueView{{AmendmentID: amendmentID, StationID: stationID, Status: "pending", Items: []appgovernance.AmendmentQueueItem{}}}}
+	sessions := &SessionStub{view: SessionView{OrgID: orgID, UserID: actorID, Roles: []string{"Station Admin"}, StationIDs: []uuid.UUID{stationID}}}
+	router := NewRouterWithDependencySet("test", nil, RouterDependencies{
+		Readiness: readyStub{current: true}, Verifier: verifierStub{}, Sessions: sessions,
+		Amendment: service, LatestMigration: 11,
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/amendments", nil)
+	request.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status: got %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if service.queueRequest.OrgID != orgID || service.queueRequest.ActorID != actorID || service.queueRequest.Role != "Station Admin" || len(service.queueRequest.StationIDs) != 1 || service.queueRequest.StationIDs[0] != stationID {
+		t.Fatalf("queue request: %+v", service.queueRequest)
+	}
+	var response []map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response) != 1 || response[0]["AmendmentID"] != amendmentID.String() {
+		t.Fatalf("response: got %v", response)
+	}
+}
+
 type AmendmentStub struct {
-	request appgovernance.AmendmentRequest
+	request      appgovernance.AmendmentRequest
+	queue        []appgovernance.AmendmentQueueView
+	queueRequest appgovernance.AmendmentQueueRequest
 }
 
 func (s *AmendmentStub) Request(_ context.Context, request appgovernance.AmendmentRequest) (appgovernance.Amendment, error) {
@@ -49,6 +80,11 @@ func (s *AmendmentStub) Approve(context.Context, appgovernance.ApproveAmendmentR
 
 func (s *AmendmentStub) Reject(context.Context, appgovernance.RejectAmendmentRequest) error {
 	return nil
+}
+
+func (s *AmendmentStub) ListQueue(_ context.Context, request appgovernance.AmendmentQueueRequest) ([]appgovernance.AmendmentQueueView, error) {
+	s.queueRequest = request
+	return s.queue, nil
 }
 
 var _ governanceapi.AmendmentService = (*AmendmentStub)(nil)

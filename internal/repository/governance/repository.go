@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,73 @@ func NewGovernanceRepository(store *Store) *GovernanceRepository {
 		return &GovernanceRepository{}
 	}
 	return &GovernanceRepository{db: store.DB}
+}
+
+type amendmentQueueRow struct {
+	AmendmentID          uuid.UUID
+	StationID            uuid.UUID
+	ShiftID              uuid.UUID
+	BaseReportID         uuid.UUID
+	BaseVersionNo        int
+	Status               string
+	RequesterUserID      uuid.UUID
+	RequesterDisplayName string
+	Reason               string
+	RequestedAt          time.Time
+	StaleCheckHash       []byte
+}
+
+// ListAmendmentQueue reads pending amendments within the verified actor scope.
+func (r *GovernanceRepository) ListAmendmentQueue(ctx context.Context, request appgovernance.AmendmentQueueRequest) ([]appgovernance.AmendmentQueueView, error) {
+	if r == nil || r.db == nil {
+		return nil, appgovernance.ErrDependencyUnavailable
+	}
+	if request.OrgID == uuid.Nil || request.ActorID == uuid.Nil {
+		return nil, appgovernance.ErrInvalidAmendmentRequest
+	}
+	if request.Role != "Station Admin" && request.Role != "Owner" && request.Role != "Superadmin" {
+		return nil, appgovernance.ErrAmendmentRoleRequired
+	}
+	if request.Role == "Station Admin" && len(request.StationIDs) == 0 {
+		return nil, appgovernance.ErrInvalidAmendmentRequest
+	}
+	query := r.db.WithContext(ctx).Table("amendments AS a").
+		Select("a.amendment_id, a.station_id, a.shift_id, a.base_report_id, a.status, a.requester_user_id, a.reason, a.requested_at, a.stale_check_hash, r.version_no AS base_version_no, u.display_name AS requester_display_name").
+		Joins("JOIN shift_reports AS r ON r.org_id = a.org_id AND r.station_id = a.station_id AND r.shift_id = a.shift_id AND r.report_id = a.base_report_id").
+		Joins("JOIN users AS u ON u.org_id = a.org_id AND u.user_id = a.requester_user_id").
+		Where("a.org_id = ? AND a.status = ?", request.OrgID, "pending")
+	if request.Role == "Station Admin" {
+		query = query.Where("a.station_id IN ?", request.StationIDs)
+	}
+	roleScope := r.db.Table("user_station_roles AS scope").Select("1").
+		Where("scope.org_id = a.org_id AND scope.user_id = ? AND scope.role = ?", request.ActorID, request.Role)
+	if request.Role == "Station Admin" {
+		roleScope = roleScope.Where("scope.station_id = a.station_id")
+	}
+	query = query.Where("EXISTS (?)", roleScope).Order("a.requested_at, a.amendment_id")
+	var rows []amendmentQueueRow
+	if err := query.Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list amendment queue: %w", err)
+	}
+	result := make([]appgovernance.AmendmentQueueView, 0, len(rows))
+	for _, row := range rows {
+		var items []AmendmentItemModel
+		if err := r.db.WithContext(ctx).Where("org_id = ? AND station_id = ? AND amendment_id = ?", request.OrgID, row.StationID, row.AmendmentID).Order("target_kind, target_logical_id, field").Find(&items).Error; err != nil {
+			return nil, fmt.Errorf("list amendment items: %w", err)
+		}
+		view := appgovernance.AmendmentQueueView{
+			AmendmentID: row.AmendmentID, StationID: row.StationID, ShiftID: row.ShiftID, BaseReportID: row.BaseReportID,
+			BaseVersionNo: row.BaseVersionNo, Status: row.Status,
+			Requester: appgovernance.AmendmentQueueRequester{UserID: row.RequesterUserID, DisplayName: row.RequesterDisplayName},
+			Reason:    row.Reason, RequestedAt: row.RequestedAt.UTC().Format(time.RFC3339Nano), StaleCheckHash: hex.EncodeToString(row.StaleCheckHash),
+			Items: make([]appgovernance.AmendmentQueueItem, 0, len(items)),
+		}
+		for _, item := range items {
+			view.Items = append(view.Items, appgovernance.AmendmentQueueItem{ItemID: item.ItemID, TargetKind: item.TargetKind, TargetLogicalID: item.TargetLogicalID, Field: item.Field, OldValue: append([]byte(nil), item.OldValue...), NewValue: append([]byte(nil), item.NewValue...)})
+		}
+		result = append(result, view)
+	}
+	return result, nil
 }
 
 // Acknowledge records one decision and advances the shift state atomically.
