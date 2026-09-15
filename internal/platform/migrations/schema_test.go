@@ -229,6 +229,50 @@ func TestMigrationSet_DefinesIdentityAdministrationTables(t *testing.T) {
 	}
 }
 
+func TestMigrationSet_DefinesAccountStationName(t *testing.T) {
+	root := repositoryRoot(t)
+	up, err := os.ReadFile(filepath.Join(root, "migrations", "000013_account_station_name.up.sql"))
+	if err != nil {
+		t.Fatalf("read account station up migration: %v", err)
+	}
+	down, err := os.ReadFile(filepath.Join(root, "migrations", "000013_account_station_name.down.sql"))
+	if err != nil {
+		t.Fatalf("read account station down migration: %v", err)
+	}
+	if !strings.Contains(strings.ToLower(string(up)), "add column name text not null") {
+		t.Fatal("account station up migration does not add station name")
+	}
+	if !strings.Contains(strings.ToLower(string(down)), "drop column if exists name") {
+		t.Fatal("account station down migration does not remove station name")
+	}
+}
+
+func TestMigrationSet_DefinesOrganizationDetail(t *testing.T) {
+	root := repositoryRoot(t)
+	up, err := os.ReadFile(filepath.Join(root, "migrations", "000014_organization_detail.up.sql"))
+	if err != nil {
+		t.Fatalf("read organization up migration: %v", err)
+	}
+	down, err := os.ReadFile(filepath.Join(root, "migrations", "000014_organization_detail.down.sql"))
+	if err != nil {
+		t.Fatalf("read organization down migration: %v", err)
+	}
+	upText, downText := strings.ToLower(string(up)), strings.ToLower(string(down))
+	for _, required := range []string{"add column legal_name text", "add column address text", "add column contact_email text", "add column timezone text", "add column enabled boolean not null default true", "add column updated_at timestamptz(6)"} {
+		if !strings.Contains(upText, required) {
+			t.Fatalf("organization migration does not contain %q", required)
+		}
+	}
+	for _, required := range []string{"drop column if exists legal_name", "drop column if exists address", "drop column if exists contact_email", "drop column if exists timezone", "drop column if exists enabled", "drop column if exists updated_at"} {
+		if !strings.Contains(downText, required) {
+			t.Fatalf("organization down migration does not contain %q", required)
+		}
+	}
+	if strings.Contains(upText, "create function") || strings.Contains(upText, "create trigger") || strings.Contains(upText, "grant ") {
+		t.Fatal("organization migration contains unsupported database behavior")
+	}
+}
+
 func TestMigrationSet_DefinesAcknowledgementTables(t *testing.T) {
 	root := repositoryRoot(t)
 	path := filepath.Join(root, "migrations", "000007_governance_ack.up.sql")
@@ -373,17 +417,56 @@ func TestMigrationSet_AppliesAndReversesInAnIsolatedSchema(t *testing.T) {
 	}
 
 	if err := runner.Steps(ctx, -1); err != nil {
-		t.Fatalf("reverse paired account migration: %v", err)
+		t.Fatalf("reverse paired organization migration: %v", err)
+	}
+	var organizationDetailCount int
+	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'organizations' and column_name = 'legal_name'`).Scan(&organizationDetailCount); err != nil {
+		t.Fatalf("count organization detail after paired down: %v", err)
+	}
+	if organizationDetailCount != 0 {
+		t.Fatalf("organization detail remains after paired down: got %d", organizationDetailCount)
+	}
+	if err := runner.Steps(ctx, 1); err != nil {
+		t.Fatalf("reapply paired organization migration: %v", err)
 	}
 	var stationNameCount int
+	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'name'`).Scan(&stationNameCount); err != nil {
+		t.Fatalf("count station name after paired up: %v", err)
+	}
+	if stationNameCount != 1 {
+		t.Fatalf("station name changed after organization round trip: got %d", stationNameCount)
+	}
+
+	if err := runner.Steps(ctx, -1); err != nil {
+		t.Fatalf("reverse paired organization migration: %v", err)
+	}
+	if err := runner.Steps(ctx, -1); err != nil {
+		t.Fatalf("reverse paired station migration: %v", err)
+	}
 	if err := connection.QueryRow(ctx, `select count(*) from information_schema.columns where table_schema = current_schema() and table_name = 'stations' and column_name = 'name'`).Scan(&stationNameCount); err != nil {
 		t.Fatalf("count station name after paired down: %v", err)
 	}
 	if stationNameCount != 0 {
 		t.Fatalf("station name remains after paired down: got %d", stationNameCount)
 	}
+	if err := runner.Steps(ctx, -1); err != nil {
+		t.Fatalf("reverse paired identity migration: %v", err)
+	}
+	var identityTableCount int
+	if err := connection.QueryRow(ctx, `select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = current_schema() and c.relkind = 'r' and c.relname = 'account_tokens'`).Scan(&identityTableCount); err != nil {
+		t.Fatalf("count identity table after paired down: %v", err)
+	}
+	if identityTableCount != 0 {
+		t.Fatalf("account_tokens remains after paired down: got %d", identityTableCount)
+	}
 	if err := runner.Steps(ctx, 1); err != nil {
 		t.Fatalf("reapply paired identity migration: %v", err)
+	}
+	if err := runner.Steps(ctx, 1); err != nil {
+		t.Fatalf("reapply paired station migration: %v", err)
+	}
+	if err := runner.Steps(ctx, 1); err != nil {
+		t.Fatalf("reapply paired organization migration: %v", err)
 	}
 
 	if err := runner.Down(ctx); err != nil {

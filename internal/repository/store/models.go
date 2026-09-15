@@ -10,9 +10,15 @@ import (
 
 // OrganizationModel maps the organizations table.
 type OrganizationModel struct {
-	OrgID     uuid.UUID `gorm:"column:org_id;type:uuid;primaryKey"`
-	Name      string    `gorm:"column:name;not null"`
-	CreatedAt time.Time `gorm:"column:created_at;not null"`
+	OrgID        uuid.UUID  `gorm:"column:org_id;type:uuid;primaryKey"`
+	Name         string     `gorm:"column:name;not null"`
+	LegalName    *string    `gorm:"column:legal_name"`
+	Address      *string    `gorm:"column:address"`
+	ContactEmail *string    `gorm:"column:contact_email"`
+	Timezone     *string    `gorm:"column:timezone"`
+	Enabled      bool       `gorm:"column:enabled;not null;default:true"`
+	UpdatedAt    *time.Time `gorm:"column:updated_at"`
+	CreatedAt    time.Time  `gorm:"column:created_at;not null"`
 }
 
 // TableName returns the organizations table name.

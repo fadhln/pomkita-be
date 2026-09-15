@@ -51,8 +51,8 @@ func TestReadyChecksLatestMigration(t *testing.T) {
 	router := testRouter("test", nil, readyStub{current: true, latest: &latest}, nil, nil)
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
-	if recorder.Code != http.StatusOK || latest != 13 {
-		t.Fatalf("ready migration check: status=%d latest=%d, want 200 and 13", recorder.Code, latest)
+	if recorder.Code != http.StatusOK || latest != 14 {
+		t.Fatalf("ready migration check: status=%d latest=%d, want 200 and 14", recorder.Code, latest)
 	}
 }
 
