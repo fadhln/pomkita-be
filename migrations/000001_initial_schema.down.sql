@@ -1,4 +1,4 @@
--- Phase 1 clean schema rollback.
+-- Phase 1 schema rollback.
 
 ALTER TABLE IF EXISTS shifts DROP CONSTRAINT IF EXISTS shifts_current_report_fk;
 DROP TABLE IF EXISTS shift_reports;

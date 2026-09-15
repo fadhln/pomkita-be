@@ -26,7 +26,9 @@ make run       # run the server
 make tidy      # update Go module metadata
 ```
 
-The implementation follows the phases in `../BE-PLAN.md`. API contract artifacts will be published from this repository and pinned by the frontend.
+The implementation uses the service and GORM repository boundaries documented in
+[`docs/CONVENTIONS.md`](docs/CONVENTIONS.md). API contract artifacts are
+published from this repository and pinned by the frontend.
 
 ## Development conventions
 

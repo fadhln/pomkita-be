@@ -1,7 +1,7 @@
 # Backend behavior matrix
 
-This matrix records the current contract and the planned service boundary. It is
-the Phase 0 baseline for the migration to Go services and repository ports.
+This matrix records the current contract and service boundaries. Go services own
+business decisions, and GORM repositories own database access.
 
 | Area | Actor and rule | Success result | Denial or conflict | Current proof |
 | --- | --- | --- | --- | --- |
