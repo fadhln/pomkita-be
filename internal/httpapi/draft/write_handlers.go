@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appdraft "github.com/fadhln/pomkita-be/internal/service/draft"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appdraft "github.com/pomkita/pomkita-be/internal/service/draft"
 )
 
 // DraftWriteService is the typed revision-fenced draft write boundary.

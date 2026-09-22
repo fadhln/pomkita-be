@@ -2,15 +2,15 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	auditapi "github.com/fadhln/pomkita-be/internal/httpapi/audit"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/google/uuid"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
 func TestAuditExportRoute_UsesSessionOrganizationAndStableCSV(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/platform/mailer"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/platform/mailer"
 )
 
 type fixedClock struct{ value time.Time }

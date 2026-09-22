@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	store "github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	apporg "github.com/fadhln/pomkita-be/internal/service/organization"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	store "github.com/pomkita/pomkita-be/internal/repository/store"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	apporg "github.com/pomkita/pomkita-be/internal/service/organization"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

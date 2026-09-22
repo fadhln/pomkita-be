@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
 func TestVersionedSessionRoute_UsesTheV1ProductPrefix(t *testing.T) {

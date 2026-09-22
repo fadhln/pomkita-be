@@ -5,21 +5,32 @@ import (
 	"testing"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	"github.com/pomkita/pomkita-be/internal/repository/store"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
 )
 
 type Decimal = store.Decimal
 type DispenserModel = store.DispenserModel
 type NozzleModel = store.NozzleModel
 type LossIdentityModel = store.LossIdentityModel
+type Store = store.Store
+type AckDecisionModel = store.AckDecisionModel
+type AlertEventModel = store.AlertEventModel
+type AmendmentModel = store.AmendmentModel
+type AuditLogModel = store.AuditLogModel
+type DispenserReadingModel = store.DispenserReadingModel
+type LossEntryModel = store.LossEntryModel
+type LossExceptionModel = store.LossExceptionModel
+type PolicySnapshotItemModel = store.PolicySnapshotItemModel
+type SalesDeclaredModel = store.SalesDeclaredModel
+type ShiftReportModel = store.ShiftReportModel
 
 var NewAuditRepository = auditrepository.NewAuditRepository
 
 type governanceFixture struct {
-	store                          *Store
+	store                          *store.Store
 	cleanup                        func()
 	now                            time.Time
 	orgID, stationID               uuid.UUID

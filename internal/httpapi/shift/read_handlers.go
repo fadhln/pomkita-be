@@ -4,10 +4,10 @@ import (
 	"context"
 	"net/http"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
 )
 
 // ShiftReadService is the typed shift read boundary.

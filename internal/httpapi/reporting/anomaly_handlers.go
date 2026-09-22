@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/csv"
 	"net/http"
+	"slices"
 	"strconv"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
 // AnomalyService is the typed anomaly read boundary.
@@ -75,13 +76,13 @@ func readAnomalies(c *gin.Context, sessions transport.SessionService, service An
 	var stationID *uuid.UUID
 	if value := c.Query("station_id"); value != "" {
 		parsed, parseErr := uuid.Parse(value)
-		if parseErr != nil || parsed == uuid.Nil || !transport.ContainsUUID(session.StationIDs, parsed) {
+		if parseErr != nil || parsed == uuid.Nil || !slices.Contains(session.StationIDs, parsed) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return nil, false
 		}
 		stationID = &parsed
 	}
-	if stationID == nil && !transport.ContainsString(session.Roles, "Owner") && !transport.ContainsString(session.Roles, "Superadmin") {
+	if stationID == nil && !slices.Contains(session.Roles, "Owner") && !slices.Contains(session.Roles, "Superadmin") {
 		transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 		return nil, false
 	}

@@ -3,12 +3,13 @@ package policy
 import (
 	"context"
 	"net/http"
+	"slices"
 	"time"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	apppolicy "github.com/fadhln/pomkita-be/internal/service/policy"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 )
 
 // PolicyService is the typed policy revision boundary.
@@ -64,7 +65,7 @@ func PolicyRevisionHandler(sessions transport.SessionService, service PolicyServ
 				break
 			}
 		}
-		if input.StationID != nil && !transport.ContainsUUID(session.StationIDs, *input.StationID) && role != "Superadmin" {
+		if input.StationID != nil && !slices.Contains(session.StationIDs, *input.StationID) && role != "Superadmin" {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}

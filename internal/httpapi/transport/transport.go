@@ -8,12 +8,13 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 )
 
 type TokenVerifier interface {
@@ -96,29 +97,13 @@ func ReadSession(c *gin.Context, sessions SessionService, stationID uuid.UUID) (
 		_ = c.Error(err)
 		return SessionView{}, false
 	}
-	if !ContainsUUID(session.StationIDs, stationID) {
+	if !slices.Contains(session.StationIDs, stationID) {
 		WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 		return SessionView{}, false
 	}
 	return session, true
 }
 
-func ContainsUUID(values []uuid.UUID, target uuid.UUID) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-func ContainsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
 func PathUUID(c *gin.Context, name string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(c.Param(name))
 	if err != nil {

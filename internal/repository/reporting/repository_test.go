@@ -5,9 +5,9 @@ import (
 	"crypto/sha256"
 	"testing"
 
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/google/uuid"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
 func TestReportingRepository_ReadReportAndExportAuditUseStableOrder(t *testing.T) {

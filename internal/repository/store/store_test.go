@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	. "github.com/fadhln/pomkita-be/internal/repository/store"
 	"github.com/google/uuid"
-	. "github.com/pomkita/pomkita-be/internal/repository/store"
 	"gorm.io/gorm"
 )
 

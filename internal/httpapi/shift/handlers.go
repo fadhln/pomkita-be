@@ -3,12 +3,13 @@ package shift
 import (
 	"context"
 	"net/http"
+	"slices"
 	"time"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
 )
 
 // ShiftService is the typed shift write boundary.
@@ -50,7 +51,7 @@ func OpenShiftHandler(sessions transport.SessionService, service ShiftService) g
 			_ = c.Error(err)
 			return
 		}
-		if !transport.ContainsUUID(session.StationIDs, input.StationID) {
+		if !slices.Contains(session.StationIDs, input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}

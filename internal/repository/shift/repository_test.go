@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
 	"github.com/google/uuid"
-	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
 )
 
 func TestShiftRepository_OpenShift_PersistsSnapshotAndDraft(t *testing.T) {

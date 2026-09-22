@@ -2,15 +2,15 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	submissionapi "github.com/fadhln/pomkita-be/internal/httpapi/submission"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	appsubmission "github.com/fadhln/pomkita-be/internal/service/submission"
 	"github.com/google/uuid"
-	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
 )
 
 func TestSubmitRoute_UsesSessionScopeAndIdempotencyHeader(t *testing.T) {

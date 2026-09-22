@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/google/uuid"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 	"gorm.io/gorm"
 )
 
@@ -30,7 +31,7 @@ type thresholdSnapshotPayload struct {
 }
 
 // NewReportingRepository creates a reporting repository.
-func NewReportingRepository(store *Store) *ReportingRepository {
+func NewReportingRepository(store *store.Store) *ReportingRepository {
 	if store == nil {
 		return &ReportingRepository{}
 	}
@@ -42,7 +43,7 @@ func (r *ReportingRepository) ReadReport(ctx context.Context, orgID, stationID, 
 	if r == nil || r.db == nil {
 		return appreporting.ReportView{}, appreporting.ErrInvalidRequest
 	}
-	var report ShiftReportModel
+	var report store.ShiftReportModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).First(&report).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return appreporting.ReportView{}, appreporting.ErrNotFound
@@ -50,21 +51,21 @@ func (r *ReportingRepository) ReadReport(ctx context.Context, orgID, stationID, 
 		return appreporting.ReportView{}, fmt.Errorf("load report: %w", err)
 	}
 	view := appreporting.ReportView{ReportID: report.ReportID, StationID: report.StationID, ShiftID: report.ShiftID, VersionNo: report.VersionNo, Status: report.Status, SubmittedAt: report.SubmittedAt.UTC().Format(time.RFC3339Nano)}
-	var readings []DispenserReadingModel
+	var readings []store.DispenserReadingModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).Order("nozzle_id").Find(&readings).Error; err != nil {
 		return appreporting.ReportView{}, fmt.Errorf("load report readings: %w", err)
 	}
 	for _, row := range readings {
 		view.Readings = append(view.Readings, appreporting.ReadingView{NozzleID: row.NozzleID, MeterStart: row.MeterStart.String(), MeterEnd: row.MeterEnd.String(), ExpectedSale: row.ExpectedSale.String()})
 	}
-	var sales []SalesDeclaredModel
+	var sales []store.SalesDeclaredModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).Order("dispenser_id").Find(&sales).Error; err != nil {
 		return appreporting.ReportView{}, fmt.Errorf("load report sales: %w", err)
 	}
 	for _, row := range sales {
 		view.Sales = append(view.Sales, appreporting.SalesView{DispenserID: row.DispenserID, CashAmount: row.CashAmount.String(), CashlessAmount: row.CashlessAmount.String()})
 	}
-	var losses []LossEntryModel
+	var losses []store.LossEntryModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and report_id = ?", orgID, stationID, reportID).Order("row_id").Find(&losses).Error; err != nil {
 		return appreporting.ReportView{}, fmt.Errorf("load report losses: %w", err)
 	}
@@ -84,7 +85,7 @@ func (r *ReportingRepository) ExportAudit(ctx context.Context, orgID uuid.UUID) 
 	if r == nil || r.db == nil || orgID == uuid.Nil {
 		return nil, appreporting.ErrInvalidRequest
 	}
-	var rows []AuditLogModel
+	var rows []store.AuditLogModel
 	if err := r.db.WithContext(ctx).Where("org_id = ?", orgID).Order("org_sequence").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load audit export: %w", err)
 	}
@@ -104,7 +105,7 @@ func (r *ReportingRepository) Anomalies(ctx context.Context, orgID uuid.UUID, st
 	if stationID != nil {
 		query = query.Where("station_id = ?", *stationID)
 	}
-	var rows []AlertEventModel
+	var rows []store.AlertEventModel
 	if err := query.Order("created_at, event_id").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("load anomalies: %w", err)
 	}
@@ -112,7 +113,7 @@ func (r *ReportingRepository) Anomalies(ctx context.Context, orgID uuid.UUID, st
 	for _, row := range rows {
 		result = append(result, appreporting.AnomalyView{EventID: row.EventID, StationID: row.StationID, RuleID: row.RuleID, SubjectKind: row.SubjectKind, SubjectID: row.SubjectID, EventType: row.EventType, SourceKind: row.SourceKind, SourceID: row.SourceID, SourceVersionNo: row.SourceVersionNo, HappenedAt: row.SourceAt.UTC().Format(time.RFC3339Nano)})
 	}
-	var decisions []AckDecisionModel
+	var decisions []store.AckDecisionModel
 	decisionQuery := r.db.WithContext(ctx).Where("org_id = ? and is_break_glass = ?", orgID, true)
 	if stationID != nil {
 		decisionQuery = decisionQuery.Where("station_id = ?", *stationID)
@@ -124,7 +125,7 @@ func (r *ReportingRepository) Anomalies(ctx context.Context, orgID uuid.UUID, st
 		version := decision.VersionNo
 		result = append(result, appreporting.AnomalyView{EventID: decision.AckID, StationID: decision.StationID, SubjectKind: "report", SubjectID: decision.ReportID, EventType: "fired", SourceKind: "break_glass", SourceID: decision.AckID, SourceVersionNo: &version, HappenedAt: decision.DecidedAt.UTC().Format(time.RFC3339Nano)})
 	}
-	var amendments []AmendmentModel
+	var amendments []store.AmendmentModel
 	amendmentQuery := r.db.WithContext(ctx).Where("org_id = ? and is_break_glass = ?", orgID, true)
 	if stationID != nil {
 		amendmentQuery = amendmentQuery.Where("station_id = ?", *stationID)
@@ -135,7 +136,7 @@ func (r *ReportingRepository) Anomalies(ctx context.Context, orgID uuid.UUID, st
 	for _, amendment := range amendments {
 		result = append(result, appreporting.AnomalyView{EventID: amendment.AmendmentID, StationID: amendment.StationID, SubjectKind: "report", SubjectID: amendment.BaseReportID, EventType: "fired", SourceKind: "break_glass", SourceID: amendment.AmendmentID, HappenedAt: amendment.RequestedAt.UTC().Format(time.RFC3339Nano)})
 	}
-	var exceptions []LossExceptionModel
+	var exceptions []store.LossExceptionModel
 	exceptionQuery := r.db.WithContext(ctx).Where("org_id = ?", orgID)
 	if stationID != nil {
 		exceptionQuery = exceptionQuery.Where("station_id = ?", *stationID)
@@ -160,12 +161,12 @@ func (r *ReportingRepository) Anomalies(ctx context.Context, orgID uuid.UUID, st
 	return result, nil
 }
 
-func (r *ReportingRepository) numericAnomalies(ctx context.Context, orgID uuid.UUID, stationID *uuid.UUID, alertRows []AlertEventModel) ([]appreporting.AnomalyView, error) {
+func (r *ReportingRepository) numericAnomalies(ctx context.Context, orgID uuid.UUID, stationID *uuid.UUID, alertRows []store.AlertEventModel) ([]appreporting.AnomalyView, error) {
 	query := r.db.WithContext(ctx).Where("org_id = ?", orgID)
 	if stationID != nil {
 		query = query.Where("station_id = ?", *stationID)
 	}
-	var reports []ShiftReportModel
+	var reports []store.ShiftReportModel
 	if err := query.Order("submitted_at, report_id").Find(&reports).Error; err != nil {
 		return nil, fmt.Errorf("load reports for numeric anomalies: %w", err)
 	}
@@ -177,7 +178,7 @@ func (r *ReportingRepository) numericAnomalies(ctx context.Context, orgID uuid.U
 	}
 	result := make([]appreporting.AnomalyView, 0)
 	for _, report := range reports {
-		var snapshot PolicySnapshotItemModel
+		var snapshot store.PolicySnapshotItemModel
 		if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ? and set_id = ? and policy_kind = ?", report.OrgID, report.StationID, report.ShiftID, report.PolicySnapshot, "threshold").First(&snapshot).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				continue
@@ -208,7 +209,7 @@ func (r *ReportingRepository) numericAnomalies(ctx context.Context, orgID uuid.U
 		if err != nil {
 			return nil, fmt.Errorf("parse variance threshold: %w", err)
 		}
-		var losses []LossEntryModel
+		var losses []store.LossEntryModel
 		if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Find(&losses).Error; err != nil {
 			return nil, fmt.Errorf("load losses for numeric anomalies: %w", err)
 		}
@@ -255,12 +256,12 @@ func (r *ReportingRepository) numericAnomalies(ctx context.Context, orgID uuid.U
 	return result, nil
 }
 
-func (r *ReportingRepository) reportVariance(ctx context.Context, report ShiftReportModel) (*big.Rat, error) {
-	var readings []DispenserReadingModel
+func (r *ReportingRepository) reportVariance(ctx context.Context, report store.ShiftReportModel) (*big.Rat, error) {
+	var readings []store.DispenserReadingModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Find(&readings).Error; err != nil {
 		return nil, fmt.Errorf("load readings for variance anomaly: %w", err)
 	}
-	var sales []SalesDeclaredModel
+	var sales []store.SalesDeclaredModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Find(&sales).Error; err != nil {
 		return nil, fmt.Errorf("load sales for variance anomaly: %w", err)
 	}
@@ -296,7 +297,7 @@ func decimalRat(value string) (*big.Rat, error) {
 	return rat, nil
 }
 
-func numericAnomaly(report ShiftReportModel, source string) appreporting.AnomalyView {
+func numericAnomaly(report store.ShiftReportModel, source string) appreporting.AnomalyView {
 	eventID := uuid.NewSHA1(uuid.Nil, []byte(report.ReportID.String()+":"+source))
 	version := report.VersionNo
 	return appreporting.AnomalyView{EventID: eventID, StationID: report.StationID, SubjectKind: "report", SubjectID: report.ReportID, EventType: "fired", SourceKind: source, SourceID: report.ReportID, SourceVersionNo: &version, HappenedAt: report.SubmittedAt.UTC().Format(time.RFC3339Nano)}

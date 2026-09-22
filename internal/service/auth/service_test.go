@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
 

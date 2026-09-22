@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
+	appidentity "github.com/fadhln/pomkita-be/internal/service/identity"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/repository/store"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
-	appidentity "github.com/pomkita/pomkita-be/internal/service/identity"
 )
 
 func TestIdentityRepository_AdminRolesAndHistoryUseOneAuditChain(t *testing.T) {

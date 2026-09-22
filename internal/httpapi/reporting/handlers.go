@@ -3,11 +3,12 @@ package reporting
 import (
 	"context"
 	"net/http"
+	"slices"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
 // ReportingService is the typed report read boundary.
@@ -46,7 +47,7 @@ func ReportHandler(sessions transport.SessionService, service ReportingService) 
 		} else if len(session.StationIDs) == 1 {
 			stationID = session.StationIDs[0]
 		}
-		if stationID == uuid.Nil || !transport.ContainsUUID(session.StationIDs, stationID) {
+		if stationID == uuid.Nil || !slices.Contains(session.StationIDs, stationID) {
 			transport.ValidationError(c)
 			return
 		}

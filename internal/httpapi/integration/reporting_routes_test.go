@@ -2,15 +2,15 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
 func TestReportRoute_UsesSessionScopeAndKeepsDecimalStrings(t *testing.T) {

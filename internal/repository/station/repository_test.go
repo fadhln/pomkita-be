@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
+	appstation "github.com/fadhln/pomkita-be/internal/service/station"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/repository/store"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
-	appstation "github.com/pomkita/pomkita-be/internal/service/station"
 )
 
 func TestRepository_StationLifecycleWritesAuditAndKeepsDisabledStationReadable(t *testing.T) {

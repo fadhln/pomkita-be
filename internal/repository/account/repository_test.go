@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
+	appaccount "github.com/fadhln/pomkita-be/internal/service/account"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/repository/store"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
-	appaccount "github.com/pomkita/pomkita-be/internal/service/account"
 )
 
 func TestRepository_ReadProfileAndRevokeOtherSessions(t *testing.T) {

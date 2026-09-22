@@ -2,15 +2,15 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	draftapi "github.com/fadhln/pomkita-be/internal/httpapi/draft"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	appdraft "github.com/fadhln/pomkita-be/internal/service/draft"
 	"github.com/google/uuid"
-	appdraft "github.com/pomkita/pomkita-be/internal/service/draft"
 )
 
 func TestDraftHeartbeatRoute_UsesVerifiedStationScope(t *testing.T) {

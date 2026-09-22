@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	migrations "github.com/fadhln/pomkita-be/internal/platform/migrations"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	migrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
-	"github.com/pomkita/pomkita-be/internal/repository/store"
 )
 
 // NewStore creates a database store in an isolated schema.

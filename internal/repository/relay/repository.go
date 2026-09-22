@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	apprelay "github.com/fadhln/pomkita-be/internal/service/relay"
 	"github.com/google/uuid"
-	apprelay "github.com/pomkita/pomkita-be/internal/service/relay"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -17,7 +18,7 @@ type RelayRepository struct {
 }
 
 // NewRelayRepository creates a relay repository.
-func NewRelayRepository(store *Store) *RelayRepository {
+func NewRelayRepository(store *store.Store) *RelayRepository {
 	if store == nil {
 		return &RelayRepository{}
 	}
@@ -38,20 +39,20 @@ func (r *RelayRepository) ClaimAt(ctx context.Context, orgID, eventID uuid.UUID,
 	var lease uuid.UUID
 	var claimed bool
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var state OutboxRelayStateModel
+		var state store.OutboxRelayStateModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and event_id = ?", orgID, eventID).First(&state).Error; err != nil {
 			return fmt.Errorf("load relay state: %w", err)
 		}
 		if state.RelayStatus == "delivered" || state.RelayStatus == "in_flight" && state.LeaseExpiresAt != nil && state.LeaseExpiresAt.After(now) || state.RelayStatus == "failed" && state.NextAttemptAt != nil && state.NextAttemptAt.After(now) {
 			return nil
 		}
-		var outbox AuditOutboxModel
+		var outbox store.AuditOutboxModel
 		if err := tx.Where("org_id = ? and event_id = ?", orgID, eventID).First(&outbox).Error; err != nil {
 			return fmt.Errorf("load relay outbox: %w", err)
 		}
 		lease = uuid.New()
 		expires := now.Add(5 * time.Minute)
-		if err := tx.Model(&OutboxRelayStateModel{}).Where("org_id = ? and event_id = ?", orgID, eventID).Updates(map[string]any{"relay_status": "in_flight", "attempt_count": state.AttemptCount + 1, "lease_token": lease, "lease_expires_at": expires, "last_attempt_at": now, "last_error": nil}).Error; err != nil {
+		if err := tx.Model(&store.OutboxRelayStateModel{}).Where("org_id = ? and event_id = ?", orgID, eventID).Updates(map[string]any{"relay_status": "in_flight", "attempt_count": state.AttemptCount + 1, "lease_token": lease, "lease_expires_at": expires, "last_attempt_at": now, "last_error": nil}).Error; err != nil {
 			return fmt.Errorf("claim relay event: %w", err)
 		}
 		event = apprelay.Event{EventID: outbox.EventID, EventType: outbox.EventType, Payload: append([]byte(nil), outbox.Payload...)}
@@ -75,7 +76,7 @@ func (r *RelayRepository) FinishAt(ctx context.Context, orgID, eventID, lease uu
 		return fmt.Errorf("relay repository is unavailable")
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var state OutboxRelayStateModel
+		var state store.OutboxRelayStateModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and event_id = ? and lease_token = ? and relay_status = ?", orgID, eventID, lease, "in_flight").First(&state).Error; err != nil {
 			return fmt.Errorf("load relay lease: %w", err)
 		}
@@ -96,7 +97,7 @@ func (r *RelayRepository) FinishAt(ctx context.Context, orgID, eventID, lease uu
 			}
 			updates["next_attempt_at"] = now.Add(time.Duration(1<<attempt) * time.Second)
 		}
-		if err := tx.Model(&OutboxRelayStateModel{}).Where("org_id = ? and event_id = ?", orgID, eventID).Updates(updates).Error; err != nil {
+		if err := tx.Model(&store.OutboxRelayStateModel{}).Where("org_id = ? and event_id = ?", orgID, eventID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("finish relay event: %w", err)
 		}
 		return nil

@@ -5,12 +5,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
 )
 
+type Store = store.Store
+type AuditChainLockModel = store.AuditChainLockModel
+type AuditDeniedModel = store.AuditDeniedModel
+type AuditLogModel = store.AuditLogModel
+type AuditOutboxModel = store.AuditOutboxModel
+type OutboxRelayStateModel = store.OutboxRelayStateModel
+
 type governanceFixture struct {
-	store                          *Store
+	store                          *store.Store
 	cleanup                        func()
 	now                            time.Time
 	orgID, stationID               uuid.UUID

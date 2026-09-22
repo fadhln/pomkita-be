@@ -11,10 +11,11 @@ import (
 	"strings"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -25,7 +26,7 @@ type GovernanceRepository struct {
 }
 
 // NewGovernanceRepository creates a governance repository.
-func NewGovernanceRepository(store *Store) *GovernanceRepository {
+func NewGovernanceRepository(store *store.Store) *GovernanceRepository {
 	if store == nil {
 		return &GovernanceRepository{}
 	}
@@ -80,7 +81,7 @@ func (r *GovernanceRepository) ListAmendmentQueue(ctx context.Context, request a
 	}
 	result := make([]appgovernance.AmendmentQueueView, 0, len(rows))
 	for _, row := range rows {
-		var items []AmendmentItemModel
+		var items []store.AmendmentItemModel
 		if err := r.db.WithContext(ctx).Where("org_id = ? AND station_id = ? AND amendment_id = ?", request.OrgID, row.StationID, row.AmendmentID).Order("target_kind, target_logical_id, field").Find(&items).Error; err != nil {
 			return nil, fmt.Errorf("list amendment items: %w", err)
 		}
@@ -106,22 +107,22 @@ func (r *GovernanceRepository) Acknowledge(ctx context.Context, request appgover
 	}
 	var result appgovernance.Acknowledgement
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var station StationModel
+		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return fmt.Errorf("lock acknowledgement station: %w", err)
 		}
-		var shift ShiftModel
+		var shift store.ShiftModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).First(&shift).Error; err != nil {
 			return appgovernance.ErrAckReportNotFound
 		}
 		if shift.CurrentReportID == nil || *shift.CurrentReportID != request.ReportID || shift.Status != "awaiting_confirmation" {
 			return appgovernance.ErrAckReportUnavailable
 		}
-		var report ShiftReportModel
+		var report store.ShiftReportModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", request.OrgID, request.StationID, request.ShiftID, request.ReportID, request.VersionNo).First(&report).Error; err != nil {
 			return appgovernance.ErrAckReportNotFound
 		}
-		var head AckHeadModel
+		var head store.AckHeadModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", request.OrgID, request.StationID, request.ShiftID, request.ReportID, request.VersionNo).First(&head).Error; err != nil {
 			return appgovernance.ErrAckReportNotFound
 		}
@@ -143,10 +144,10 @@ func (r *GovernanceRepository) Acknowledge(ctx context.Context, request appgover
 			return err
 		}
 		var lastSeq int64
-		if err := tx.Model(&AckDecisionModel{}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", request.OrgID, request.StationID, request.ShiftID, request.ReportID, request.VersionNo).Select("coalesce(max(ack_seq), 0)").Scan(&lastSeq).Error; err != nil {
+		if err := tx.Model(&store.AckDecisionModel{}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", request.OrgID, request.StationID, request.ShiftID, request.ReportID, request.VersionNo).Select("coalesce(max(ack_seq), 0)").Scan(&lastSeq).Error; err != nil {
 			return fmt.Errorf("load acknowledgement sequence: %w", err)
 		}
-		ack := AckDecisionModel{
+		ack := store.AckDecisionModel{
 			AckID:            uuid.New(),
 			OrgID:            request.OrgID,
 			StationID:        request.StationID,
@@ -165,14 +166,14 @@ func (r *GovernanceRepository) Acknowledge(ctx context.Context, request appgover
 		if err := tx.Create(&ack).Error; err != nil {
 			return fmt.Errorf("create acknowledgement: %w", err)
 		}
-		if err := tx.Model(&AckHeadModel{}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", request.OrgID, request.StationID, request.ShiftID, request.ReportID, request.VersionNo).Update("active_ack_id", ack.AckID).Error; err != nil {
+		if err := tx.Model(&store.AckHeadModel{}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", request.OrgID, request.StationID, request.ShiftID, request.ReportID, request.VersionNo).Update("active_ack_id", ack.AckID).Error; err != nil {
 			return fmt.Errorf("activate acknowledgement: %w", err)
 		}
 		status := "needs_correction"
 		if request.Decision == "acked" {
 			status = "locked"
 		}
-		if err := tx.Model(&ShiftModel{}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).Update("status", status).Error; err != nil {
+		if err := tx.Model(&store.ShiftModel{}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).Update("status", status).Error; err != nil {
 			return fmt.Errorf("update acknowledged shift: %w", err)
 		}
 		auditPayload, err := json.Marshal(map[string]any{"ack_id": ack.AckID.String(), "report_id": request.ReportID.String(), "decision": request.Decision, "shift_status": status})
@@ -236,18 +237,18 @@ func (r *GovernanceRepository) RequestAmendment(ctx context.Context, request app
 	}
 	var result appgovernance.Amendment
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var station StationModel
+		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound
 		}
-		var shift ShiftModel
+		var shift store.ShiftModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).First(&shift).Error; err != nil {
 			return appgovernance.ErrAmendmentBaseUnavailable
 		}
 		if shift.CurrentReportID == nil || *shift.CurrentReportID != request.BaseReportID || (shift.Status != "locked" && shift.Status != "awaiting_confirmation" && shift.Status != "needs_correction") {
 			return appgovernance.ErrAmendmentBaseUnavailable
 		}
-		var report ShiftReportModel
+		var report store.ShiftReportModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", request.OrgID, request.StationID, request.ShiftID, request.BaseReportID).First(&report).Error; err != nil {
 			return appgovernance.ErrAmendmentBaseUnavailable
 		}
@@ -259,7 +260,7 @@ func (r *GovernanceRepository) RequestAmendment(ctx context.Context, request app
 			return appgovernance.ErrAmendmentRoleRequired
 		}
 		var pendingCount int64
-		if err := tx.Model(&AmendmentModel{}).Where("org_id = ? and station_id = ? and base_report_id = ? and status = ?", request.OrgID, request.StationID, request.BaseReportID, "pending").Count(&pendingCount).Error; err != nil {
+		if err := tx.Model(&store.AmendmentModel{}).Where("org_id = ? and station_id = ? and base_report_id = ? and status = ?", request.OrgID, request.StationID, request.BaseReportID, "pending").Count(&pendingCount).Error; err != nil {
 			return fmt.Errorf("check pending amendment: %w", err)
 		}
 		if pendingCount != 0 {
@@ -274,7 +275,7 @@ func (r *GovernanceRepository) RequestAmendment(ctx context.Context, request app
 		if err != nil {
 			return err
 		}
-		amendment := AmendmentModel{AmendmentID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, BaseReportID: request.BaseReportID, Reason: strings.TrimSpace(request.Reason), Status: "pending", RequesterUserID: request.RequesterID, RequestedAt: now, StaleCheckHash: hash, IsBreakGlass: request.IsBreakGlass}
+		amendment := store.AmendmentModel{AmendmentID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, BaseReportID: request.BaseReportID, Reason: strings.TrimSpace(request.Reason), Status: "pending", RequesterUserID: request.RequesterID, RequestedAt: now, StaleCheckHash: hash, IsBreakGlass: request.IsBreakGlass}
 		if strings.TrimSpace(request.BreakGlassReason) != "" {
 			reason := strings.TrimSpace(request.BreakGlassReason)
 			amendment.BreakGlassReason = &reason
@@ -283,7 +284,7 @@ func (r *GovernanceRepository) RequestAmendment(ctx context.Context, request app
 			return fmt.Errorf("create amendment: %w", err)
 		}
 		for _, item := range request.Items {
-			model := AmendmentItemModel{ItemID: uuid.New(), AmendmentID: amendment.AmendmentID, OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, TargetKind: item.TargetKind, TargetLogicalID: item.TargetLogicalID, Field: item.Field, OldValue: append([]byte(nil), item.OldValue...), NewValue: append([]byte(nil), item.NewValue...)}
+			model := store.AmendmentItemModel{ItemID: uuid.New(), AmendmentID: amendment.AmendmentID, OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, TargetKind: item.TargetKind, TargetLogicalID: item.TargetLogicalID, Field: item.Field, OldValue: append([]byte(nil), item.OldValue...), NewValue: append([]byte(nil), item.NewValue...)}
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create amendment item: %w", err)
 			}
@@ -310,11 +311,11 @@ func (r *GovernanceRepository) RejectAmendment(ctx context.Context, request appg
 		return appgovernance.ErrDependencyUnavailable
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var station StationModel
+		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound
 		}
-		var amendment AmendmentModel
+		var amendment store.AmendmentModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and amendment_id = ?", request.OrgID, request.StationID, request.AmendmentID).First(&amendment).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound
 		}
@@ -337,7 +338,7 @@ func (r *GovernanceRepository) RejectAmendment(ctx context.Context, request appg
 		}
 		decidedAt := now
 		updates := map[string]any{"status": "rejected", "approver_user_id": request.ApproverID, "decided_at": decidedAt, "rejection_reason": reason}
-		if err := tx.Model(&AmendmentModel{}).Where("org_id = ? and station_id = ? and amendment_id = ?", request.OrgID, request.StationID, request.AmendmentID).Updates(updates).Error; err != nil {
+		if err := tx.Model(&store.AmendmentModel{}).Where("org_id = ? and station_id = ? and amendment_id = ?", request.OrgID, request.StationID, request.AmendmentID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("reject amendment: %w", err)
 		}
 		auditPayload, err := json.Marshal(map[string]any{"amendment_id": request.AmendmentID.String(), "reason": reason})
@@ -358,11 +359,11 @@ func (r *GovernanceRepository) ApproveAmendment(ctx context.Context, request app
 	}
 	var result appgovernance.Amendment
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var station StationModel
+		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound
 		}
-		var amendment AmendmentModel
+		var amendment store.AmendmentModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and amendment_id = ?", request.OrgID, request.StationID, request.AmendmentID).First(&amendment).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound
 		}
@@ -379,14 +380,14 @@ func (r *GovernanceRepository) ApproveAmendment(ctx context.Context, request app
 		if amendment.RequesterUserID == request.ApproverID && !amendment.IsBreakGlass {
 			return appgovernance.ErrAmendmentSeparationRequired
 		}
-		var shift ShiftModel
+		var shift store.ShiftModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ?", amendment.OrgID, amendment.StationID, amendment.ShiftID).First(&shift).Error; err != nil {
 			return appgovernance.ErrAmendmentBaseUnavailable
 		}
 		if shift.CurrentReportID == nil || *shift.CurrentReportID != amendment.BaseReportID {
 			return appgovernance.ErrAmendmentBaseUnavailable
 		}
-		var base ShiftReportModel
+		var base store.ShiftReportModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", amendment.OrgID, amendment.StationID, amendment.ShiftID, amendment.BaseReportID).First(&base).Error; err != nil {
 			return appgovernance.ErrAmendmentBaseUnavailable
 		}
@@ -400,7 +401,7 @@ func (r *GovernanceRepository) ApproveAmendment(ctx context.Context, request app
 		if len(request.StaleCheckHash) != 32 || !bytes.Equal(request.StaleCheckHash, currentHash) || !bytes.Equal(amendment.StaleCheckHash, currentHash) {
 			return appgovernance.ErrAmendmentStale
 		}
-		var items []AmendmentItemModel
+		var items []store.AmendmentItemModel
 		if err := tx.Where("org_id = ? and station_id = ? and amendment_id = ?", amendment.OrgID, amendment.StationID, amendment.AmendmentID).Order("item_id").Find(&items).Error; err != nil {
 			return fmt.Errorf("load amendment items: %w", err)
 		}
@@ -409,34 +410,34 @@ func (r *GovernanceRepository) ApproveAmendment(ctx context.Context, request app
 		}
 		newReportID := uuid.New()
 		newVersion := base.VersionNo + 1
-		newReport := ShiftReportModel{ReportID: newReportID, OrgID: base.OrgID, StationID: base.StationID, ShiftID: base.ShiftID, VersionNo: newVersion, SupersedesID: &base.ReportID, Status: "submitted", SubmittedBy: request.ApproverID, SubmittedAt: now, PolicySnapshot: base.PolicySnapshot}
+		newReport := store.ShiftReportModel{ReportID: newReportID, OrgID: base.OrgID, StationID: base.StationID, ShiftID: base.ShiftID, VersionNo: newVersion, SupersedesID: &base.ReportID, Status: "submitted", SubmittedBy: request.ApproverID, SubmittedAt: now, PolicySnapshot: base.PolicySnapshot}
 		if err := tx.Create(&newReport).Error; err != nil {
 			return fmt.Errorf("create amended report: %w", err)
 		}
 		if err := r.copyAmendedReportChildren(tx, base, newReport, items); err != nil {
 			return err
 		}
-		if err := tx.Create(&AckHeadModel{OrgID: newReport.OrgID, StationID: newReport.StationID, ShiftID: newReport.ShiftID, ReportID: newReport.ReportID, VersionNo: newReport.VersionNo}).Error; err != nil {
+		if err := tx.Create(&store.AckHeadModel{OrgID: newReport.OrgID, StationID: newReport.StationID, ShiftID: newReport.ShiftID, ReportID: newReport.ReportID, VersionNo: newReport.VersionNo}).Error; err != nil {
 			return fmt.Errorf("create amended acknowledgement head: %w", err)
 		}
-		var oldHead AckHeadModel
+		var oldHead store.AckHeadModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", base.OrgID, base.StationID, base.ShiftID, base.ReportID, base.VersionNo).First(&oldHead).Error; err != nil {
 			return appgovernance.ErrAmendmentBaseUnavailable
 		}
 		if oldHead.ActiveAckID != nil {
-			supersession := AckSupersessionModel{SupersessionID: uuid.New(), OldOrgID: base.OrgID, OldStationID: base.StationID, OldShiftID: base.ShiftID, OldReportID: base.ReportID, OldVersionNo: base.VersionNo, SupersededAckID: *oldHead.ActiveAckID, ReplacementOrgID: newReport.OrgID, ReplacementStationID: newReport.StationID, ReplacementShiftID: newReport.ShiftID, ReplacementReportID: newReport.ReportID, ReplacementVersionNo: newReport.VersionNo, Reason: "amendment", CreatedAt: now}
+			supersession := store.AckSupersessionModel{SupersessionID: uuid.New(), OldOrgID: base.OrgID, OldStationID: base.StationID, OldShiftID: base.ShiftID, OldReportID: base.ReportID, OldVersionNo: base.VersionNo, SupersededAckID: *oldHead.ActiveAckID, ReplacementOrgID: newReport.OrgID, ReplacementStationID: newReport.StationID, ReplacementShiftID: newReport.ShiftID, ReplacementReportID: newReport.ReportID, ReplacementVersionNo: newReport.VersionNo, Reason: "amendment", CreatedAt: now}
 			if err := tx.Create(&supersession).Error; err != nil {
 				return fmt.Errorf("create acknowledgement supersession: %w", err)
 			}
-			if err := tx.Model(&AckHeadModel{}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", base.OrgID, base.StationID, base.ShiftID, base.ReportID, base.VersionNo).Update("active_ack_id", nil).Error; err != nil {
+			if err := tx.Model(&store.AckHeadModel{}).Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and version_no = ?", base.OrgID, base.StationID, base.ShiftID, base.ReportID, base.VersionNo).Update("active_ack_id", nil).Error; err != nil {
 				return fmt.Errorf("clear old acknowledgement head: %w", err)
 			}
 		}
-		if err := tx.Model(&ShiftModel{}).Where("org_id = ? and station_id = ? and shift_id = ?", base.OrgID, base.StationID, base.ShiftID).Updates(map[string]any{"current_report_id": newReportID, "status": "awaiting_confirmation"}).Error; err != nil {
+		if err := tx.Model(&store.ShiftModel{}).Where("org_id = ? and station_id = ? and shift_id = ?", base.OrgID, base.StationID, base.ShiftID).Updates(map[string]any{"current_report_id": newReportID, "status": "awaiting_confirmation"}).Error; err != nil {
 			return fmt.Errorf("point amended report: %w", err)
 		}
 		decidedAt := now
-		if err := tx.Model(&AmendmentModel{}).Where("org_id = ? and station_id = ? and amendment_id = ?", amendment.OrgID, amendment.StationID, amendment.AmendmentID).Updates(map[string]any{"status": "approved", "approver_user_id": request.ApproverID, "decided_at": decidedAt, "applied_report_id": newReportID}).Error; err != nil {
+		if err := tx.Model(&store.AmendmentModel{}).Where("org_id = ? and station_id = ? and amendment_id = ?", amendment.OrgID, amendment.StationID, amendment.AmendmentID).Updates(map[string]any{"status": "approved", "approver_user_id": request.ApproverID, "decided_at": decidedAt, "applied_report_id": newReportID}).Error; err != nil {
 			return fmt.Errorf("approve amendment: %w", err)
 		}
 		auditPayload, err := json.Marshal(map[string]any{"amendment_id": amendment.AmendmentID.String(), "base_report_id": base.ReportID.String(), "applied_report_id": newReportID.String(), "version_no": newVersion})
@@ -455,14 +456,14 @@ func (r *GovernanceRepository) ApproveAmendment(ctx context.Context, request app
 	return result, nil
 }
 
-func (r *GovernanceRepository) validateAmendmentItems(tx *gorm.DB, report ShiftReportModel, items []AmendmentItemModel) error {
+func (r *GovernanceRepository) validateAmendmentItems(tx *gorm.DB, report store.ShiftReportModel, items []store.AmendmentItemModel) error {
 	for _, item := range items {
 		if !repositoryAmendmentFieldAllowed(item.TargetKind, item.Field) {
 			return appgovernance.ErrAmendmentFieldForbidden
 		}
 		switch item.TargetKind {
 		case "sales_declared":
-			var sale SalesDeclaredModel
+			var sale store.SalesDeclaredModel
 			if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and sales_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID, item.TargetLogicalID).First(&sale).Error; err != nil {
 				return appgovernance.ErrAmendmentTargetNotFound
 			}
@@ -474,7 +475,7 @@ func (r *GovernanceRepository) validateAmendmentItems(tx *gorm.DB, report ShiftR
 				return appgovernance.ErrAmendmentStale
 			}
 		case "loss_entry":
-			var loss LossEntryModel
+			var loss store.LossEntryModel
 			if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and row_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID, item.TargetLogicalID).First(&loss).Error; err != nil {
 				return appgovernance.ErrAmendmentTargetNotFound
 			}
@@ -499,8 +500,8 @@ func (r *GovernanceRepository) validateAmendmentItems(tx *gorm.DB, report ShiftR
 	return nil
 }
 
-func (r *GovernanceRepository) copyAmendedReportChildren(tx *gorm.DB, base, replacement ShiftReportModel, items []AmendmentItemModel) error {
-	var readings []DispenserReadingModel
+func (r *GovernanceRepository) copyAmendedReportChildren(tx *gorm.DB, base, replacement store.ShiftReportModel, items []store.AmendmentItemModel) error {
+	var readings []store.DispenserReadingModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", base.OrgID, base.StationID, base.ShiftID, base.ReportID).Find(&readings).Error; err != nil {
 		return fmt.Errorf("load report readings: %w", err)
 	}
@@ -511,7 +512,7 @@ func (r *GovernanceRepository) copyAmendedReportChildren(tx *gorm.DB, base, repl
 			return fmt.Errorf("copy report reading: %w", err)
 		}
 	}
-	var sales []SalesDeclaredModel
+	var sales []store.SalesDeclaredModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", base.OrgID, base.StationID, base.ShiftID, base.ReportID).Find(&sales).Error; err != nil {
 		return fmt.Errorf("load report sales: %w", err)
 	}
@@ -536,7 +537,7 @@ func (r *GovernanceRepository) copyAmendedReportChildren(tx *gorm.DB, base, repl
 			return fmt.Errorf("copy report sale: %w", err)
 		}
 	}
-	var losses []LossEntryModel
+	var losses []store.LossEntryModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", base.OrgID, base.StationID, base.ShiftID, base.ReportID).Find(&losses).Error; err != nil {
 		return fmt.Errorf("load report losses: %w", err)
 	}
@@ -588,12 +589,12 @@ func jsonValueEquals(raw []byte, value string) bool {
 	return string(raw) == value
 }
 
-func amendmentDecimalValue(raw []byte) (Decimal, error) {
+func amendmentDecimalValue(raw []byte) (store.Decimal, error) {
 	var text string
 	if err := json.Unmarshal(raw, &text); err != nil {
 		text = strings.TrimSpace(string(raw))
 	}
-	return NewDecimal(text)
+	return store.NewDecimal(text)
 }
 
 // RecordAlertOccurrence inserts one alert event or returns its existing key.
@@ -603,7 +604,7 @@ func (r *GovernanceRepository) RecordAlertOccurrence(ctx context.Context, reques
 	}
 	var result appgovernance.AlertEvent
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var rule AlertRuleModel
+		var rule store.AlertRuleModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and rule_id = ?", request.OrgID, request.StationID, request.RuleID).First(&rule).Error; err != nil {
 			return appgovernance.ErrAlertInvalidRequest
 		}
@@ -615,7 +616,7 @@ func (r *GovernanceRepository) RecordAlertOccurrence(ctx context.Context, reques
 			return appgovernance.ErrAlertRelatedRequired
 		}
 		periodBucket := request.PeriodStart.UTC().Truncate(time.Hour)
-		var existing AlertEventModel
+		var existing store.AlertEventModel
 		query := tx.Where("org_id = ? and station_id = ? and rule_id = ? and subject_kind = ? and subject_id = ? and event_type = ? and period_bucket = ?", request.OrgID, request.StationID, request.RuleID, request.SubjectKind, request.SubjectID, request.EventType, periodBucket)
 		if request.EventType == "cleared" {
 			query = tx.Where("org_id = ? and station_id = ? and related_fired_event_id = ? and event_type = ?", request.OrgID, request.StationID, *request.RelatedFiredEventID, request.EventType)
@@ -631,7 +632,7 @@ func (r *GovernanceRepository) RecordAlertOccurrence(ctx context.Context, reques
 		if request.EventType == "fired" {
 			related = &eventID
 		}
-		model := AlertEventModel{EventID: eventID, OrgID: request.OrgID, StationID: request.StationID, RuleID: request.RuleID, SubjectKind: request.SubjectKind, SubjectID: request.SubjectID, EventType: request.EventType, PeriodStart: request.PeriodStart, RelatedFiredID: related, SourceKind: request.SourceKind, SourceID: request.SourceID, SourceVersionNo: request.SourceVersionNo, SourceAt: request.SourceAt, CreatedBy: request.CreatedBy, CreatedAt: now}
+		model := store.AlertEventModel{EventID: eventID, OrgID: request.OrgID, StationID: request.StationID, RuleID: request.RuleID, SubjectKind: request.SubjectKind, SubjectID: request.SubjectID, EventType: request.EventType, PeriodStart: request.PeriodStart, RelatedFiredID: related, SourceKind: request.SourceKind, SourceID: request.SourceID, SourceVersionNo: request.SourceVersionNo, SourceAt: request.SourceAt, CreatedBy: request.CreatedBy, CreatedAt: now}
 		if err := tx.Create(&model).Error; err != nil {
 			return fmt.Errorf("create alert event: %w", err)
 		}
@@ -655,15 +656,15 @@ func (r *GovernanceRepository) EvaluateStarvation(ctx context.Context, now time.
 	inserted := 0
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		cutoff := now.Add(-window)
-		var shifts []ShiftModel
+		var shifts []store.ShiftModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("status in ? and opened_at <= ?", []string{"open", "awaiting_confirmation", "locked"}, now).Order("org_id, station_id, shift_id").Find(&shifts).Error; err != nil {
 			return fmt.Errorf("load starvation shifts: %w", err)
 		}
-		var rules []AlertRuleModel
+		var rules []store.AlertRuleModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("rule_type = ?", "starvation").Order("station_id, rule_id").Find(&rules).Error; err != nil {
 			return fmt.Errorf("load starvation rules: %w", err)
 		}
-		rulesByStation := make(map[uuid.UUID][]AlertRuleModel)
+		rulesByStation := make(map[uuid.UUID][]store.AlertRuleModel)
 		for _, rule := range rules {
 			rulesByStation[rule.StationID] = append(rulesByStation[rule.StationID], rule)
 		}
@@ -674,7 +675,7 @@ func (r *GovernanceRepository) EvaluateStarvation(ctx context.Context, now time.
 						continue
 					}
 					period := shift.OpenedAt.UTC().Truncate(time.Hour)
-					var existing AlertEventModel
+					var existing store.AlertEventModel
 					err := tx.Where("org_id = ? and station_id = ? and rule_id = ? and subject_kind = ? and subject_id = ? and event_type = ? and period_bucket = ?", shift.OrgID, shift.StationID, rule.RuleID, "shift", shift.ShiftID, "fired", period).First(&existing).Error
 					if err == nil {
 						continue
@@ -683,7 +684,7 @@ func (r *GovernanceRepository) EvaluateStarvation(ctx context.Context, now time.
 						return fmt.Errorf("load starvation alert: %w", err)
 					}
 					eventID := uuid.New()
-					event := AlertEventModel{EventID: eventID, OrgID: shift.OrgID, StationID: shift.StationID, RuleID: rule.RuleID, SubjectKind: "shift", SubjectID: shift.ShiftID, EventType: "fired", PeriodStart: shift.OpenedAt, RelatedFiredID: &eventID, SourceKind: "scheduler", SourceID: shift.ShiftID, SourceAt: now, CreatedAt: now}
+					event := store.AlertEventModel{EventID: eventID, OrgID: shift.OrgID, StationID: shift.StationID, RuleID: rule.RuleID, SubjectKind: "shift", SubjectID: shift.ShiftID, EventType: "fired", PeriodStart: shift.OpenedAt, RelatedFiredID: &eventID, SourceKind: "scheduler", SourceID: shift.ShiftID, SourceAt: now, CreatedAt: now}
 					if err := tx.Create(&event).Error; err != nil {
 						return fmt.Errorf("create starvation alert: %w", err)
 					}
@@ -692,12 +693,12 @@ func (r *GovernanceRepository) EvaluateStarvation(ctx context.Context, now time.
 				if shift.Status != "locked" {
 					continue
 				}
-				var fired []AlertEventModel
+				var fired []store.AlertEventModel
 				if err := tx.Where("org_id = ? and station_id = ? and rule_id = ? and subject_kind = ? and subject_id = ? and event_type = ?", shift.OrgID, shift.StationID, rule.RuleID, "shift", shift.ShiftID, "fired").Order("created_at, event_id").Find(&fired).Error; err != nil {
 					return fmt.Errorf("load fired starvation alerts: %w", err)
 				}
 				for _, firedEvent := range fired {
-					var cleared AlertEventModel
+					var cleared store.AlertEventModel
 					err := tx.Where("org_id = ? and station_id = ? and related_fired_event_id = ? and event_type = ?", shift.OrgID, shift.StationID, firedEvent.EventID, "cleared").First(&cleared).Error
 					if err == nil {
 						continue
@@ -706,7 +707,7 @@ func (r *GovernanceRepository) EvaluateStarvation(ctx context.Context, now time.
 						return fmt.Errorf("load cleared starvation alert: %w", err)
 					}
 					related := firedEvent.EventID
-					clear := AlertEventModel{EventID: uuid.New(), OrgID: shift.OrgID, StationID: shift.StationID, RuleID: rule.RuleID, SubjectKind: "shift", SubjectID: shift.ShiftID, EventType: "cleared", PeriodStart: firedEvent.PeriodStart, RelatedFiredID: &related, SourceKind: "shift_transition", SourceID: shift.ShiftID, SourceAt: now, CreatedAt: now}
+					clear := store.AlertEventModel{EventID: uuid.New(), OrgID: shift.OrgID, StationID: shift.StationID, RuleID: rule.RuleID, SubjectKind: "shift", SubjectID: shift.ShiftID, EventType: "cleared", PeriodStart: firedEvent.PeriodStart, RelatedFiredID: &related, SourceKind: "shift_transition", SourceID: shift.ShiftID, SourceAt: now, CreatedAt: now}
 					if err := tx.Create(&clear).Error; err != nil {
 						return fmt.Errorf("create starvation clear: %w", err)
 					}
@@ -722,25 +723,25 @@ func (r *GovernanceRepository) EvaluateStarvation(ctx context.Context, now time.
 	return inserted, nil
 }
 
-func (r *GovernanceRepository) reportSnapshotHash(tx *gorm.DB, report ShiftReportModel) ([]byte, error) {
-	var readings []DispenserReadingModel
+func (r *GovernanceRepository) reportSnapshotHash(tx *gorm.DB, report store.ShiftReportModel) ([]byte, error) {
+	var readings []store.DispenserReadingModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Order("reading_id").Find(&readings).Error; err != nil {
 		return nil, fmt.Errorf("load amendment readings: %w", err)
 	}
-	var sales []SalesDeclaredModel
+	var sales []store.SalesDeclaredModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Order("sales_id").Find(&sales).Error; err != nil {
 		return nil, fmt.Errorf("load amendment sales: %w", err)
 	}
-	var losses []LossEntryModel
+	var losses []store.LossEntryModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Order("row_id").Find(&losses).Error; err != nil {
 		return nil, fmt.Errorf("load amendment losses: %w", err)
 	}
 	payload, err := json.Marshal(struct {
 		ReportID string
 		Version  int
-		Readings []DispenserReadingModel
-		Sales    []SalesDeclaredModel
-		Losses   []LossEntryModel
+		Readings []store.DispenserReadingModel
+		Sales    []store.SalesDeclaredModel
+		Losses   []store.LossEntryModel
 	}{ReportID: report.ReportID.String(), Version: report.VersionNo, Readings: readings, Sales: sales, Losses: losses})
 	if err != nil {
 		return nil, fmt.Errorf("encode amendment base: %w", err)

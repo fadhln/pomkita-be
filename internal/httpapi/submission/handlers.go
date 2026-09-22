@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appsubmission "github.com/fadhln/pomkita-be/internal/service/submission"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
 )
 
 // SubmissionService is the typed report submission boundary.
@@ -50,7 +51,7 @@ func SubmitHandler(sessions transport.SessionService, service SubmissionService)
 			_ = c.Error(err)
 			return
 		}
-		if !transport.ContainsUUID(session.StationIDs, input.StationID) {
+		if !slices.Contains(session.StationIDs, input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}

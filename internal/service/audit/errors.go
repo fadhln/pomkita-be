@@ -1,6 +1,6 @@
 package audit
 
-import "github.com/pomkita/pomkita-be/internal/domain"
+import "github.com/fadhln/pomkita-be/internal/domain"
 
 var (
 	// ErrDependencyUnavailable identifies a missing audit dependency.

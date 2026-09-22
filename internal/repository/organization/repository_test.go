@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
+	apporg "github.com/fadhln/pomkita-be/internal/service/organization"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/repository/store"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
-	apporg "github.com/pomkita/pomkita-be/internal/service/organization"
 )
 
 func TestRepository_CreateOrganizationAndFirstStationWritesAuditAtomically(t *testing.T) {

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	appreconciliation "github.com/fadhln/pomkita-be/internal/service/reconciliation"
+	appsubmission "github.com/fadhln/pomkita-be/internal/service/submission"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
-	appreconciliation "github.com/pomkita/pomkita-be/internal/service/reconciliation"
-	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
 )
 
 func TestSubmissionRepository_Submit_IsIdempotentByRequestHash(t *testing.T) {

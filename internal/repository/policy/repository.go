@@ -7,10 +7,11 @@ import (
 	"sort"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	apppolicy "github.com/fadhln/pomkita-be/internal/service/policy"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -25,7 +26,7 @@ func (r *PolicyRepository) History(ctx context.Context, orgID uuid.UUID, station
 	if r == nil || r.db == nil {
 		return nil, apppolicy.ErrInvalidRequest
 	}
-	var thresholds []ThresholdPolicyRevisionModel
+	var thresholds []store.ThresholdPolicyRevisionModel
 	thresholdQuery := r.db.WithContext(ctx).Where("org_id = ?", orgID)
 	if stationID != nil {
 		thresholdQuery = thresholdQuery.Where("station_id = ? or station_id is null", *stationID)
@@ -33,7 +34,7 @@ func (r *PolicyRepository) History(ctx context.Context, orgID uuid.UUID, station
 	if err := thresholdQuery.Find(&thresholds).Error; err != nil {
 		return nil, fmt.Errorf("load threshold policy history: %w", err)
 	}
-	var evidence []EvidencePolicyRevisionModel
+	var evidence []store.EvidencePolicyRevisionModel
 	evidenceQuery := r.db.WithContext(ctx).Where("org_id = ?", orgID)
 	if stationID != nil {
 		evidenceQuery = evidenceQuery.Where("station_id = ? or station_id is null", *stationID)
@@ -57,7 +58,7 @@ func (r *PolicyRepository) History(ctx context.Context, orgID uuid.UUID, station
 }
 
 // NewPolicyRepository creates a policy repository.
-func NewPolicyRepository(store *Store) *PolicyRepository {
+func NewPolicyRepository(store *store.Store) *PolicyRepository {
 	if store == nil {
 		return &PolicyRepository{}
 	}
@@ -72,7 +73,7 @@ func (r *PolicyRepository) CreateRevision(ctx context.Context, request apppolicy
 	var result apppolicy.PolicyRevision
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if request.StationID != uuid.Nil {
-			var station StationModel
+			var station store.StationModel
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 				return apppolicy.ErrInvalidRequest
 			}
@@ -99,7 +100,7 @@ func (r *PolicyRepository) CreateRevision(ctx context.Context, request apppolicy
 		}
 		var duplicateCount int64
 		if request.PolicyKind == "threshold" {
-			query := tx.Model(&ThresholdPolicyRevisionModel{}).Where("org_id = ? and policy_id = ? and valid_from = ?", request.OrgID, request.PolicyID, request.ValidFrom)
+			query := tx.Model(&store.ThresholdPolicyRevisionModel{}).Where("org_id = ? and policy_id = ? and valid_from = ?", request.OrgID, request.PolicyID, request.ValidFrom)
 			if request.StationID == uuid.Nil {
 				query = query.Where("station_id is null")
 			} else {
@@ -109,7 +110,7 @@ func (r *PolicyRepository) CreateRevision(ctx context.Context, request apppolicy
 				return fmt.Errorf("check threshold revision overlap: %w", err)
 			}
 		} else {
-			query := tx.Model(&EvidencePolicyRevisionModel{}).Where("org_id = ? and policy_id = ? and valid_from = ?", request.OrgID, request.PolicyID, request.ValidFrom)
+			query := tx.Model(&store.EvidencePolicyRevisionModel{}).Where("org_id = ? and policy_id = ? and valid_from = ?", request.OrgID, request.PolicyID, request.ValidFrom)
 			if request.StationID == uuid.Nil {
 				query = query.Where("station_id is null")
 			} else {
@@ -128,12 +129,12 @@ func (r *PolicyRepository) CreateRevision(ctx context.Context, request apppolicy
 			supersedesOrgID = &request.OrgID
 		}
 		if request.PolicyKind == "threshold" {
-			model := ThresholdPolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Disabled: request.Disabled, TombstoneReason: optionalString(request.TombstoneReason), LossLiterThreshold: Decimal(request.LossLiterThreshold), GainLiterThreshold: Decimal(request.GainLiterThreshold), LossRupiahThreshold: Decimal(request.LossRupiahThreshold), GainRupiahThreshold: Decimal(request.GainRupiahThreshold), VarianceThreshold: Decimal(request.VarianceRupiahThreshold), RolloverThreshold: Decimal(request.RolloverThreshold), CreatedBy: request.ActorID, CreatedAt: now}
+			model := store.ThresholdPolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Disabled: request.Disabled, TombstoneReason: optionalString(request.TombstoneReason), LossLiterThreshold: store.Decimal(request.LossLiterThreshold), GainLiterThreshold: store.Decimal(request.GainLiterThreshold), LossRupiahThreshold: store.Decimal(request.LossRupiahThreshold), GainRupiahThreshold: store.Decimal(request.GainRupiahThreshold), VarianceThreshold: store.Decimal(request.VarianceRupiahThreshold), RolloverThreshold: store.Decimal(request.RolloverThreshold), CreatedBy: request.ActorID, CreatedAt: now}
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create threshold policy revision: %w", err)
 			}
 		} else {
-			model := EvidencePolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Mode: request.EvidenceMode, Disabled: request.Disabled, TombstoneReason: optionalString(request.TombstoneReason), CreatedBy: request.ActorID, CreatedAt: now}
+			model := store.EvidencePolicyRevisionModel{RevID: revisionID, PolicyID: request.PolicyID, OrgID: request.OrgID, StationID: optionalUUID(request.StationID), ValidFrom: request.ValidFrom, SupersedesOrgID: supersedesOrgID, SupersedesRevID: request.SupersedesRevisionID, Mode: request.EvidenceMode, Disabled: request.Disabled, TombstoneReason: optionalString(request.TombstoneReason), CreatedBy: request.ActorID, CreatedAt: now}
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create evidence policy revision: %w", err)
 			}
@@ -160,13 +161,13 @@ func (r *PolicyRepository) CreateRevision(ctx context.Context, request apppolicy
 
 func (r *PolicyRepository) supersededValidFrom(tx *gorm.DB, request apppolicy.PolicyRevisionRequest, revisionID uuid.UUID) (time.Time, error) {
 	if request.PolicyKind == "threshold" {
-		var revision ThresholdPolicyRevisionModel
+		var revision store.ThresholdPolicyRevisionModel
 		if err := tx.Where("org_id = ? and rev_id = ?", request.OrgID, revisionID).First(&revision).Error; err != nil {
 			return time.Time{}, apppolicy.ErrInvalidRequest
 		}
 		return revision.ValidFrom, nil
 	}
-	var revision EvidencePolicyRevisionModel
+	var revision store.EvidencePolicyRevisionModel
 	if err := tx.Where("org_id = ? and rev_id = ?", request.OrgID, revisionID).First(&revision).Error; err != nil {
 		return time.Time{}, apppolicy.ErrInvalidRequest
 	}

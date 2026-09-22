@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
 	"github.com/gin-gonic/gin"
-	"github.com/pomkita/pomkita-be/internal/domain"
 )
 
 func TestHealthAndReady(t *testing.T) {

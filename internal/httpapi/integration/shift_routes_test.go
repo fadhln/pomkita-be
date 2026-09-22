@@ -3,16 +3,16 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	shiftapi "github.com/fadhln/pomkita-be/internal/httpapi/shift"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
 	"github.com/google/uuid"
-	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
 )
 
 func TestOpenShiftRoute_UsesSessionTenantAndReturnsDecimalSafeShift(t *testing.T) {

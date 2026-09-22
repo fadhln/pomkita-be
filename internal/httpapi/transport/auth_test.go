@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 )
 
 type verifierStub struct {

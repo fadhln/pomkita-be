@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/hex"
 	"net/http"
+	"slices"
 	"strings"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 )
 
 // AmendmentService is the typed amendment governance boundary.
@@ -175,7 +176,7 @@ func readSession(c *gin.Context, sessions transport.SessionService, stationID uu
 		_ = c.Error(err)
 		return transport.SessionView{}, false
 	}
-	if !transport.ContainsUUID(session.StationIDs, stationID) && !containsString(session.Roles, "Owner") && !containsString(session.Roles, "Superadmin") {
+	if !slices.Contains(session.StationIDs, stationID) && !slices.Contains(session.Roles, "Owner") && !slices.Contains(session.Roles, "Superadmin") {
 		transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 		return transport.SessionView{}, false
 	}
@@ -192,18 +193,9 @@ func decodeHash(value string) ([]byte, error) {
 
 func firstRole(roles []string, allowed ...string) string {
 	for _, candidate := range allowed {
-		if containsString(roles, candidate) {
+		if slices.Contains(roles, candidate) {
 			return candidate
 		}
 	}
 	return ""
-}
-
-func containsString(values []string, expected string) bool {
-	for _, value := range values {
-		if value == expected {
-			return true
-		}
-	}
-	return false
 }

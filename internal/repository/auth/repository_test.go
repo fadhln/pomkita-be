@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
 )
 
 func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {

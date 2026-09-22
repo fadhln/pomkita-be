@@ -3,8 +3,8 @@ package httpapi_test
 import (
 	"context"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
 type SessionView = appjwt.SessionView

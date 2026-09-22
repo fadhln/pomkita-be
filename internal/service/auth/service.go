@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/domain"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
 

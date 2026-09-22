@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appstation "github.com/fadhln/pomkita-be/internal/service/station"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appstation "github.com/pomkita/pomkita-be/internal/service/station"
 )
 
 // Service provides station use cases required by the HTTP adapter.

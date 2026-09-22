@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/fadhln/pomkita-be/internal/httpapi/session"
+	"github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
 	"github.com/gin-gonic/gin"
-	"github.com/pomkita/pomkita-be/internal/httpapi/session"
-	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
 type readyStub struct {

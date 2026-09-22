@@ -2,8 +2,8 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	auditapi "github.com/fadhln/pomkita-be/internal/httpapi/audit"
 	"net/http"
 	"net/http/httptest"
 	"strings"

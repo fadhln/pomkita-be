@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
 	"github.com/google/uuid"
-	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 )
 
 func TestGovernanceRepository_Acknowledge_LocksTheReportAndShift(t *testing.T) {

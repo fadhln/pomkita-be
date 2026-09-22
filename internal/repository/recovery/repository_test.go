@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	apprecovery "github.com/fadhln/pomkita-be/internal/service/recovery"
 	"github.com/google/uuid"
-	apprecovery "github.com/pomkita/pomkita-be/internal/service/recovery"
 )
 
 func TestRecoveryRepository_RecoverStale_ReopensDraftWithoutReport(t *testing.T) {

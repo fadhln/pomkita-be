@@ -3,11 +3,12 @@ package governance
 import (
 	"context"
 	"net/http"
+	"slices"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 )
 
 // GovernanceService is the typed acknowledgement boundary.
@@ -49,7 +50,7 @@ func AcknowledgeHandler(sessions transport.SessionService, service GovernanceSer
 			_ = c.Error(err)
 			return
 		}
-		if !transport.ContainsUUID(session.StationIDs, input.StationID) {
+		if !slices.Contains(session.StationIDs, input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}

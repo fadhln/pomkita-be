@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appdraft "github.com/fadhln/pomkita-be/internal/service/draft"
 	"github.com/google/uuid"
-	appdraft "github.com/pomkita/pomkita-be/internal/service/draft"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -20,7 +21,7 @@ type DraftRepository struct {
 }
 
 // NewDraftRepository creates a draft repository.
-func NewDraftRepository(store *Store) *DraftRepository {
+func NewDraftRepository(store *store.Store) *DraftRepository {
 	if store == nil {
 		return &DraftRepository{}
 	}
@@ -34,7 +35,7 @@ func (r *DraftRepository) Claim(ctx context.Context, request appdraft.ClaimReque
 	}
 	var result appdraft.ClaimResult
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var draft ShiftDraftModel
+		var draft store.ShiftDraftModel
 		query := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("draft_id = ? and shift_id = ? and org_id is not null", request.DraftID, request.ShiftID)
 		if err := query.First(&draft).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -48,7 +49,7 @@ func (r *DraftRepository) Claim(ctx context.Context, request appdraft.ClaimReque
 		token := uuid.New()
 		expires := now.Add(draftLeaseDuration)
 		updates := map[string]any{"owned_by": request.ActorID, "claim_token": token, "claim_expires_at": expires, "status": "editing", "updated_by": request.ActorID, "updated_at": now}
-		if err := tx.Model(&ShiftDraftModel{}).Where("draft_id = ?", draft.DraftID).Updates(updates).Error; err != nil {
+		if err := tx.Model(&store.ShiftDraftModel{}).Where("draft_id = ?", draft.DraftID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("claim draft: %w", err)
 		}
 		result = appdraft.ClaimResult{DraftID: draft.DraftID, ClaimToken: token, ClaimExpiresAt: expires, Revision: draft.Revision}
@@ -65,7 +66,7 @@ func (r *DraftRepository) Heartbeat(ctx context.Context, request appdraft.Heartb
 	if r == nil || r.db == nil {
 		return appdraft.ErrDependencyUnavailable
 	}
-	result := r.db.WithContext(ctx).Model(&ShiftDraftModel{}).
+	result := r.db.WithContext(ctx).Model(&store.ShiftDraftModel{}).
 		Where("draft_id = ? and owned_by = ? and claim_token = ? and claim_expires_at > ? and status = ?", request.DraftID, request.ActorID, request.ClaimToken, now, "editing").
 		Updates(map[string]any{"claim_expires_at": now.Add(draftLeaseDuration), "updated_at": now, "updated_by": request.ActorID})
 	if result.Error != nil {
@@ -84,7 +85,7 @@ func (r *DraftRepository) WriteReading(ctx context.Context, request appdraft.Wri
 	}
 	var nextRevision int
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var draft ShiftDraftModel
+		var draft store.ShiftDraftModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("draft_id = ?", request.DraftID).First(&draft).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return appdraft.ErrDraftNotFound
@@ -97,12 +98,12 @@ func (r *DraftRepository) WriteReading(ctx context.Context, request appdraft.Wri
 		if draft.Revision != request.Revision {
 			return appdraft.ErrRevisionConflict
 		}
-		row := DraftReadingModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, NozzleID: request.NozzleID, MeterStart: Decimal(request.MeterStart), MeterEnd: Decimal(request.MeterEnd), CreatedBy: request.ActorID}
+		row := store.DraftReadingModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, NozzleID: request.NozzleID, MeterStart: store.Decimal(request.MeterStart), MeterEnd: store.Decimal(request.MeterEnd), CreatedBy: request.ActorID}
 		if err := tx.Create(&row).Error; err != nil {
 			return fmt.Errorf("create draft reading: %w", err)
 		}
 		nextRevision = draft.Revision + 1
-		if err := tx.Model(&ShiftDraftModel{}).Where("draft_id = ? and revision = ?", draft.DraftID, draft.Revision).Updates(map[string]any{"revision": nextRevision, "updated_at": now, "updated_by": request.ActorID}).Error; err != nil {
+		if err := tx.Model(&store.ShiftDraftModel{}).Where("draft_id = ? and revision = ?", draft.DraftID, draft.Revision).Updates(map[string]any{"revision": nextRevision, "updated_at": now, "updated_by": request.ActorID}).Error; err != nil {
 			return fmt.Errorf("advance draft revision: %w", err)
 		}
 		return nil
@@ -124,7 +125,7 @@ func (r *DraftRepository) WriteSales(ctx context.Context, request appdraft.Write
 		if err != nil {
 			return err
 		}
-		row := DraftSalesModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, DispenserID: request.DispenserID, CashAmount: Decimal(request.CashAmount), CashlessAmount: Decimal(request.CashlessAmount), CreatedBy: request.ActorID}
+		row := store.DraftSalesModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, DispenserID: request.DispenserID, CashAmount: store.Decimal(request.CashAmount), CashlessAmount: store.Decimal(request.CashlessAmount), CreatedBy: request.ActorID}
 		if err := tx.Create(&row).Error; err != nil {
 			return fmt.Errorf("create draft sales: %w", err)
 		}
@@ -148,12 +149,12 @@ func (r *DraftRepository) WriteLoss(ctx context.Context, request appdraft.WriteL
 		if err != nil {
 			return err
 		}
-		var cash *Decimal
+		var cash *store.Decimal
 		if request.CashAmount != "" {
-			value := Decimal(request.CashAmount)
+			value := store.Decimal(request.CashAmount)
 			cash = &value
 		}
-		row := DraftLossModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, LossID: request.LossID, Direction: request.Direction, ReasonCode: request.ReasonCode, Liters: Decimal(request.Liters), CashAmount: cash, CreatedBy: request.ActorID}
+		row := store.DraftLossModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, LossID: request.LossID, Direction: request.Direction, ReasonCode: request.ReasonCode, Liters: store.Decimal(request.Liters), CashAmount: cash, CreatedBy: request.ActorID}
 		if request.Note != "" {
 			row.Note = &request.Note
 		}
@@ -180,7 +181,7 @@ func (r *DraftRepository) StageEvidence(ctx context.Context, request appdraft.St
 		if err != nil {
 			return err
 		}
-		row := DraftEvidenceStagingModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, LossRowID: request.LossRowID, EvidenceType: request.EvidenceType, ObjectKey: request.ObjectKey, ContentHash: append([]byte(nil), request.ContentHash...), SizeBytes: request.SizeBytes, MIME: request.MIME, Status: "uploaded", UploadedBy: request.ActorID}
+		row := store.DraftEvidenceStagingModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, DraftID: draft.DraftID, LossRowID: request.LossRowID, EvidenceType: request.EvidenceType, ObjectKey: request.ObjectKey, ContentHash: append([]byte(nil), request.ContentHash...), SizeBytes: request.SizeBytes, MIME: request.MIME, Status: "uploaded", UploadedBy: request.ActorID}
 		if err := tx.Create(&row).Error; err != nil {
 			return fmt.Errorf("stage draft evidence: %w", err)
 		}
@@ -193,25 +194,25 @@ func (r *DraftRepository) StageEvidence(ctx context.Context, request appdraft.St
 	return next, nil
 }
 
-func (r *DraftRepository) lockDraftForMutation(tx *gorm.DB, draftID, claimToken, actorID uuid.UUID, revision int, now time.Time) (ShiftDraftModel, error) {
-	var draft ShiftDraftModel
+func (r *DraftRepository) lockDraftForMutation(tx *gorm.DB, draftID, claimToken, actorID uuid.UUID, revision int, now time.Time) (store.ShiftDraftModel, error) {
+	var draft store.ShiftDraftModel
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("draft_id = ?", draftID).First(&draft).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ShiftDraftModel{}, appdraft.ErrDraftNotFound
+			return store.ShiftDraftModel{}, appdraft.ErrDraftNotFound
 		}
-		return ShiftDraftModel{}, fmt.Errorf("load draft child: %w", err)
+		return store.ShiftDraftModel{}, fmt.Errorf("load draft child: %w", err)
 	}
 	if draft.ClaimExpiresAt == nil || !draft.ClaimExpiresAt.After(now) || draft.ClaimToken == nil || *draft.ClaimToken != claimToken || draft.OwnedBy == nil || *draft.OwnedBy != actorID {
-		return ShiftDraftModel{}, appdraft.ErrClaimExpired
+		return store.ShiftDraftModel{}, appdraft.ErrClaimExpired
 	}
 	if draft.Revision != revision {
-		return ShiftDraftModel{}, appdraft.ErrRevisionConflict
+		return store.ShiftDraftModel{}, appdraft.ErrRevisionConflict
 	}
 	return draft, nil
 }
 
-func (r *DraftRepository) advanceDraft(tx *gorm.DB, draft ShiftDraftModel, revision int, actorID uuid.UUID, now time.Time) error {
-	if err := tx.Model(&ShiftDraftModel{}).Where("draft_id = ? and revision = ?", draft.DraftID, draft.Revision).Updates(map[string]any{"revision": revision, "updated_at": now, "updated_by": actorID}).Error; err != nil {
+func (r *DraftRepository) advanceDraft(tx *gorm.DB, draft store.ShiftDraftModel, revision int, actorID uuid.UUID, now time.Time) error {
+	if err := tx.Model(&store.ShiftDraftModel{}).Where("draft_id = ? and revision = ?", draft.DraftID, draft.Revision).Updates(map[string]any{"revision": revision, "updated_at": now, "updated_by": actorID}).Error; err != nil {
 		return fmt.Errorf("advance draft revision: %w", err)
 	}
 	return nil

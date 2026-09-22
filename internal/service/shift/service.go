@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/domain"
 )
 
 // Status is the server-owned lifecycle state of a shift.

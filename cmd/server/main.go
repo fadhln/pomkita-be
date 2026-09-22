@@ -6,59 +6,42 @@ import (
 	"os"
 	"time"
 
-	"github.com/pomkita/pomkita-be/internal/config"
-	"github.com/pomkita/pomkita-be/internal/httpapi"
-	accountapi "github.com/pomkita/pomkita-be/internal/httpapi/account"
-	auditapi "github.com/pomkita/pomkita-be/internal/httpapi/audit"
-	draftapi "github.com/pomkita/pomkita-be/internal/httpapi/draft"
-	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
-	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
-	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
-	sessionapi "github.com/pomkita/pomkita-be/internal/httpapi/session"
-	shiftapi "github.com/pomkita/pomkita-be/internal/httpapi/shift"
-	submissionapi "github.com/pomkita/pomkita-be/internal/httpapi/submission"
-	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	"github.com/pomkita/pomkita-be/internal/platform/mailer"
-	migrations "github.com/pomkita/pomkita-be/internal/platform/migrations"
-	accountrepository "github.com/pomkita/pomkita-be/internal/repository/account"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	authrepository "github.com/pomkita/pomkita-be/internal/repository/auth"
-	draftrepository "github.com/pomkita/pomkita-be/internal/repository/draft"
-	governancerepository "github.com/pomkita/pomkita-be/internal/repository/governance"
-	identityrepository "github.com/pomkita/pomkita-be/internal/repository/identity"
-	organizationrepository "github.com/pomkita/pomkita-be/internal/repository/organization"
-	policyrepository "github.com/pomkita/pomkita-be/internal/repository/policy"
-	reportingrepository "github.com/pomkita/pomkita-be/internal/repository/reporting"
-	shiftrepository "github.com/pomkita/pomkita-be/internal/repository/shift"
-	stationrepository "github.com/pomkita/pomkita-be/internal/repository/station"
-	store "github.com/pomkita/pomkita-be/internal/repository/store"
-	submissionrepository "github.com/pomkita/pomkita-be/internal/repository/submission"
-	accountservice "github.com/pomkita/pomkita-be/internal/service/account"
-	auditservice "github.com/pomkita/pomkita-be/internal/service/audit"
-	authservice "github.com/pomkita/pomkita-be/internal/service/auth"
-	draftservice "github.com/pomkita/pomkita-be/internal/service/draft"
-	governanceservice "github.com/pomkita/pomkita-be/internal/service/governance"
-	identityservice "github.com/pomkita/pomkita-be/internal/service/identity"
-	organizationservice "github.com/pomkita/pomkita-be/internal/service/organization"
-	policysservice "github.com/pomkita/pomkita-be/internal/service/policy"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
-	shiftservice "github.com/pomkita/pomkita-be/internal/service/shift"
-	stationservice "github.com/pomkita/pomkita-be/internal/service/station"
-	submissionservice "github.com/pomkita/pomkita-be/internal/service/submission"
+	"github.com/fadhln/pomkita-be/internal/config"
+	"github.com/fadhln/pomkita-be/internal/httpapi"
+	accountapi "github.com/fadhln/pomkita-be/internal/httpapi/account"
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	"github.com/fadhln/pomkita-be/internal/platform/mailer"
+	migrations "github.com/fadhln/pomkita-be/internal/platform/migrations"
+	accountrepository "github.com/fadhln/pomkita-be/internal/repository/account"
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	authrepository "github.com/fadhln/pomkita-be/internal/repository/auth"
+	draftrepository "github.com/fadhln/pomkita-be/internal/repository/draft"
+	governancerepository "github.com/fadhln/pomkita-be/internal/repository/governance"
+	identityrepository "github.com/fadhln/pomkita-be/internal/repository/identity"
+	organizationrepository "github.com/fadhln/pomkita-be/internal/repository/organization"
+	policyrepository "github.com/fadhln/pomkita-be/internal/repository/policy"
+	reportingrepository "github.com/fadhln/pomkita-be/internal/repository/reporting"
+	shiftrepository "github.com/fadhln/pomkita-be/internal/repository/shift"
+	stationrepository "github.com/fadhln/pomkita-be/internal/repository/station"
+	store "github.com/fadhln/pomkita-be/internal/repository/store"
+	submissionrepository "github.com/fadhln/pomkita-be/internal/repository/submission"
+	accountservice "github.com/fadhln/pomkita-be/internal/service/account"
+	auditservice "github.com/fadhln/pomkita-be/internal/service/audit"
+	authservice "github.com/fadhln/pomkita-be/internal/service/auth"
+	draftservice "github.com/fadhln/pomkita-be/internal/service/draft"
+	governanceservice "github.com/fadhln/pomkita-be/internal/service/governance"
+	identityservice "github.com/fadhln/pomkita-be/internal/service/identity"
+	organizationservice "github.com/fadhln/pomkita-be/internal/service/organization"
+	policysservice "github.com/fadhln/pomkita-be/internal/service/policy"
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
+	shiftservice "github.com/fadhln/pomkita-be/internal/service/shift"
+	stationservice "github.com/fadhln/pomkita-be/internal/service/station"
+	submissionservice "github.com/fadhln/pomkita-be/internal/service/submission"
 )
 
 type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
-
-func composeRouterDependencies(readiness httpapi.Readiness, verifier transport.TokenVerifier, sessions sessionapi.Service, shiftService shiftapi.ShiftService, shiftRead shiftapi.ShiftReadService, draftService draftapi.DraftService, draftWrites draftapi.DraftWriteService, submissionService submissionapi.SubmissionService, governanceService governanceapi.GovernanceService, amendment governanceapi.AmendmentService, policyService policyapi.PolicyService, policyRead policyapi.PolicyReadService, auditService auditapi.AuditService, auditVerify auditapi.AuditVerificationService, anomalies reportingapi.AnomalyService, reports reportingapi.ReportingService) httpapi.RouterDependencies {
-	return httpapi.RouterDependencies{
-		Readiness: readiness, Verifier: verifier, Sessions: sessions,
-		Shift: shiftService, ShiftRead: shiftRead, Draft: draftService, DraftWrites: draftWrites, Submission: submissionService, Governance: governanceService, Amendment: amendment, Policy: policyService, PolicyRead: policyRead, Audit: auditService, AuditVerify: auditVerify, Anomalies: anomalies,
-		Reports: reports, LatestMigration: 16,
-	}
-}
 
 func main() {
 	cfg := config.Load()
@@ -108,15 +91,15 @@ func main() {
 	auditRepository := auditrepository.NewAuditRepository(database)
 	auditService := auditservice.NewService(auditRepository, systemClock{})
 	deniedAudit := auditservice.NewDeniedService(auditRepository, systemClock{})
-	dependencies := composeRouterDependencies(
-		database, jwtService, sessionService, shiftService, shiftService, draftService, draftService, submissionService, governanceService, amendmentService, policyService, policyService, reportingService, auditService, reportingService, reportingService,
-	)
-	dependencies.DeniedAudit = deniedAudit
-	dependencies.Users = identityService
-	dependencies.Account = accountService
-	dependencies.Organization = organizationService
-	dependencies.Station = stationService
-	dependencies.AccountLimiter = accountapi.NewLimiter(5, time.Minute, time.Now)
+	dependencies := httpapi.RouterDependencies{
+		Readiness: database, Verifier: jwtService, Sessions: sessionService,
+		Shift: shiftService, ShiftRead: shiftService, Draft: draftService, DraftWrites: draftService,
+		Submission: submissionService, Governance: governanceService, Amendment: amendmentService,
+		Policy: policyService, PolicyRead: policyService, Audit: reportingService, AuditVerify: auditService,
+		Anomalies: reportingService, Reports: reportingService, DeniedAudit: deniedAudit,
+		Users: identityService, Account: accountService, Organization: organizationService, Station: stationService,
+		AccountLimiter: accountapi.NewLimiter(5, time.Minute, time.Now), LatestMigration: 16,
+	}
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)
 
 	if err := router.Run(":" + cfg.Port); err != nil {

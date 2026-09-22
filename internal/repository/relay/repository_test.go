@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	"github.com/google/uuid"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 )
 
 func TestRelayRepository_ClaimAndFinishSupportsLeaseRetry(t *testing.T) {

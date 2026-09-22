@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pomkita/pomkita-be/internal/httpapi"
+	"github.com/fadhln/pomkita-be/internal/httpapi"
 )
 
 func main() {

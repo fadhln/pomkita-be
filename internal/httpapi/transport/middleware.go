@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
 	"github.com/gin-gonic/gin"
-	"github.com/pomkita/pomkita-be/internal/domain"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
 )
 
 // ErrorMappingMiddleware maps known service and PostgreSQL errors to safe HTTP errors.

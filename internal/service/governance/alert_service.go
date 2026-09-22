@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/domain"
 )
 
 var (

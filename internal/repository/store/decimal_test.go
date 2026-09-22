@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	. "github.com/pomkita/pomkita-be/internal/repository/store"
+	. "github.com/fadhln/pomkita-be/internal/repository/store"
 )
 
 func TestDecimal_PreservesExactTextAndJSONString(t *testing.T) {

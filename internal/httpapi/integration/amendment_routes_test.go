@@ -3,15 +3,15 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	governanceapi "github.com/pomkita/pomkita-be/internal/httpapi/governance"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	governanceapi "github.com/fadhln/pomkita-be/internal/httpapi/governance"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
 	"github.com/google/uuid"
-	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
 )
 
 func TestAmendmentRequestRoute_UsesVerifiedSessionScope(t *testing.T) {

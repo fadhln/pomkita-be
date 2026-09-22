@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	apppolicy "github.com/fadhln/pomkita-be/internal/service/policy"
 	"github.com/google/uuid"
-	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 )
 
 func TestPolicyRepository_CreateRevision_PersistsExactThresholds(t *testing.T) {

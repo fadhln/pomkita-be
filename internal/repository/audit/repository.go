@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/canonical"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/canonical"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -24,7 +25,7 @@ type AuditRepository struct {
 }
 
 // NewAuditRepository creates an audit repository.
-func NewAuditRepository(store *Store) *AuditRepository {
+func NewAuditRepository(store *store.Store) *AuditRepository {
 	if store == nil {
 		return &AuditRepository{}
 	}
@@ -36,7 +37,7 @@ func (r *AuditRepository) RecordDenied(ctx context.Context, request appaudit.Den
 	if r == nil || r.db == nil {
 		return appaudit.ErrDependencyUnavailable
 	}
-	row := AuditDeniedModel{
+	row := store.AuditDeniedModel{
 		RequestID: request.RequestID,
 		SubjectID: request.SubjectID,
 		JTI:       request.JTI,
@@ -80,13 +81,13 @@ func AppendInTransaction(tx *gorm.DB, request appaudit.AppendRequest, now time.T
 	if request.OrgID == uuid.Nil || request.EventID == uuid.Nil || strings.TrimSpace(request.EventType) == "" || len(request.Payload) == 0 || !json.Valid(request.Payload) || strings.TrimSpace(request.Outcome) == "" {
 		return appaudit.Event{}, appaudit.ErrInvalidRequest
 	}
-	var lock AuditChainLockModel
+	var lock store.AuditChainLockModel
 	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ?", request.OrgID).First(&lock).Error
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return appaudit.Event{}, fmt.Errorf("lock audit chain: %w", err)
 		}
-		lock = AuditChainLockModel{OrgID: request.OrgID}
+		lock = store.AuditChainLockModel{OrgID: request.OrgID}
 		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&lock).Error; err != nil {
 			return appaudit.Event{}, fmt.Errorf("create audit chain lock: %w", err)
 		}
@@ -94,7 +95,7 @@ func AppendInTransaction(tx *gorm.DB, request appaudit.AppendRequest, now time.T
 			return appaudit.Event{}, fmt.Errorf("lock new audit chain: %w", err)
 		}
 	}
-	var last AuditLogModel
+	var last store.AuditLogModel
 	if err := tx.Where("org_id = ?", request.OrgID).Order("org_sequence desc").First(&last).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return appaudit.Event{}, fmt.Errorf("load audit tail: %w", err)
 	}
@@ -108,18 +109,18 @@ func AppendInTransaction(tx *gorm.DB, request appaudit.AppendRequest, now time.T
 	if len(rowHash) != 32 {
 		return appaudit.Event{}, appaudit.ErrInvalidRequest
 	}
-	row := AuditLogModel{EventID: request.EventID, OrgID: request.OrgID, OrgSequence: sequence, EventType: request.EventType, Payload: append([]byte(nil), request.Payload...), Outcome: request.Outcome, CreatedAt: createdAt, PrevHash: append([]byte(nil), prevHash...), RowHash: rowHash}
+	row := store.AuditLogModel{EventID: request.EventID, OrgID: request.OrgID, OrgSequence: sequence, EventType: request.EventType, Payload: append([]byte(nil), request.Payload...), Outcome: request.Outcome, CreatedAt: createdAt, PrevHash: append([]byte(nil), prevHash...), RowHash: rowHash}
 	if strings.TrimSpace(request.OutcomeError) != "" {
 		row.OutcomeError = stringPointer(request.OutcomeError)
 	}
 	if err := tx.Create(&row).Error; err != nil {
 		return appaudit.Event{}, fmt.Errorf("append audit log: %w", err)
 	}
-	outbox := AuditOutboxModel{OrgID: request.OrgID, EventID: request.EventID, EventType: request.EventType, Payload: append([]byte(nil), request.Payload...), CreatedAt: createdAt}
+	outbox := store.AuditOutboxModel{OrgID: request.OrgID, EventID: request.EventID, EventType: request.EventType, Payload: append([]byte(nil), request.Payload...), CreatedAt: createdAt}
 	if err := tx.Create(&outbox).Error; err != nil {
 		return appaudit.Event{}, fmt.Errorf("append audit outbox: %w", err)
 	}
-	state := OutboxRelayStateModel{OrgID: request.OrgID, EventID: request.EventID, RelayStatus: "pending", NextAttemptAt: &createdAt}
+	state := store.OutboxRelayStateModel{OrgID: request.OrgID, EventID: request.EventID, RelayStatus: "pending", NextAttemptAt: &createdAt}
 	if err := tx.Create(&state).Error; err != nil {
 		return appaudit.Event{}, fmt.Errorf("create relay state: %w", err)
 	}
@@ -131,7 +132,7 @@ func (r *AuditRepository) Verify(ctx context.Context, orgID uuid.UUID) error {
 	if r == nil || r.db == nil {
 		return appaudit.ErrDependencyUnavailable
 	}
-	var rows []AuditLogModel
+	var rows []store.AuditLogModel
 	if err := r.db.WithContext(ctx).Where("org_id = ?", orgID).Order("org_sequence").Find(&rows).Error; err != nil {
 		return fmt.Errorf("load audit chain: %w", err)
 	}

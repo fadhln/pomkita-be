@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	appauth "github.com/fadhln/pomkita-be/internal/service/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appauth "github.com/pomkita/pomkita-be/internal/service/auth"
 )
 
 type sessionServiceStub struct {

@@ -5,10 +5,10 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	apporg "github.com/fadhln/pomkita-be/internal/service/organization"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	apporg "github.com/pomkita/pomkita-be/internal/service/organization"
 )
 
 // Service provides organization use cases required by the HTTP adapter.

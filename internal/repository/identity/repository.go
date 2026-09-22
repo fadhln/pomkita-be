@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	store "github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	appidentity "github.com/fadhln/pomkita-be/internal/service/identity"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	store "github.com/pomkita/pomkita-be/internal/repository/store"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	appidentity "github.com/pomkita/pomkita-be/internal/service/identity"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

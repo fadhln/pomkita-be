@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/canonical"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/canonical"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
 )
 
 func TestAuditRowHash_UsesCanonicalJSONBytes(t *testing.T) {

@@ -1,6 +1,6 @@
 package governance
 
-import "github.com/pomkita/pomkita-be/internal/domain"
+import "github.com/fadhln/pomkita-be/internal/domain"
 
 var (
 	// ErrEvidenceInvalid identifies an invalid evidence policy evaluation.

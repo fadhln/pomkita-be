@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	appdraft "github.com/fadhln/pomkita-be/internal/service/draft"
 	"github.com/google/uuid"
-	appdraft "github.com/pomkita/pomkita-be/internal/service/draft"
 )
 
 func TestDraftRepository_WriteReading_RejectsExpiredClaim(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	appaccount "github.com/fadhln/pomkita-be/internal/service/account"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appaccount "github.com/pomkita/pomkita-be/internal/service/account"
 )
 
 type accountHTTPServiceStub struct{}

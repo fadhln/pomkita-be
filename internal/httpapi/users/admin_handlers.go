@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appidentity "github.com/fadhln/pomkita-be/internal/service/identity"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appidentity "github.com/pomkita/pomkita-be/internal/service/identity"
 )
 
 // AdminService provides authenticated user administration use cases.

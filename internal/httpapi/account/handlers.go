@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	appaccount "github.com/fadhln/pomkita-be/internal/service/account"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appaccount "github.com/pomkita/pomkita-be/internal/service/account"
 )
 
 // Service provides account use cases required by the HTTP adapter.

@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	appshift "github.com/pomkita/pomkita-be/internal/service/shift"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -24,7 +25,7 @@ type ShiftRepository struct {
 }
 
 // NewShiftRepository creates a shift repository.
-func NewShiftRepository(store *Store) *ShiftRepository {
+func NewShiftRepository(store *store.Store) *ShiftRepository {
 	if store == nil {
 		return &ShiftRepository{}
 	}
@@ -38,13 +39,13 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 	}
 	var result appshift.Shift
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var station StationModel
+		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return fmt.Errorf("lock station: %w", err)
 		}
 
 		var sequence int64
-		if err := tx.Model(&ShiftModel{}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).Select("coalesce(max(station_seq), 0) + 1").Scan(&sequence).Error; err != nil {
+		if err := tx.Model(&store.ShiftModel{}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).Select("coalesce(max(station_seq), 0) + 1").Scan(&sequence).Error; err != nil {
 			return fmt.Errorf("allocate station sequence: %w", err)
 		}
 		var originalEventDate *time.Time
@@ -97,7 +98,7 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 		}
 		shiftID := uuid.New()
 		openedAt := request.OpenedAt.UTC()
-		shift := ShiftModel{
+		shift := store.ShiftModel{
 			ShiftID: shiftID, OrgID: request.OrgID, StationID: request.StationID,
 			StationSeq: sequence, SupervisorID: request.ActorID, OpenedAt: openedAt,
 			TimezoneSnapshot: station.Timezone, BusinessDate: openedAt.In(location).Format("2006-01-02"),
@@ -106,7 +107,7 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 		if err := tx.Create(&shift).Error; err != nil {
 			return fmt.Errorf("create shift: %w", err)
 		}
-		draft := ShiftDraftModel{
+		draft := store.ShiftDraftModel{
 			DraftID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: shiftID,
 			OwnedBy: &request.ActorID, UpdatedBy: &request.ActorID, Status: "editing", Revision: 1,
 			RecoveryCount: 0, UpdatedAt: openedAt,
@@ -143,7 +144,7 @@ func (r *ShiftRepository) List(ctx context.Context, orgID uuid.UUID, stationID *
 	if stationID != nil {
 		query = query.Where("station_id = ?", *stationID)
 	}
-	var rows []ShiftModel
+	var rows []store.ShiftModel
 	if err := query.Order("station_id, station_seq").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list shifts: %w", err)
 	}
@@ -159,7 +160,7 @@ func (r *ShiftRepository) Detail(ctx context.Context, orgID, stationID, shiftID 
 	if r == nil || r.db == nil {
 		return appshift.Detail{}, appshift.ErrDependencyUnavailable
 	}
-	var row ShiftModel
+	var row store.ShiftModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ?", orgID, stationID, shiftID).First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return appshift.Detail{}, appshift.ErrInvalidRequest
@@ -167,7 +168,7 @@ func (r *ShiftRepository) Detail(ctx context.Context, orgID, stationID, shiftID 
 		return appshift.Detail{}, fmt.Errorf("load shift detail: %w", err)
 	}
 	result := appshift.Detail{Summary: shiftSummary(row)}
-	var draft ShiftDraftModel
+	var draft store.ShiftDraftModel
 	if err := r.db.WithContext(ctx).Where("org_id = ? and station_id = ? and shift_id = ?", orgID, stationID, shiftID).First(&draft).Error; err == nil {
 		result.DraftID = &draft.DraftID
 		result.Revision = &draft.Revision
@@ -175,7 +176,7 @@ func (r *ShiftRepository) Detail(ctx context.Context, orgID, stationID, shiftID 
 	return result, nil
 }
 
-func shiftSummary(row ShiftModel) appshift.Summary {
+func shiftSummary(row store.ShiftModel) appshift.Summary {
 	return appshift.Summary{ShiftID: row.ShiftID, StationID: row.StationID, StationSeq: row.StationSeq, SupervisorID: row.SupervisorID, OpenedAt: row.OpenedAt.UTC().Format(time.RFC3339Nano), BusinessDate: row.BusinessDate, Status: row.Status, CurrentReportID: row.CurrentReportID}
 }
 
@@ -199,8 +200,8 @@ func (r *ShiftRepository) catalogSnapshot(tx *gorm.DB, request appshift.OpenRequ
 	type catalogRow struct {
 		DispenserID          uuid.UUID
 		NozzleID             uuid.UUID
-		MeterMax             Decimal
-		Price                Decimal
+		MeterMax             store.Decimal
+		Price                store.Decimal
 		PriceID              uuid.UUID
 		DispenserNozzleMapID uuid.UUID
 		NozzleTankMapID      *uuid.UUID

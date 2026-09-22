@@ -2,14 +2,14 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	policyapi "github.com/fadhln/pomkita-be/internal/httpapi/policy"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	apppolicy "github.com/fadhln/pomkita-be/internal/service/policy"
 	"github.com/google/uuid"
-	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 )
 
 func TestPolicyHistoryRoute_UsesVerifiedSessionScope(t *testing.T) {

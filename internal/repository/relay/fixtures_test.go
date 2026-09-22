@@ -5,15 +5,20 @@ import (
 	"testing"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	"github.com/pomkita/pomkita-be/internal/repository/testsupport"
 )
+
+type Store = store.Store
+type AuditOutboxModel = store.AuditOutboxModel
+type OutboxRelayStateModel = store.OutboxRelayStateModel
 
 var NewAuditRepository = auditrepository.NewAuditRepository
 
 type governanceFixture struct {
-	store                          *Store
+	store                          *store.Store
 	cleanup                        func()
 	now                            time.Time
 	orgID, stationID               uuid.UUID

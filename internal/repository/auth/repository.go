@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appauth "github.com/fadhln/pomkita-be/internal/service/auth"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appauth "github.com/pomkita/pomkita-be/internal/service/auth"
 	"gorm.io/gorm"
 )
 
@@ -21,7 +22,7 @@ type AuthRepository struct {
 }
 
 // NewAuthRepository creates an authentication repository. Secret values stay in process memory.
-func NewAuthRepository(store *Store, secrets map[string]string) *AuthRepository {
+func NewAuthRepository(store *store.Store, secrets map[string]string) *AuthRepository {
 	copyOfSecrets := make(map[string]string, len(secrets))
 	for name, value := range secrets {
 		copyOfSecrets[name] = value
@@ -37,7 +38,7 @@ func (r *AuthRepository) FindUserByEmail(ctx context.Context, email string) (app
 	if r == nil || r.db == nil {
 		return appauth.User{}, appauth.ErrDependencyUnavailable
 	}
-	var model UserModel
+	var model store.UserModel
 	err := r.db.WithContext(ctx).Where("lower(email) = lower(?)", strings.TrimSpace(email)).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return appauth.User{}, appauth.ErrUserNotFound
@@ -56,7 +57,7 @@ func (r *AuthRepository) FindUserByUsername(ctx context.Context, username string
 	if r == nil || r.db == nil {
 		return appauth.User{}, appauth.ErrDependencyUnavailable
 	}
-	var model UserModel
+	var model store.UserModel
 	err := r.db.WithContext(ctx).Where("lower(username) = lower(?)", strings.TrimSpace(username)).First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return appauth.User{}, appauth.ErrUserNotFound
@@ -132,7 +133,7 @@ func (r *AuthRepository) ActiveKey(ctx context.Context) (appjwt.Key, error) {
 	if r == nil || r.db == nil {
 		return appjwt.Key{}, appauth.ErrDependencyUnavailable
 	}
-	var model JWTKeyModel
+	var model store.JWTKeyModel
 	if err := r.db.WithContext(ctx).Where("status = ?", string(appjwt.KeyActive)).First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return appjwt.Key{}, appjwt.ErrUnknownKID
@@ -147,7 +148,7 @@ func (r *AuthRepository) Key(ctx context.Context, kid string) (appjwt.Key, error
 	if r == nil || r.db == nil {
 		return appjwt.Key{}, appauth.ErrDependencyUnavailable
 	}
-	var model JWTKeyModel
+	var model store.JWTKeyModel
 	if err := r.db.WithContext(ctx).Where("kid = ?", kid).First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return appjwt.Key{}, appjwt.ErrUnknownKID
@@ -157,7 +158,7 @@ func (r *AuthRepository) Key(ctx context.Context, kid string) (appjwt.Key, error
 	return r.key(model)
 }
 
-func (r *AuthRepository) key(model JWTKeyModel) (appjwt.Key, error) {
+func (r *AuthRepository) key(model store.JWTKeyModel) (appjwt.Key, error) {
 	secret := r.secrets[model.SecretRef]
 	if secret == "" {
 		return appjwt.Key{}, appjwt.ErrInvalidSignature
@@ -170,7 +171,7 @@ func (r *AuthRepository) CreateSession(ctx context.Context, session appjwt.Sessi
 	if r == nil || r.db == nil {
 		return appauth.ErrDependencyUnavailable
 	}
-	model := SessionModel{JTI: session.JTI, UserID: session.UserID, KID: session.KID, IssuedAt: session.IssuedAt, ExpiresAt: session.ExpiresAt, LastActiveAt: session.LastActiveAt, RevokedAt: session.RevokedAt}
+	model := store.SessionModel{JTI: session.JTI, UserID: session.UserID, KID: session.KID, IssuedAt: session.IssuedAt, ExpiresAt: session.ExpiresAt, LastActiveAt: session.LastActiveAt, RevokedAt: session.RevokedAt}
 	if model.UserID == uuid.Nil {
 		return errors.New("session user ID is required")
 	}
@@ -185,7 +186,7 @@ func (r *AuthRepository) Session(ctx context.Context, jti uuid.UUID) (appjwt.Ses
 	if r == nil || r.db == nil {
 		return appjwt.Session{}, appauth.ErrDependencyUnavailable
 	}
-	var model SessionModel
+	var model store.SessionModel
 	if err := r.db.WithContext(ctx).Where("jti = ?", jti).First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return appjwt.Session{}, appjwt.ErrSessionNotFound
@@ -195,7 +196,7 @@ func (r *AuthRepository) Session(ctx context.Context, jti uuid.UUID) (appjwt.Ses
 	if model.RevokedAt == nil {
 		now := time.Now().UTC()
 		if model.ExpiresAt.IsZero() || !now.After(model.ExpiresAt.Add(60*time.Second)) {
-			if err := r.db.WithContext(ctx).Model(&SessionModel{}).Where("jti = ? and revoked_at is null", jti).Updates(map[string]any{"last_active_at": now}).Error; err != nil {
+			if err := r.db.WithContext(ctx).Model(&store.SessionModel{}).Where("jti = ? and revoked_at is null", jti).Updates(map[string]any{"last_active_at": now}).Error; err != nil {
 				return appjwt.Session{}, fmt.Errorf("touch JWT session: %w", err)
 			}
 			model.LastActiveAt = now
@@ -209,7 +210,7 @@ func (r *AuthRepository) RevokeSession(ctx context.Context, jti uuid.UUID, at ti
 	if r == nil || r.db == nil {
 		return appauth.ErrDependencyUnavailable
 	}
-	result := r.db.WithContext(ctx).Model(&SessionModel{}).Where("jti = ? and revoked_at is null", jti).Update("revoked_at", at)
+	result := r.db.WithContext(ctx).Model(&store.SessionModel{}).Where("jti = ? and revoked_at is null", jti).Update("revoked_at", at)
 	if result.Error != nil {
 		return fmt.Errorf("revoke JWT session: %w", result.Error)
 	}

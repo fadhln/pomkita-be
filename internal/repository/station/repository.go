@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	store "github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	appstation "github.com/fadhln/pomkita-be/internal/service/station"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	store "github.com/pomkita/pomkita-be/internal/repository/store"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	appstation "github.com/pomkita/pomkita-be/internal/service/station"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

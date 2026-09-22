@@ -5,12 +5,13 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"net/http"
+	"slices"
 	"strconv"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
 // AuditService is the typed audit export boundary.
@@ -116,7 +117,7 @@ func readAuditOrganization(c *gin.Context, sessions transport.SessionService) (u
 		_ = c.Error(err)
 		return uuid.Nil, false
 	}
-	if !transport.ContainsString(session.Roles, "Owner") && !transport.ContainsString(session.Roles, "Superadmin") {
+	if !slices.Contains(session.Roles, "Owner") && !slices.Contains(session.Roles, "Superadmin") {
 		transport.WriteError(c, http.StatusForbidden, "audit_role_required")
 		return uuid.Nil, false
 	}

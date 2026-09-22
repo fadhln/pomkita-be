@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pomkita/pomkita-be/internal/domain"
+	"github.com/fadhln/pomkita-be/internal/domain"
 )
 
 var decimalPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
@@ -54,7 +54,7 @@ func CalculateMeterDelta(start, end, modulus, rolloverThreshold string) (string,
 			return "", ErrRolloverOverThreshold
 		}
 	}
-	return formatDecimal(delta, maxInt(scaleStart, maxInt(scaleEnd, maxInt(scaleModulus, scaleThreshold)))), nil
+	return formatDecimal(delta, max(scaleStart, scaleEnd, scaleModulus, scaleThreshold)), nil
 }
 
 // ValidateMeterStart checks the current start against reset, baseline, or predecessor state.
@@ -135,11 +135,4 @@ func formatDecimal(value *big.Rat, scale int) string {
 		return "0"
 	}
 	return text
-}
-
-func maxInt(left, right int) int {
-	if left > right {
-		return left
-	}
-	return right
 }

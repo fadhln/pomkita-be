@@ -1,4 +1,4 @@
-module github.com/pomkita/pomkita-be
+module github.com/fadhln/pomkita-be
 
 go 1.23
 

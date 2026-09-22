@@ -3,11 +3,12 @@ package draft
 import (
 	"context"
 	"net/http"
+	"slices"
 
+	transport "github.com/fadhln/pomkita-be/internal/httpapi/transport"
+	appdraft "github.com/fadhln/pomkita-be/internal/service/draft"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	transport "github.com/pomkita/pomkita-be/internal/httpapi/transport"
-	appdraft "github.com/pomkita/pomkita-be/internal/service/draft"
 )
 
 // DraftService is the typed draft lease boundary.
@@ -40,7 +41,7 @@ func ClaimDraftHandler(sessions transport.SessionService, service DraftService) 
 			_ = c.Error(err)
 			return
 		}
-		if !transport.ContainsUUID(session.StationIDs, input.StationID) {
+		if !slices.Contains(session.StationIDs, input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}

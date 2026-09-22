@@ -11,12 +11,13 @@ import (
 	"strings"
 	"time"
 
+	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
+	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
+	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
+	appreconciliation "github.com/fadhln/pomkita-be/internal/service/reconciliation"
+	appsubmission "github.com/fadhln/pomkita-be/internal/service/submission"
 	"github.com/google/uuid"
-	auditrepository "github.com/pomkita/pomkita-be/internal/repository/audit"
-	appaudit "github.com/pomkita/pomkita-be/internal/service/audit"
-	appgovernance "github.com/pomkita/pomkita-be/internal/service/governance"
-	appreconciliation "github.com/pomkita/pomkita-be/internal/service/reconciliation"
-	appsubmission "github.com/pomkita/pomkita-be/internal/service/submission"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -40,7 +41,7 @@ type catalogSnapshot struct {
 }
 
 // NewSubmissionRepository creates a submission repository.
-func NewSubmissionRepository(store *Store) *SubmissionRepository {
+func NewSubmissionRepository(store *store.Store) *SubmissionRepository {
 	if store == nil {
 		return &SubmissionRepository{}
 	}
@@ -55,19 +56,19 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 	var result appsubmission.Result
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		tookOver := false
-		var station StationModel
+		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return fmt.Errorf("lock station for submit: %w", err)
 		}
-		var shift ShiftModel
+		var shift store.ShiftModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).First(&shift).Error; err != nil {
 			return fmt.Errorf("load shift for submit: %w", err)
 		}
-		var draft ShiftDraftModel
+		var draft store.ShiftDraftModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and draft_id = ? and shift_id = ?", request.OrgID, request.StationID, request.DraftID, request.ShiftID).First(&draft).Error; err != nil {
 			return fmt.Errorf("load draft for submit: %w", err)
 		}
-		var idem SubmitIdempotencyModel
+		var idem store.SubmitIdempotencyModel
 		idemErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and shift_id = ? and idempotency_key = ?", request.OrgID, request.StationID, request.ShiftID, request.IdempotencyKey).First(&idem).Error
 		if idemErr == nil {
 			if string(idem.RequestHash) != string(requestHash) || idem.Status == "failed" {
@@ -85,7 +86,7 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 					return appsubmission.ErrIdempotencyConflict
 				}
 				oldClaimToken := *idem.ClaimToken
-				claim := tx.Model(&SubmitIdempotencyModel{}).
+				claim := tx.Model(&store.SubmitIdempotencyModel{}).
 					Where("idem_id = ? and claim_token = ? and lease_expires_at < ?", idem.IdemID, oldClaimToken, now).
 					Updates(map[string]any{"status": "in_progress", "claim_token": request.ClaimToken, "attempt_count": idem.AttemptCount + 1, "lease_started_at": now, "lease_expires_at": now.Add(10 * time.Minute), "updated_at": now, "error_detail": nil})
 				if claim.Error != nil {
@@ -109,20 +110,20 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 			return fmt.Errorf("submit draft revision: %w", appsubmission.ErrIdempotencyConflict)
 		}
 		if idemErr != nil {
-			idem = SubmitIdempotencyModel{IdemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, IdempotencyKey: request.IdempotencyKey, RequestHash: append([]byte(nil), requestHash...), Status: "in_progress", ClaimToken: &request.ClaimToken, AttemptCount: 1, LeaseStartedAt: &now, LeaseExpiresAt: submissionTimePointer(now.Add(10 * time.Minute)), CreatedAt: now, UpdatedAt: now}
+			idem = store.SubmitIdempotencyModel{IdemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, IdempotencyKey: request.IdempotencyKey, RequestHash: append([]byte(nil), requestHash...), Status: "in_progress", ClaimToken: &request.ClaimToken, AttemptCount: 1, LeaseStartedAt: &now, LeaseExpiresAt: submissionTimePointer(now.Add(10 * time.Minute)), CreatedAt: now, UpdatedAt: now}
 			if err := tx.Create(&idem).Error; err != nil {
 				return fmt.Errorf("create submit idempotency: %w", err)
 			}
 		} else if !tookOver {
 			updates := map[string]any{"status": "in_progress", "claim_token": request.ClaimToken, "attempt_count": idem.AttemptCount + 1, "lease_started_at": now, "lease_expires_at": now.Add(10 * time.Minute), "updated_at": now, "error_detail": nil}
-			if err := tx.Model(&SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(updates).Error; err != nil {
+			if err := tx.Model(&store.SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(updates).Error; err != nil {
 				return fmt.Errorf("take over submit idempotency: %w", err)
 			}
 		}
 
-		var policySet PolicySnapshotSetModel
+		var policySet store.PolicySnapshotSetModel
 		if err := tx.Where("org_id = ? and station_id = ? and shift_id = ?", request.OrgID, request.StationID, request.ShiftID).First(&policySet).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-			policySet = PolicySnapshotSetModel{SetID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: &request.ShiftID, CreatedAt: now}
+			policySet = store.PolicySnapshotSetModel{SetID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: &request.ShiftID, CreatedAt: now}
 			if err := tx.Create(&policySet).Error; err != nil {
 				return fmt.Errorf("create policy snapshot set: %w", err)
 			}
@@ -137,11 +138,11 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 			return err
 		}
 		reportID := uuid.New()
-		report := ShiftReportModel{ReportID: reportID, OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, VersionNo: 1, Status: "submitted", SubmittedBy: request.ActorID, SubmittedAt: now, PolicySnapshot: policySet.SetID}
+		report := store.ShiftReportModel{ReportID: reportID, OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, VersionNo: 1, Status: "submitted", SubmittedBy: request.ActorID, SubmittedAt: now, PolicySnapshot: policySet.SetID}
 		if err := tx.Create(&report).Error; err != nil {
 			return fmt.Errorf("create shift report: %w", err)
 		}
-		head := AckHeadModel{OrgID: report.OrgID, StationID: report.StationID, ShiftID: report.ShiftID, ReportID: report.ReportID, VersionNo: report.VersionNo}
+		head := store.AckHeadModel{OrgID: report.OrgID, StationID: report.StationID, ShiftID: report.ShiftID, ReportID: report.ReportID, VersionNo: report.VersionNo}
 		if err := tx.Create(&head).Error; err != nil {
 			return fmt.Errorf("create acknowledgement head: %w", err)
 		}
@@ -151,13 +152,13 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 		if err := r.evaluateVarianceAlerts(tx, report, policySet, now); err != nil {
 			return err
 		}
-		if err := tx.Model(&ShiftModel{}).Where("shift_id = ?", request.ShiftID).Updates(map[string]any{"status": "awaiting_confirmation", "current_report_id": reportID, "closed_at": now}).Error; err != nil {
+		if err := tx.Model(&store.ShiftModel{}).Where("shift_id = ?", request.ShiftID).Updates(map[string]any{"status": "awaiting_confirmation", "current_report_id": reportID, "closed_at": now}).Error; err != nil {
 			return fmt.Errorf("move shift to confirmation: %w", err)
 		}
-		if err := tx.Model(&ShiftDraftModel{}).Where("draft_id = ?", request.DraftID).Updates(map[string]any{"status": "submitted", "claim_token": nil, "claim_expires_at": nil, "updated_at": now, "updated_by": request.ActorID}).Error; err != nil {
+		if err := tx.Model(&store.ShiftDraftModel{}).Where("draft_id = ?", request.DraftID).Updates(map[string]any{"status": "submitted", "claim_token": nil, "claim_expires_at": nil, "updated_at": now, "updated_by": request.ActorID}).Error; err != nil {
 			return fmt.Errorf("complete draft: %w", err)
 		}
-		if err := tx.Model(&SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(map[string]any{"status": "succeeded", "resulting_report_id": reportID, "lease_expires_at": nil, "updated_at": now}).Error; err != nil {
+		if err := tx.Model(&store.SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(map[string]any{"status": "succeeded", "resulting_report_id": reportID, "lease_expires_at": nil, "updated_at": now}).Error; err != nil {
 			return fmt.Errorf("complete submit idempotency: %w", err)
 		}
 		auditPayload, err := json.Marshal(map[string]any{"report_id": reportID.String(), "shift_id": shift.ShiftID.String(), "version_no": report.VersionNo})
@@ -183,10 +184,10 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 
 func (r *SubmissionRepository) markSubmitFailed(ctx context.Context, request appsubmission.Request, requestHash []byte, now time.Time) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var idem SubmitIdempotencyModel
+		var idem store.SubmitIdempotencyModel
 		err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and idempotency_key = ?", request.OrgID, request.StationID, request.ShiftID, request.IdempotencyKey).First(&idem).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			idem = SubmitIdempotencyModel{IdemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, IdempotencyKey: request.IdempotencyKey, RequestHash: append([]byte(nil), requestHash...), Status: "failed", AttemptCount: 1, CreatedAt: now, UpdatedAt: now}
+			idem = store.SubmitIdempotencyModel{IdemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, IdempotencyKey: request.IdempotencyKey, RequestHash: append([]byte(nil), requestHash...), Status: "failed", AttemptCount: 1, CreatedAt: now, UpdatedAt: now}
 			return tx.Create(&idem).Error
 		}
 		if err != nil {
@@ -195,7 +196,7 @@ func (r *SubmissionRepository) markSubmitFailed(ctx context.Context, request app
 		if string(idem.RequestHash) != string(requestHash) || idem.Status == "succeeded" {
 			return nil
 		}
-		return tx.Model(&SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(map[string]any{"status": "failed", "error_detail": "submit_failed", "lease_expires_at": nil, "updated_at": now}).Error
+		return tx.Model(&store.SubmitIdempotencyModel{}).Where("idem_id = ?", idem.IdemID).Updates(map[string]any{"status": "failed", "error_detail": "submit_failed", "lease_expires_at": nil, "updated_at": now}).Error
 	})
 }
 
@@ -221,7 +222,7 @@ type submitLoss struct {
 	NozzleID uuid.UUID `json:"nozzle_id"`
 }
 
-func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftModel, draft ShiftDraftModel, report ShiftReportModel, payload []byte, rolloverThreshold string, now time.Time) error {
+func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift store.ShiftModel, draft store.ShiftDraftModel, report store.ShiftReportModel, payload []byte, rolloverThreshold string, now time.Time) error {
 	var input submitPayload
 	if err := json.Unmarshal(payload, &input); err != nil {
 		return fmt.Errorf("decode submit payload: %w", appsubmission.ErrInvalidRequest)
@@ -242,7 +243,7 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 			lossInput[item.LossID] = item
 		}
 	}
-	var draftReadings []DraftReadingModel
+	var draftReadings []store.DraftReadingModel
 	if err := tx.Where("org_id = ? and station_id = ? and draft_id = ?", draft.OrgID, draft.StationID, draft.DraftID).Find(&draftReadings).Error; err != nil {
 		return fmt.Errorf("load draft readings: %w", err)
 	}
@@ -252,15 +253,15 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 			if err != nil {
 				return fmt.Errorf("backfill nozzle ID: %w", appsubmission.ErrInvalidRequest)
 			}
-			var previous ShiftModel
+			var previous store.ShiftModel
 			if err := tx.Where("org_id = ? and station_id = ? and station_seq < ? and status = ? and current_report_id is not null", shift.OrgID, shift.StationID, shift.StationSeq, "locked").Order("station_seq desc").First(&previous).Error; err != nil {
 				return fmt.Errorf("backfill meter source shift: %w", appsubmission.ErrInvalidRequest)
 			}
-			var source DispenserReadingModel
+			var source store.DispenserReadingModel
 			if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and nozzle_id = ?", shift.OrgID, shift.StationID, previous.ShiftID, *previous.CurrentReportID, nozzleID).First(&source).Error; err != nil {
 				return fmt.Errorf("backfill meter source reading: %w", appsubmission.ErrInvalidRequest)
 			}
-			model := DispenserReadingModel{ReadingID: uuid.New(), OrgID: shift.OrgID, StationID: shift.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, NozzleID: source.NozzleID, MeterStart: source.MeterStart, MeterEnd: source.MeterEnd, PriceUsed: source.PriceUsed, ExpectedSale: source.ExpectedSale, Observed: false, IsCarriedForward: true, SourceShiftID: &source.ShiftID, SourceReportID: &source.ReportID, SourceReadingID: &source.ReadingID}
+			model := store.DispenserReadingModel{ReadingID: uuid.New(), OrgID: shift.OrgID, StationID: shift.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, NozzleID: source.NozzleID, MeterStart: source.MeterStart, MeterEnd: source.MeterEnd, PriceUsed: source.PriceUsed, ExpectedSale: source.ExpectedSale, Observed: false, IsCarriedForward: true, SourceShiftID: &source.ShiftID, SourceReportID: &source.ReportID, SourceReadingID: &source.ReadingID}
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create carried-forward reading: %w", err)
 			}
@@ -300,23 +301,23 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 			if input, exists := readingInput[row.NozzleID]; exists && input.Observed != nil {
 				observed = *input.Observed
 			}
-			model := DispenserReadingModel{ReadingID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, NozzleID: row.NozzleID, MeterStart: Decimal(meterStart), MeterEnd: Decimal(meterEnd), PriceUsed: Decimal(item.Price), ExpectedSale: Decimal(expected), Observed: observed, IsCarriedForward: false}
+			model := store.DispenserReadingModel{ReadingID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, NozzleID: row.NozzleID, MeterStart: store.Decimal(meterStart), MeterEnd: store.Decimal(meterEnd), PriceUsed: store.Decimal(item.Price), ExpectedSale: store.Decimal(expected), Observed: observed, IsCarriedForward: false}
 			if err := tx.Create(&model).Error; err != nil {
 				return fmt.Errorf("create report reading: %w", err)
 			}
 		}
 	}
-	var draftSales []DraftSalesModel
+	var draftSales []store.DraftSalesModel
 	if err := tx.Where("org_id = ? and station_id = ? and draft_id = ?", draft.OrgID, draft.StationID, draft.DraftID).Find(&draftSales).Error; err != nil {
 		return fmt.Errorf("load draft sales: %w", err)
 	}
 	for _, row := range draftSales {
-		model := SalesDeclaredModel{SalesID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, DispenserID: row.DispenserID, CashAmount: row.CashAmount, CashlessAmount: row.CashlessAmount, CreatedBy: row.CreatedBy}
+		model := store.SalesDeclaredModel{SalesID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, DispenserID: row.DispenserID, CashAmount: row.CashAmount, CashlessAmount: row.CashlessAmount, CreatedBy: row.CreatedBy}
 		if err := tx.Create(&model).Error; err != nil {
 			return fmt.Errorf("create report sales: %w", err)
 		}
 	}
-	var draftLosses []DraftLossModel
+	var draftLosses []store.DraftLossModel
 	if err := tx.Where("org_id = ? and station_id = ? and draft_id = ?", draft.OrgID, draft.StationID, draft.DraftID).Find(&draftLosses).Error; err != nil {
 		return fmt.Errorf("load draft losses: %w", err)
 	}
@@ -325,16 +326,16 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 		if !ok || input.NozzleID == uuid.Nil {
 			return fmt.Errorf("loss %s nozzle: %w", row.LossID, appsubmission.ErrInvalidRequest)
 		}
-		identity := LossIdentityModel{LossID: row.LossID, OrgID: draft.OrgID, StationID: draft.StationID, CreatedBy: row.CreatedBy, CreatedAt: now}
+		identity := store.LossIdentityModel{LossID: row.LossID, OrgID: draft.OrgID, StationID: draft.StationID, CreatedBy: row.CreatedBy, CreatedAt: now}
 		if err := tx.Create(&identity).Error; err != nil {
 			return fmt.Errorf("create loss identity: %w", err)
 		}
-		entry := LossEntryModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, VersionNo: report.VersionNo, LossID: row.LossID, NozzleID: input.NozzleID, Direction: row.Direction, ReasonCode: row.ReasonCode, Liters: row.Liters, CashAmount: row.CashAmount, Note: row.Note, CreatedBy: row.CreatedBy}
+		entry := store.LossEntryModel{RowID: uuid.New(), OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, VersionNo: report.VersionNo, LossID: row.LossID, NozzleID: input.NozzleID, Direction: row.Direction, ReasonCode: row.ReasonCode, Liters: row.Liters, CashAmount: row.CashAmount, Note: row.Note, CreatedBy: row.CreatedBy}
 		if err := tx.Create(&entry).Error; err != nil {
 			return fmt.Errorf("create report loss: %w", err)
 		}
 	}
-	var stagedEvidence []DraftEvidenceStagingModel
+	var stagedEvidence []store.DraftEvidenceStagingModel
 	if err := tx.Where("org_id = ? and station_id = ? and draft_id = ?", draft.OrgID, draft.StationID, draft.DraftID).Find(&stagedEvidence).Error; err != nil {
 		return fmt.Errorf("load staged evidence: %w", err)
 	}
@@ -342,15 +343,15 @@ func (r *SubmissionRepository) promoteDraftChildren(tx *gorm.DB, shift ShiftMode
 		return err
 	}
 	for _, staged := range stagedEvidence {
-		var draftLoss DraftLossModel
+		var draftLoss store.DraftLossModel
 		if err := tx.Where("row_id = ? and draft_id = ?", staged.LossRowID, draft.DraftID).First(&draftLoss).Error; err != nil {
 			return fmt.Errorf("load staged evidence loss: %w", err)
 		}
-		var reportLoss LossEntryModel
+		var reportLoss store.LossEntryModel
 		if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and loss_id = ?", draft.OrgID, draft.StationID, shift.ShiftID, report.ReportID, draftLoss.LossID).First(&reportLoss).Error; err != nil {
 			return fmt.Errorf("load report evidence loss: %w", err)
 		}
-		event := EvidenceEventModel{EvidenceEventID: uuid.New(), EvidenceID: staged.RowID, OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, LossRowID: reportLoss.RowID, EventSeq: 1, EventType: staged.Status, EvidenceType: staged.EvidenceType, ObjectKey: staged.ObjectKey, ContentHash: append([]byte(nil), staged.ContentHash...), SizeBytes: staged.SizeBytes, MIME: staged.MIME, ActorUserID: staged.UploadedBy, At: now}
+		event := store.EvidenceEventModel{EvidenceEventID: uuid.New(), EvidenceID: staged.RowID, OrgID: draft.OrgID, StationID: draft.StationID, ShiftID: shift.ShiftID, ReportID: report.ReportID, LossRowID: reportLoss.RowID, EventSeq: 1, EventType: staged.Status, EvidenceType: staged.EvidenceType, ObjectKey: staged.ObjectKey, ContentHash: append([]byte(nil), staged.ContentHash...), SizeBytes: staged.SizeBytes, MIME: staged.MIME, ActorUserID: staged.UploadedBy, At: now}
 		if err := tx.Create(&event).Error; err != nil {
 			return fmt.Errorf("create evidence event: %w", err)
 		}
@@ -380,8 +381,8 @@ type evidenceSnapshotType struct {
 	AcceptedMIMETypes   []string `json:"accepted_mime_types"`
 }
 
-func (r *SubmissionRepository) ensureEvidenceSnapshot(tx *gorm.DB, request appsubmission.Request, policySet PolicySnapshotSetModel, now time.Time) error {
-	var item PolicySnapshotItemModel
+func (r *SubmissionRepository) ensureEvidenceSnapshot(tx *gorm.DB, request appsubmission.Request, policySet store.PolicySnapshotSetModel, now time.Time) error {
+	var item store.PolicySnapshotItemModel
 	err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and set_id = ? and policy_kind = ?", request.OrgID, request.StationID, request.ShiftID, policySet.SetID, "evidence").First(&item).Error
 	if err == nil {
 		return nil
@@ -390,7 +391,7 @@ func (r *SubmissionRepository) ensureEvidenceSnapshot(tx *gorm.DB, request appsu
 		return fmt.Errorf("load evidence policy snapshot: %w", err)
 	}
 
-	var revision EvidencePolicyRevisionModel
+	var revision store.EvidencePolicyRevisionModel
 	revisionErr := tx.Where("org_id = ? and disabled = false and valid_from <= ? and (station_id = ? or station_id is null)", request.OrgID, now, request.StationID).
 		Order("station_id is not null desc").Order("valid_from desc").First(&revision).Error
 	if errors.Is(revisionErr, gorm.ErrRecordNotFound) {
@@ -399,7 +400,7 @@ func (r *SubmissionRepository) ensureEvidenceSnapshot(tx *gorm.DB, request appsu
 	if revisionErr != nil {
 		return fmt.Errorf("resolve evidence policy: %w", revisionErr)
 	}
-	var policyTypes []EvidencePolicyTypeModel
+	var policyTypes []store.EvidencePolicyTypeModel
 	if err := tx.Where("org_id = ? and rev_id = ?", revision.OrgID, revision.RevID).Order("evidence_type").Find(&policyTypes).Error; err != nil {
 		return fmt.Errorf("load evidence policy types: %w", err)
 	}
@@ -421,15 +422,15 @@ func (r *SubmissionRepository) ensureEvidenceSnapshot(tx *gorm.DB, request appsu
 	if revision.StationID != nil {
 		scope = "station"
 	}
-	item = PolicySnapshotItemModel{ItemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, SetID: policySet.SetID, PolicyKind: "evidence", PolicyID: revision.PolicyID, RevID: revision.RevID, Scope: scope, Payload: encoded, PayloadHash: hash[:]}
+	item = store.PolicySnapshotItemModel{ItemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, SetID: policySet.SetID, PolicyKind: "evidence", PolicyID: revision.PolicyID, RevID: revision.RevID, Scope: scope, Payload: encoded, PayloadHash: hash[:]}
 	if err := tx.Create(&item).Error; err != nil {
 		return fmt.Errorf("create evidence policy snapshot: %w", err)
 	}
 	return nil
 }
 
-func (r *SubmissionRepository) validateStagedEvidence(tx *gorm.DB, draft ShiftDraftModel, losses []DraftLossModel, staged []DraftEvidenceStagingModel) error {
-	var item PolicySnapshotItemModel
+func (r *SubmissionRepository) validateStagedEvidence(tx *gorm.DB, draft store.ShiftDraftModel, losses []store.DraftLossModel, staged []store.DraftEvidenceStagingModel) error {
+	var item store.PolicySnapshotItemModel
 	err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and policy_kind = ?", draft.OrgID, draft.StationID, draft.ShiftID, "evidence").First(&item).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil
@@ -484,8 +485,8 @@ func containsEvidenceMIME(values []string, expected string) bool {
 	return false
 }
 
-func (r *SubmissionRepository) evaluateVarianceAlerts(tx *gorm.DB, report ShiftReportModel, policySet PolicySnapshotSetModel, now time.Time) error {
-	var snapshot PolicySnapshotItemModel
+func (r *SubmissionRepository) evaluateVarianceAlerts(tx *gorm.DB, report store.ShiftReportModel, policySet store.PolicySnapshotSetModel, now time.Time) error {
+	var snapshot store.PolicySnapshotItemModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and set_id = ? and policy_kind = ?", report.OrgID, report.StationID, report.ShiftID, policySet.SetID, "threshold").First(&snapshot).Error; err != nil {
 		return fmt.Errorf("load variance policy snapshot: %w", err)
 	}
@@ -497,11 +498,11 @@ func (r *SubmissionRepository) evaluateVarianceAlerts(tx *gorm.DB, report ShiftR
 	if !ok || threshold.Sign() < 0 {
 		return fmt.Errorf("invalid variance threshold: %w", appsubmission.ErrInvalidRequest)
 	}
-	var readings []DispenserReadingModel
+	var readings []store.DispenserReadingModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Find(&readings).Error; err != nil {
 		return fmt.Errorf("load report readings for variance: %w", err)
 	}
-	var sales []SalesDeclaredModel
+	var sales []store.SalesDeclaredModel
 	if err := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ?", report.OrgID, report.StationID, report.ShiftID, report.ReportID).Find(&sales).Error; err != nil {
 		return fmt.Errorf("load report sales for variance: %w", err)
 	}
@@ -530,7 +531,7 @@ func (r *SubmissionRepository) evaluateVarianceAlerts(tx *gorm.DB, report ShiftR
 	if absolute.Cmp(threshold) <= 0 {
 		return nil
 	}
-	var rules []AlertRuleModel
+	var rules []store.AlertRuleModel
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ? and rule_type = ? and enabled = true", report.OrgID, report.StationID, "variance").Order("rule_id").Find(&rules).Error; err != nil {
 		return fmt.Errorf("load variance alert rules: %w", err)
 	}
@@ -544,7 +545,7 @@ func (r *SubmissionRepository) evaluateVarianceAlerts(tx *gorm.DB, report ShiftR
 			continue
 		}
 		eventID := uuid.New()
-		event := AlertEventModel{EventID: eventID, OrgID: report.OrgID, StationID: report.StationID, RuleID: rule.RuleID, SubjectKind: "report", SubjectID: report.ReportID, EventType: "fired", PeriodStart: now, RelatedFiredID: &eventID, SourceKind: "report", SourceID: report.ReportID, SourceVersionNo: &version, SourceAt: now, CreatedBy: &report.SubmittedBy, CreatedAt: now}
+		event := store.AlertEventModel{EventID: eventID, OrgID: report.OrgID, StationID: report.StationID, RuleID: rule.RuleID, SubjectKind: "report", SubjectID: report.ReportID, EventType: "fired", PeriodStart: now, RelatedFiredID: &eventID, SourceKind: "report", SourceID: report.ReportID, SourceVersionNo: &version, SourceAt: now, CreatedBy: &report.SubmittedBy, CreatedAt: now}
 		if err := tx.Create(&event).Error; err != nil {
 			return fmt.Errorf("create variance alert: %w", err)
 		}
@@ -552,8 +553,8 @@ func (r *SubmissionRepository) evaluateVarianceAlerts(tx *gorm.DB, report ShiftR
 	return nil
 }
 
-func (r *SubmissionRepository) ensureThresholdSnapshot(tx *gorm.DB, request appsubmission.Request, policySet PolicySnapshotSetModel, now time.Time) (string, error) {
-	var item PolicySnapshotItemModel
+func (r *SubmissionRepository) ensureThresholdSnapshot(tx *gorm.DB, request appsubmission.Request, policySet store.PolicySnapshotSetModel, now time.Time) (string, error) {
+	var item store.PolicySnapshotItemModel
 	itemErr := tx.Where("org_id = ? and station_id = ? and shift_id = ? and set_id = ? and policy_kind = ?", request.OrgID, request.StationID, request.ShiftID, policySet.SetID, "threshold").First(&item).Error
 	if itemErr == nil {
 		var payload thresholdSnapshotPayload
@@ -566,21 +567,21 @@ func (r *SubmissionRepository) ensureThresholdSnapshot(tx *gorm.DB, request apps
 		return "", fmt.Errorf("load threshold policy snapshot: %w", itemErr)
 	}
 
-	var revision ThresholdPolicyRevisionModel
+	var revision store.ThresholdPolicyRevisionModel
 	revisionErr := tx.Where("org_id = ? and disabled = false and valid_from <= ? and (station_id = ? or station_id is null)", request.OrgID, now, request.StationID).
 		Order("station_id is not null desc").Order("valid_from desc").First(&revision).Error
 	if revisionErr == gorm.ErrRecordNotFound || errors.Is(revisionErr, gorm.ErrRecordNotFound) || revisionErr != nil && strings.Contains(revisionErr.Error(), gorm.ErrRecordNotFound.Error()) {
-		revision = ThresholdPolicyRevisionModel{
+		revision = store.ThresholdPolicyRevisionModel{
 			RevID:               uuid.New(),
 			PolicyID:            uuid.New(),
 			OrgID:               request.OrgID,
 			ValidFrom:           now,
-			LossLiterThreshold:  Decimal("10.00"),
-			GainLiterThreshold:  Decimal("0.00"),
-			LossRupiahThreshold: Decimal("0"),
-			GainRupiahThreshold: Decimal("0"),
-			VarianceThreshold:   Decimal("0"),
-			RolloverThreshold:   Decimal("10.0"),
+			LossLiterThreshold:  store.Decimal("10.00"),
+			GainLiterThreshold:  store.Decimal("0.00"),
+			LossRupiahThreshold: store.Decimal("0"),
+			GainRupiahThreshold: store.Decimal("0"),
+			VarianceThreshold:   store.Decimal("0"),
+			RolloverThreshold:   store.Decimal("10.0"),
 			CreatedBy:           request.ActorID,
 			CreatedAt:           now,
 		}
@@ -610,15 +611,15 @@ func (r *SubmissionRepository) ensureThresholdSnapshot(tx *gorm.DB, request apps
 	if revision.StationID != nil {
 		scope = "station"
 	}
-	item = PolicySnapshotItemModel{ItemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, SetID: policySet.SetID, PolicyKind: "threshold", PolicyID: revision.PolicyID, RevID: revision.RevID, Scope: scope, Payload: encoded, PayloadHash: hash[:]}
+	item = store.PolicySnapshotItemModel{ItemID: uuid.New(), OrgID: request.OrgID, StationID: request.StationID, ShiftID: request.ShiftID, SetID: policySet.SetID, PolicyKind: "threshold", PolicyID: revision.PolicyID, RevID: revision.RevID, Scope: scope, Payload: encoded, PayloadHash: hash[:]}
 	if err := tx.Create(&item).Error; err != nil {
 		return "", fmt.Errorf("create threshold policy snapshot: %w", err)
 	}
 	return payload.RolloverThreshold, nil
 }
 
-func (r *SubmissionRepository) meterContinuity(tx *gorm.DB, shift ShiftModel, nozzleID uuid.UUID) (string, string, string, error) {
-	var reset MeterResetEventModel
+func (r *SubmissionRepository) meterContinuity(tx *gorm.DB, shift store.ShiftModel, nozzleID uuid.UUID) (string, string, string, error) {
+	var reset store.MeterResetEventModel
 	resetErr := tx.Where("org_id = ? and station_id = ? and nozzle_id = ? and effective_shift_id = ? and status = ?", shift.OrgID, shift.StationID, nozzleID, shift.ShiftID, "approved").First(&reset).Error
 	if resetErr != nil && !errors.Is(resetErr, gorm.ErrRecordNotFound) {
 		return "", "", "", fmt.Errorf("load meter reset: %w", resetErr)
@@ -628,7 +629,7 @@ func (r *SubmissionRepository) meterContinuity(tx *gorm.DB, shift ShiftModel, no
 		resetValue = reset.NewValue.String()
 	}
 	var baseline struct {
-		InitialMeterValue Decimal
+		InitialMeterValue store.Decimal
 	}
 	baselineErr := tx.Table("nozzle_baseline_revisions r").Select("r.initial_meter_value").Joins("join nozzle_baseline_current c on c.org_id = r.org_id and c.station_id = r.station_id and c.nozzle_id = r.nozzle_id and c.current_baseline_rev_id = r.baseline_rev_id").Where("r.org_id = ? and r.station_id = ? and r.nozzle_id = ? and r.effective_station_seq <= ?", shift.OrgID, shift.StationID, nozzleID, shift.StationSeq).Order("r.effective_station_seq desc").First(&baseline).Error
 	if baselineErr != nil && !errors.Is(baselineErr, gorm.ErrRecordNotFound) {
@@ -638,14 +639,14 @@ func (r *SubmissionRepository) meterContinuity(tx *gorm.DB, shift ShiftModel, no
 	if baselineErr == nil {
 		baselineValue = baseline.InitialMeterValue.String()
 	}
-	var previous ShiftModel
+	var previous store.ShiftModel
 	previousErr := tx.Where("org_id = ? and station_id = ? and station_seq < ? and status = ?", shift.OrgID, shift.StationID, shift.StationSeq, "locked").Order("station_seq desc").First(&previous).Error
 	if previousErr != nil && !errors.Is(previousErr, gorm.ErrRecordNotFound) {
 		return "", "", "", fmt.Errorf("load predecessor shift: %w", previousErr)
 	}
 	predecessorEnd := ""
 	if previousErr == nil && previous.CurrentReportID != nil {
-		var reading DispenserReadingModel
+		var reading store.DispenserReadingModel
 		readingErr := tx.Where("org_id = ? and station_id = ? and shift_id = ? and report_id = ? and nozzle_id = ?", shift.OrgID, shift.StationID, previous.ShiftID, *previous.CurrentReportID, nozzleID).First(&reading).Error
 		if readingErr != nil && !errors.Is(readingErr, gorm.ErrRecordNotFound) {
 			return "", "", "", fmt.Errorf("load predecessor reading: %w", readingErr)

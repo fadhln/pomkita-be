@@ -2,14 +2,14 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	reportingapi "github.com/pomkita/pomkita-be/internal/httpapi/reporting"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	reportingapi "github.com/fadhln/pomkita-be/internal/httpapi/reporting"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	appreporting "github.com/fadhln/pomkita-be/internal/service/reporting"
 	"github.com/google/uuid"
-	appreporting "github.com/pomkita/pomkita-be/internal/service/reporting"
 )
 
 func TestAnomalyExportRoute_UsesVerifiedOrganization(t *testing.T) {

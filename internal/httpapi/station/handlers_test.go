@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	appstation "github.com/fadhln/pomkita-be/internal/service/station"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	appjwt "github.com/pomkita/pomkita-be/internal/jwt"
-	appstation "github.com/pomkita/pomkita-be/internal/service/station"
 )
 
 type stationHTTPServiceStub struct{}

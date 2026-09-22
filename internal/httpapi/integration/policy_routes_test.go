@@ -2,16 +2,16 @@ package httpapi_test
 
 import (
 	"context"
-	. "github.com/pomkita/pomkita-be/internal/httpapi"
-	policyapi "github.com/pomkita/pomkita-be/internal/httpapi/policy"
+	. "github.com/fadhln/pomkita-be/internal/httpapi"
+	policyapi "github.com/fadhln/pomkita-be/internal/httpapi/policy"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	apppolicy "github.com/fadhln/pomkita-be/internal/service/policy"
 	"github.com/google/uuid"
-	apppolicy "github.com/pomkita/pomkita-be/internal/service/policy"
 )
 
 func TestPolicyRevisionRoute_UsesVerifiedOwnerScope(t *testing.T) {
