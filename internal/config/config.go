@@ -27,13 +27,17 @@ func Load() Config {
 	environment := valueOrDefault("ENVIRONMENT", "development")
 	mailerName := valueOrDefault("POMKITA_MAILER", "spool")
 	mailFrom := os.Getenv("POMKITA_MAIL_FROM")
+
 	if mailFrom == "" && !(environment == "production" && mailerName == "resend") {
 		mailFrom = "noreply@localhost"
 	}
+
 	publicBaseURL := os.Getenv("POMKITA_PUBLIC_BASE_URL")
+
 	if publicBaseURL == "" && environment != "production" {
 		publicBaseURL = "http://localhost:3000"
 	}
+
 	return Config{
 		Port:               valueOrDefault("PORT", "8080"),
 		Environment:        environment,
