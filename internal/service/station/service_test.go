@@ -9,9 +9,10 @@ import (
 )
 
 type stationRepositoryStub struct {
-	createdOrg uuid.UUID
-	updatedOrg uuid.UUID
-	readOrg    uuid.UUID
+	createdOrg     uuid.UUID
+	updatedOrg     uuid.UUID
+	readOrg        uuid.UUID
+	updatedEnabled *bool
 }
 
 func (s *stationRepositoryStub) List(context.Context, uuid.UUID) ([]Station, error) {
@@ -28,9 +29,10 @@ func (s *stationRepositoryStub) Create(_ context.Context, orgID uuid.UUID, _ Cre
 	return Station{}, nil
 }
 
-func (s *stationRepositoryStub) Update(_ context.Context, orgID, _ uuid.UUID, _ UpdateRequest, _ uuid.UUID, _ time.Time) (Station, error) {
+func (s *stationRepositoryStub) Update(_ context.Context, orgID, _ uuid.UUID, request UpdateRequest, _ uuid.UUID, _ time.Time) (Station, error) {
 	s.updatedOrg = orgID
-	return Station{}, nil
+	s.updatedEnabled = request.Enabled
+	return Station{Enabled: request.Enabled != nil && *request.Enabled}, nil
 }
 
 func (s *stationRepositoryStub) Disable(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, time.Time) error {
@@ -71,6 +73,35 @@ func TestService_StationAuthorityAndScope(t *testing.T) {
 	}
 	if err := service.Disable(context.Background(), stationActor("Owner", orgID), otherID, uuid.New()); err != ErrStationNotFound {
 		t.Fatalf("disable wrong organization error: got %v, want %v", err, ErrStationNotFound)
+	}
+}
+
+func TestService_SuperadminCanReenableStation(t *testing.T) {
+	orgID, stationID := uuid.New(), uuid.New()
+	repository := &stationRepositoryStub{}
+	service := NewService(repository, stationClock{})
+	enabled := true
+
+	updated, err := service.Update(context.Background(), stationActor("Superadmin", uuid.New()), orgID, stationID, UpdateRequest{Enabled: &enabled})
+
+	if err != nil || !updated.Enabled || repository.updatedOrg != orgID || repository.updatedEnabled == nil || !*repository.updatedEnabled {
+		t.Fatalf("re-enable station: result=%+v err=%v enabled=%v", updated, err, repository.updatedEnabled)
+	}
+}
+
+func TestService_OwnerCannotChangeStationEnabledState(t *testing.T) {
+	orgID, stationID := uuid.New(), uuid.New()
+	repository := &stationRepositoryStub{}
+	service := NewService(repository, stationClock{})
+	enabled := true
+
+	_, err := service.Update(context.Background(), stationActor("Owner", orgID), orgID, stationID, UpdateRequest{Enabled: &enabled})
+
+	if err != ErrEnabledChangeForbidden {
+		t.Fatalf("enabled change error: got %v, want %v", err, ErrEnabledChangeForbidden)
+	}
+	if repository.updatedOrg != uuid.Nil {
+		t.Fatal("owner enabled change reached repository")
 	}
 }
 

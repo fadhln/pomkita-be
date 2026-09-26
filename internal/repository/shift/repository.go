@@ -11,6 +11,7 @@ import (
 	"time"
 
 	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/scope"
 	"github.com/fadhln/pomkita-be/internal/repository/store"
 	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
@@ -39,6 +40,9 @@ func (r *ShiftRepository) OpenShift(ctx context.Context, request appshift.OpenRe
 	}
 	var result appshift.Shift
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scope.RequireEnabled(tx, request.OrgID, request.StationID); err != nil {
+			return err
+		}
 		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return fmt.Errorf("lock station: %w", err)

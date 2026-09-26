@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/repository/scope"
 	"github.com/fadhln/pomkita-be/internal/repository/store"
 	appdraft "github.com/fadhln/pomkita-be/internal/service/draft"
 	"github.com/google/uuid"
@@ -43,6 +44,9 @@ func (r *DraftRepository) Claim(ctx context.Context, request appdraft.ClaimReque
 			}
 			return fmt.Errorf("load draft: %w", err)
 		}
+		if err := scope.RequireEnabled(tx, draft.OrgID, draft.StationID); err != nil {
+			return err
+		}
 		if draft.ClaimExpiresAt != nil && draft.ClaimExpiresAt.After(now) && draft.OwnedBy != nil && *draft.OwnedBy != request.ActorID {
 			return appdraft.ErrClaimExpired
 		}
@@ -66,14 +70,25 @@ func (r *DraftRepository) Heartbeat(ctx context.Context, request appdraft.Heartb
 	if r == nil || r.db == nil {
 		return appdraft.ErrDependencyUnavailable
 	}
-	result := r.db.WithContext(ctx).Model(&store.ShiftDraftModel{}).
-		Where("draft_id = ? and owned_by = ? and claim_token = ? and claim_expires_at > ? and status = ?", request.DraftID, request.ActorID, request.ClaimToken, now, "editing").
-		Updates(map[string]any{"claim_expires_at": now.Add(draftLeaseDuration), "updated_at": now, "updated_by": request.ActorID})
-	if result.Error != nil {
-		return fmt.Errorf("heartbeat draft: %w", result.Error)
-	}
-	if result.RowsAffected != 1 {
-		return appdraft.ErrClaimExpired
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var draft store.ShiftDraftModel
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("draft_id = ?", request.DraftID).First(&draft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return appdraft.ErrDraftNotFound
+			}
+			return fmt.Errorf("load draft for heartbeat: %w", err)
+		}
+		if err := scope.RequireEnabled(tx, draft.OrgID, draft.StationID); err != nil {
+			return err
+		}
+		if draft.OwnedBy == nil || *draft.OwnedBy != request.ActorID || draft.ClaimToken == nil || *draft.ClaimToken != request.ClaimToken || draft.ClaimExpiresAt == nil || !draft.ClaimExpiresAt.After(now) || draft.Status != "editing" {
+			return appdraft.ErrClaimExpired
+		}
+		return tx.Model(&store.ShiftDraftModel{}).Where("draft_id = ?", request.DraftID).
+			Updates(map[string]any{"claim_expires_at": now.Add(draftLeaseDuration), "updated_at": now, "updated_by": request.ActorID}).Error
+	})
+	if err != nil {
+		return fmt.Errorf("heartbeat draft: %w", err)
 	}
 	return nil
 }
@@ -91,6 +106,9 @@ func (r *DraftRepository) WriteReading(ctx context.Context, request appdraft.Wri
 				return appdraft.ErrDraftNotFound
 			}
 			return fmt.Errorf("load draft for reading: %w", err)
+		}
+		if err := scope.RequireEnabled(tx, draft.OrgID, draft.StationID); err != nil {
+			return err
 		}
 		if draft.ClaimExpiresAt == nil || !draft.ClaimExpiresAt.After(now) || draft.ClaimToken == nil || *draft.ClaimToken != request.ClaimToken || draft.OwnedBy == nil || *draft.OwnedBy != request.ActorID {
 			return appdraft.ErrClaimExpired
@@ -201,6 +219,9 @@ func (r *DraftRepository) lockDraftForMutation(tx *gorm.DB, draftID, claimToken,
 			return store.ShiftDraftModel{}, appdraft.ErrDraftNotFound
 		}
 		return store.ShiftDraftModel{}, fmt.Errorf("load draft child: %w", err)
+	}
+	if err := scope.RequireEnabled(tx, draft.OrgID, draft.StationID); err != nil {
+		return store.ShiftDraftModel{}, err
 	}
 	if draft.ClaimExpiresAt == nil || !draft.ClaimExpiresAt.After(now) || draft.ClaimToken == nil || *draft.ClaimToken != claimToken || draft.OwnedBy == nil || *draft.OwnedBy != actorID {
 		return store.ShiftDraftModel{}, appdraft.ErrClaimExpired

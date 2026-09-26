@@ -4,13 +4,32 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
 	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
 	"github.com/google/uuid"
 )
+
+func TestGovernanceRepository_Acknowledge_RejectsDisabledOrganization(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+	if err := fixture.store.DB.Table("organizations").Where("org_id = ?", fixture.orgID).Update("enabled", false).Error; err != nil {
+		t.Fatalf("disable organization: %v", err)
+	}
+
+	_, err := NewGovernanceRepository(fixture.store).Acknowledge(ctx, appgovernance.AcknowledgeRequest{
+		OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, ReportID: fixture.reportID, ActorID: fixture.actorID, VersionNo: 1, Role: "Station Admin", Decision: "acked",
+	}, fixture.now)
+	var scopeErr *domain.Error
+	if !errors.As(err, &scopeErr) || scopeErr.Code != "org_disabled" {
+		t.Fatalf("acknowledgement error: got %v, want org_disabled", err)
+	}
+}
 
 func TestGovernanceRepository_Acknowledge_LocksTheReportAndShift(t *testing.T) {
 	ctx := context.Background()
@@ -97,6 +116,27 @@ func TestGovernanceRepository_Acknowledge_RejectionNeedsCorrection(t *testing.T)
 	}
 	if ack.RejectionReason == nil || *ack.RejectionReason != "meter evidence is missing" {
 		t.Fatalf("rejection reason: got %v", ack.RejectionReason)
+	}
+}
+
+func TestGovernanceRepository_RequestAmendment_RejectsDisabledOrganization(t *testing.T) {
+	ctx := context.Background()
+	fixture := newGovernanceFixture(t, ctx)
+	defer fixture.cleanup()
+	if err := fixture.store.DB.Table("organizations").Where("org_id = ?", fixture.orgID).Update("enabled", false).Error; err != nil {
+		t.Fatalf("disable organization: %v", err)
+	}
+	if err := fixture.store.DB.Table("user_station_roles").Create(map[string]any{"org_id": fixture.orgID, "station_id": fixture.stationID, "user_id": fixture.actorID, "role": "Supervisor"}).Error; err != nil {
+		t.Fatalf("create supervisor role: %v", err)
+	}
+
+	_, err := NewGovernanceRepository(fixture.store).RequestAmendment(ctx, appgovernance.AmendmentRequest{
+		OrgID: fixture.orgID, StationID: fixture.stationID, ShiftID: fixture.shiftID, BaseReportID: fixture.reportID, RequesterID: fixture.actorID, Role: "Supervisor", Reason: "correct cash amount", StaleCheckHash: make([]byte, 32),
+		Items: []appgovernance.AmendmentItem{{TargetKind: "sales_declared", TargetLogicalID: uuid.New(), Field: "cash_amount", OldValue: []byte(`"100"`), NewValue: []byte(`"110"`)}},
+	}, fixture.now)
+	var scopeErr *domain.Error
+	if !errors.As(err, &scopeErr) || scopeErr.Code != "org_disabled" {
+		t.Fatalf("amendment error: got %v, want org_disabled", err)
 	}
 }
 
