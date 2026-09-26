@@ -65,12 +65,16 @@ func PolicyRevisionHandler(sessions transport.SessionService, service PolicyServ
 				break
 			}
 		}
-		if input.StationID != nil && !slices.Contains(session.StationIDs, *input.StationID) && role != "Superadmin" {
+		if input.StationID != nil && !slices.Contains(transport.ActiveStationIDs(session), *input.StationID) && (role != "Superadmin" || session.ActiveContext != nil) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}
+		stationID := optionalRequestUUID(input.StationID)
+		if input.StationID == nil && session.ActiveContext != nil {
+			stationID = session.ActiveContext.StationID
+		}
 		result, err := service.CreateRevision(c.Request.Context(), apppolicy.PolicyRevisionRequest{
-			OrgID: session.OrgID, StationID: optionalRequestUUID(input.StationID), ActorID: session.UserID, Role: role,
+			OrgID: transport.ActiveOrgID(session), StationID: stationID, ActorID: session.UserID, Role: role,
 			PolicyKind: input.PolicyKind, PolicyID: input.PolicyID, SupersedesRevisionID: input.SupersedesRevisionID,
 			ValidFrom: validFrom, Disabled: input.Disabled, TombstoneReason: input.TombstoneReason,
 			LossLiterThreshold: input.LossLiterThreshold, GainLiterThreshold: input.GainLiterThreshold,

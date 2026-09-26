@@ -32,7 +32,7 @@ func PolicyHistoryHandler(sessions transport.SessionService, service PolicyReadS
 		if !ok {
 			return
 		}
-		rows, err := service.History(c.Request.Context(), session.OrgID, &stationID)
+		rows, err := service.History(c.Request.Context(), transport.ActiveOrgID(session), &stationID)
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -61,6 +61,9 @@ func requestedStation(c *gin.Context, sessions transport.SessionService) (uuid.U
 	if err != nil {
 		_ = c.Error(err)
 		return uuid.Nil, false
+	}
+	if session.ActiveContext != nil {
+		return session.ActiveContext.StationID, true
 	}
 	if len(session.StationIDs) != 1 {
 		transport.ValidationError(c)

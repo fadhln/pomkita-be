@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
 	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
 	"github.com/google/uuid"
 )
@@ -26,6 +27,28 @@ func TestShiftListRoute_UsesVerifiedOrganizationAndStationScope(t *testing.T) {
 	}
 	if service.orgID != orgID || service.stationID != stationID {
 		t.Fatalf("read scope: org=%s station=%s", service.orgID, service.stationID)
+	}
+}
+
+func TestShiftListRoute_UsesActiveContextWithoutChangingRoleGrants(t *testing.T) {
+	identityOrgID, activeOrgID := uuid.New(), uuid.New()
+	grantStationID, activeStationID := uuid.New(), uuid.New()
+	service := &ShiftReadStub{}
+	sessions := &SessionStub{view: SessionView{
+		OrgID: identityOrgID, UserID: uuid.New(), Roles: []string{"Superadmin"},
+		StationIDs:    []uuid.UUID{grantStationID},
+		ActiveContext: &appjwt.ActiveContext{OrgID: activeOrgID, StationID: activeStationID},
+	}}
+	router := NewRouterWithDependencySet("test", nil, RouterDependencies{Readiness: readyStub{current: true}, Verifier: verifierStub{}, Sessions: sessions, ShiftRead: service, LatestMigration: 17})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/shifts?station_id="+activeStationID.String(), nil)
+	request.Header.Set("Authorization", "Bearer token")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || service.orgID != activeOrgID || service.stationID != activeStationID {
+		t.Fatalf("active scope: status=%d org=%s station=%s body=%s", recorder.Code, service.orgID, service.stationID, recorder.Body.String())
+	}
+	if sessions.view.OrgID != identityOrgID || len(sessions.view.StationIDs) != 1 || sessions.view.StationIDs[0] != grantStationID {
+		t.Fatalf("active context changed identity grants: %+v", sessions.view)
 	}
 }
 

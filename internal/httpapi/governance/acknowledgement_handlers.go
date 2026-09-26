@@ -50,7 +50,7 @@ func AcknowledgeHandler(sessions transport.SessionService, service GovernanceSer
 			_ = c.Error(err)
 			return
 		}
-		if !slices.Contains(session.StationIDs, input.StationID) {
+		if !slices.Contains(transport.ActiveStationIDs(session), input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}
@@ -62,7 +62,7 @@ func AcknowledgeHandler(sessions transport.SessionService, service GovernanceSer
 			}
 		}
 		result, err := service.Acknowledge(c.Request.Context(), appgovernance.AcknowledgeRequest{
-			OrgID: session.OrgID, StationID: input.StationID, ShiftID: input.ShiftID, ReportID: reportID,
+			OrgID: transport.ActiveOrgID(session), StationID: input.StationID, ShiftID: input.ShiftID, ReportID: reportID,
 			ActorID: session.UserID, VersionNo: input.VersionNo, Role: role, Decision: input.Decision,
 			RejectionReason: input.RejectionReason, IsBreakGlass: input.IsBreakGlass, BreakGlassReason: input.BreakGlassReason,
 		})

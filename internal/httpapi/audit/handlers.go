@@ -121,5 +121,5 @@ func readAuditOrganization(c *gin.Context, sessions transport.SessionService) (u
 		transport.WriteError(c, http.StatusForbidden, "audit_role_required")
 		return uuid.Nil, false
 	}
-	return session.OrgID, true
+	return transport.ActiveOrgID(session), true
 }

@@ -34,7 +34,7 @@ func ShiftListHandler(sessions transport.SessionService, service ShiftReadServic
 		if !ok {
 			return
 		}
-		rows, err := service.List(c.Request.Context(), session.OrgID, &stationID)
+		rows, err := service.List(c.Request.Context(), transport.ActiveOrgID(session), &stationID)
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -60,7 +60,7 @@ func ShiftDetailHandler(sessions transport.SessionService, service ShiftReadServ
 		if !ok {
 			return
 		}
-		result, err := service.Detail(c.Request.Context(), session.OrgID, stationID, shiftID)
+		result, err := service.Detail(c.Request.Context(), transport.ActiveOrgID(session), stationID, shiftID)
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -86,6 +86,9 @@ func requestedStation(c *gin.Context, sessions transport.SessionService) (uuid.U
 	if err != nil {
 		_ = c.Error(err)
 		return uuid.Nil, false
+	}
+	if session.ActiveContext != nil {
+		return session.ActiveContext.StationID, true
 	}
 	if len(session.StationIDs) != 1 {
 		transport.ValidationError(c)

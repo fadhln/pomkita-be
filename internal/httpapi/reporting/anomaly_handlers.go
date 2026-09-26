@@ -76,17 +76,21 @@ func readAnomalies(c *gin.Context, sessions transport.SessionService, service An
 	var stationID *uuid.UUID
 	if value := c.Query("station_id"); value != "" {
 		parsed, parseErr := uuid.Parse(value)
-		if parseErr != nil || parsed == uuid.Nil || !slices.Contains(session.StationIDs, parsed) {
+		if parseErr != nil || parsed == uuid.Nil || !slices.Contains(transport.ActiveStationIDs(session), parsed) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return nil, false
 		}
 		stationID = &parsed
 	}
+	if stationID == nil && session.ActiveContext != nil {
+		selectedStationID := session.ActiveContext.StationID
+		stationID = &selectedStationID
+	}
 	if stationID == nil && !slices.Contains(session.Roles, "Owner") && !slices.Contains(session.Roles, "Superadmin") {
 		transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 		return nil, false
 	}
-	rows, err := service.Anomalies(c.Request.Context(), session.OrgID, stationID)
+	rows, err := service.Anomalies(c.Request.Context(), transport.ActiveOrgID(session), stationID)
 	if err != nil {
 		_ = c.Error(err)
 		return nil, false

@@ -87,6 +87,22 @@ func DecodeRequest(c *gin.Context, target any) bool {
 	return true
 }
 
+// ActiveOrgID returns the active organization or the authenticated user's organization.
+func ActiveOrgID(session SessionView) uuid.UUID {
+	if session.ActiveContext != nil {
+		return session.ActiveContext.OrgID
+	}
+	return session.OrgID
+}
+
+// ActiveStationIDs returns the selected station or the identity's station grants.
+func ActiveStationIDs(session SessionView) []uuid.UUID {
+	if session.ActiveContext != nil {
+		return []uuid.UUID{session.ActiveContext.StationID}
+	}
+	return session.StationIDs
+}
+
 func ReadSession(c *gin.Context, sessions SessionService, stationID uuid.UUID) (SessionView, bool) {
 	if sessions == nil {
 		WriteError(c, http.StatusInternalServerError, "internal_error")
@@ -97,7 +113,7 @@ func ReadSession(c *gin.Context, sessions SessionService, stationID uuid.UUID) (
 		_ = c.Error(err)
 		return SessionView{}, false
 	}
-	if !slices.Contains(session.StationIDs, stationID) {
+	if !slices.Contains(ActiveStationIDs(session), stationID) {
 		WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 		return SessionView{}, false
 	}

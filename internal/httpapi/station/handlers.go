@@ -175,7 +175,7 @@ func readActor(c *gin.Context, sessions transport.SessionService) (appstation.Ac
 		_ = c.Error(err)
 		return appstation.Actor{}, false
 	}
-	return appstation.Actor{UserID: view.UserID, OrgID: view.OrgID, Roles: view.Roles}, true
+	return appstation.Actor{UserID: view.UserID, OrgID: transport.ActiveOrgID(view), Roles: view.Roles}, true
 }
 
 func requestedOrganization(c *gin.Context, actor appstation.Actor) (uuid.UUID, bool) {

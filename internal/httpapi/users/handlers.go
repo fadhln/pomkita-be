@@ -60,7 +60,7 @@ func inviteHandler(sessions transport.SessionService, service Service) gin.Handl
 			return
 		}
 		role := highestAdministrationRole(session.Roles)
-		targetOrgID := session.OrgID
+		targetOrgID := transport.ActiveOrgID(session)
 		if role == "Owner" && input.OrgID != uuid.Nil {
 			targetOrgID = input.OrgID
 		}
@@ -68,7 +68,7 @@ func inviteHandler(sessions transport.SessionService, service Service) gin.Handl
 			targetOrgID = input.OrgID
 		}
 		err = service.Invite(c.Request.Context(), appidentity.InvitationRequest{
-			ActorID: session.UserID, ActorOrgID: session.OrgID, ActorRole: role,
+			ActorID: session.UserID, ActorOrgID: transport.ActiveOrgID(session), ActorRole: role,
 			TargetOrgID: targetOrgID, Email: input.Email, DisplayName: input.DisplayName,
 			Role: input.Role, StationID: input.StationID,
 		})
