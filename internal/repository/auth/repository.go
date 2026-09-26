@@ -171,6 +171,29 @@ func (r *AuthRepository) SetActiveContext(ctx context.Context, jti, orgID, stati
 	})
 }
 
+// ReadContextPreference reads the organization and station saved for one user.
+func (r *AuthRepository) ReadContextPreference(ctx context.Context, userID uuid.UUID) (*appjwt.ActiveContext, error) {
+	if r == nil || r.db == nil {
+		return nil, appauth.ErrDependencyUnavailable
+	}
+	var preference struct {
+		OrgID     *uuid.UUID
+		StationID *uuid.UUID
+	}
+	if err := r.db.WithContext(ctx).Table("users").
+		Select("preferred_org_id, preferred_station_id").
+		Where("user_id = ?", userID).Take(&preference).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, appauth.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("read account context preference: %w", err)
+	}
+	if preference.OrgID == nil || preference.StationID == nil {
+		return nil, nil
+	}
+	return &appjwt.ActiveContext{OrgID: *preference.OrgID, StationID: *preference.StationID}, nil
+}
+
 // OrganizationExists reports whether an organization exists.
 func (r *AuthRepository) OrganizationExists(ctx context.Context, orgID uuid.UUID) (bool, error) {
 	if r == nil || r.db == nil {
