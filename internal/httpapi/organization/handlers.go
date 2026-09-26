@@ -161,7 +161,7 @@ func readActor(c *gin.Context, sessions transport.SessionService) (apporg.Actor,
 		_ = c.Error(err)
 		return apporg.Actor{}, false
 	}
-	return apporg.Actor{UserID: view.UserID, OrgID: view.OrgID, Roles: view.Roles}, true
+	return apporg.Actor{UserID: view.UserID, OrgID: transport.ActiveOrgID(view), Roles: view.Roles}, true
 }
 
 func allowed(c *gin.Context, actor apporg.Actor) bool {

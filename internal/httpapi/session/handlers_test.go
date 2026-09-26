@@ -15,12 +15,14 @@ import (
 )
 
 type sessionServiceStub struct {
-	loginToken string
-	loginErr   error
-	logoutErr  error
-	view       appjwt.SessionView
-	readErr    error
-	logoutJTI  uuid.UUID
+	loginToken      string
+	loginErr        error
+	logoutErr       error
+	view            appjwt.SessionView
+	readErr         error
+	logoutJTI       uuid.UUID
+	setContextCalls int
+	setContextErr   error
 }
 
 func (s *sessionServiceStub) Login(context.Context, string, string) (string, appjwt.Claims, error) {
@@ -34,6 +36,10 @@ func (s *sessionServiceStub) Logout(_ context.Context, jti uuid.UUID) error {
 
 func (s *sessionServiceStub) ReadSession(context.Context, string) (appjwt.SessionView, error) {
 	return s.view, s.readErr
+}
+func (s *sessionServiceStub) SetActiveContext(context.Context, uuid.UUID, []string, uuid.UUID, uuid.UUID) error {
+	s.setContextCalls++
+	return s.setContextErr
 }
 
 func TestLoginSetsSessionCookieWithContractFlags(t *testing.T) {
@@ -121,6 +127,33 @@ func TestLogoutRequiresCSRFHeader(t *testing.T) {
 	}
 }
 
+func TestActiveContextRequiresCSRFHeader(t *testing.T) {
+	router := testSessionRouter("test", sessionVerifierStub{claims: appjwt.Claims{JTI: uuid.New()}}, &sessionServiceStub{})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/session/active-context", strings.NewReader(`{"org_id":"11111111-1111-4111-8111-111111111111","station_id":"22222222-2222-4222-8222-222222222222"}`))
+	request.Header.Set("Authorization", "Bearer token")
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden || !strings.Contains(recorder.Body.String(), `"code":"csrf_required"`) {
+		t.Fatalf("response: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestActiveContextUpdatesCurrentSession(t *testing.T) {
+	jti := uuid.New()
+	service := &sessionServiceStub{view: appjwt.SessionView{Roles: []string{"Superadmin"}}}
+	router := testSessionRouter("test", sessionVerifierStub{claims: appjwt.Claims{JTI: jti}}, service)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/session/active-context", strings.NewReader(`{"org_id":"11111111-1111-4111-8111-111111111111","station_id":"22222222-2222-4222-8222-222222222222"}`))
+	request.Header.Set("Authorization", "Bearer token")
+	request.Header.Set("X-Requested-With", "XMLHttpRequest")
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNoContent || service.setContextCalls != 1 {
+		t.Fatalf("response: status=%d calls=%d body=%s", recorder.Code, service.setContextCalls, recorder.Body.String())
+	}
+}
+
 func TestLogoutReturnsInternalErrorWhenSessionServiceIsMissing(t *testing.T) {
 	router := testSessionRouter("test", sessionVerifierStub{}, nil)
 	recorder := httptest.NewRecorder()
@@ -142,6 +175,10 @@ func TestSessionReturnsSessionPayload(t *testing.T) {
 		Roles:       []string{"Owner"},
 		OrgID:       uuid.MustParse("11111111-1111-4111-8111-111111111111"),
 		StationIDs:  []uuid.UUID{uuid.MustParse("22222222-2222-4222-8222-222222222222")},
+		ActiveContext: &appjwt.ActiveContext{
+			OrgID:     uuid.MustParse("11111111-1111-4111-8111-111111111111"),
+			StationID: uuid.MustParse("22222222-2222-4222-8222-222222222222"),
+		},
 	}
 	router := testSessionRouter("test", sessionVerifierStub{}, &sessionServiceStub{view: view})
 	recorder := httptest.NewRecorder()
@@ -152,7 +189,7 @@ func TestSessionReturnsSessionPayload(t *testing.T) {
 		t.Fatalf("status: got %d, want %d", recorder.Code, http.StatusOK)
 	}
 	body := recorder.Body.String()
-	for _, expected := range []string{`"display_name":"Test User"`, `"roles":["Owner"]`, `"org_id":"11111111-1111-4111-8111-111111111111"`} {
+	for _, expected := range []string{`"display_name":"Test User"`, `"roles":["Owner"]`, `"org_id":"11111111-1111-4111-8111-111111111111"`, `"active_context":{"org_id":"11111111-1111-4111-8111-111111111111","station_id":"22222222-2222-4222-8222-222222222222"}`} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("response does not contain %s: %s", expected, body)
 		}

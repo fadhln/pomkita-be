@@ -133,6 +133,7 @@ func decorateIdentityContract(document *huma.OpenAPI) {
 	}{
 		"/api/v1/login":                   {errors: map[string][]string{"401": {"invalid_credentials"}}, example: map[string]any{"username": "demo-owner", "password": "demo-password"}},
 		"/api/v1/session":                 {roles: []string{"Operator", "Supervisor", "Station Admin", "Owner", "Superadmin"}},
+		"/api/v1/session/active-context":  {roles: []string{"Superadmin"}, errors: map[string][]string{"400": {"validation_error"}, "401": {"invalid_session"}, "403": {"active_context_forbidden", "csrf_required"}, "404": {"active_context_target_not_found"}}, csrf: true, example: map[string]any{"org_id": "11111111-1111-4111-8111-111111111111", "station_id": "22222222-2222-4222-8222-222222222222"}},
 		"/api/v1/users":                   {roles: []string{"Owner", "Superadmin"}, errors: map[string][]string{"403": {"user_administration_forbidden", "organization_scope_forbidden"}, "409": {"email_conflict", "username_conflict"}, "422": {"organization_has_no_station", "invalid_identity_request"}}, example: map[string]any{"email": "operator@example.test", "display_name": "Operator", "role": "Operator", "station_id": "22222222-2222-4222-8222-222222222222"}},
 		"/api/v1/auth/invitations/accept": {errors: map[string][]string{"400": {"INVALID_TOKEN"}, "422": {"invalid_username", "weak_password"}}, example: map[string]any{"token": "raw-token-from-email", "username": "operator-1", "password": "strong-password", "display_name": "Operator"}},
 		"/api/v1/account":                 {roles: []string{"Operator", "Supervisor", "Station Admin", "Owner", "Superadmin"}, errors: map[string][]string{"401": {"invalid_session"}}},
@@ -154,6 +155,17 @@ func decorateIdentityContract(document *huma.OpenAPI) {
 		if item.Patch != nil {
 			decorateOperation(item.Patch, metadata.roles, metadata.errors, metadata.example, true)
 			item.Patch.Extensions["x-stable-error-codes"] = map[string][]string{"401": {"invalid_session"}, "403": {"csrf_required"}, "409": {"username_conflict"}, "422": {"invalid_display_name", "invalid_username"}}
+		}
+	}
+	setMutationResponse(document, "/api/v1/session/active-context", http.MethodPost, http.StatusNoContent)
+	if operation := document.Paths["/api/v1/session/active-context"].Post; operation != nil {
+		ensureProblemResponses(operation, "400", "401", "403", "404", "500")
+	}
+	trimResponses(document, "/api/v1/session/active-context", http.MethodPost, "204", "400", "401", "403", "404", "500")
+	if schema := document.Components.Schemas.Map()["SessionView"]; schema != nil {
+		if activeContext := schema.Properties["active_context"]; activeContext != nil {
+			activeContext.AnyOf = []*huma.Schema{{Ref: activeContext.Ref}, {Type: "null"}}
+			activeContext.Ref = ""
 		}
 	}
 	setMutationResponse(document, "/api/v1/account/password", http.MethodPost, http.StatusNoContent)
@@ -459,6 +471,7 @@ func registerOpenAPIOperations(api huma.API) {
 	registerOpenAPIOperation[openAPIBodyInput[sessionapi.LoginRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/login", "login", "Create a session")
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIEmptyOutput](api, http.MethodDelete, "/api/v1/logout", "logout", "Revoke a session")
 	registerOpenAPIOperation[openAPIEmptyInput, openAPIOutput[appjwt.SessionView]](api, http.MethodGet, "/api/v1/session", "session", "Read the current session")
+	registerOpenAPIOperation[openAPIBodyInput[sessionapi.ActiveContextRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/session/active-context", "setActiveContext", "Set the active organization and station for the current session")
 	registerOpenAPIOperation[openAPIBodyInput[usersapi.InviteRequest], openAPIEmptyOutput](api, http.MethodPost, "/api/v1/users", "inviteUser", "Invite a user")
 	registerOpenAPIOperation[openAPIOrganizationScopeInput, openAPIOutput[[]appidentity.UserView]](api, http.MethodGet, "/api/v1/users", "listUsers", "List users")
 	registerOpenAPIOperation[openAPIIDInput, openAPIOutput[appidentity.UserView]](api, http.MethodGet, "/api/v1/users/{id}", "getUser", "Read a user")

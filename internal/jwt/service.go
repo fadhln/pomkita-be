@@ -71,14 +71,21 @@ type Claims struct {
 	KID       string
 }
 
+// ActiveContext is the server-owned organization and station selected for a session.
+type ActiveContext struct {
+	OrgID     uuid.UUID `json:"org_id"`
+	StationID uuid.UUID `json:"station_id"`
+}
+
 // SessionView is the verified user identity and station scope.
 type SessionView struct {
-	UserID      uuid.UUID   `json:"user_id"`
-	Username    string      `json:"username"`
-	DisplayName string      `json:"display_name"`
-	Roles       []string    `json:"roles"`
-	OrgID       uuid.UUID   `json:"org_id"`
-	StationIDs  []uuid.UUID `json:"station_ids"`
+	UserID        uuid.UUID      `json:"user_id"`
+	Username      string         `json:"username"`
+	DisplayName   string         `json:"display_name"`
+	Roles         []string       `json:"roles"`
+	OrgID         uuid.UUID      `json:"org_id"`
+	StationIDs    []uuid.UUID    `json:"station_ids"`
+	ActiveContext *ActiveContext `json:"active_context"`
 }
 
 // Service issues, verifies, and revokes session JWTs.

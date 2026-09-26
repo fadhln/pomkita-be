@@ -44,14 +44,16 @@ func ReportHandler(sessions transport.SessionService, service ReportingService) 
 				transport.ValidationError(c)
 				return
 			}
+		} else if session.ActiveContext != nil {
+			stationID = session.ActiveContext.StationID
 		} else if len(session.StationIDs) == 1 {
 			stationID = session.StationIDs[0]
 		}
-		if stationID == uuid.Nil || !slices.Contains(session.StationIDs, stationID) {
+		if stationID == uuid.Nil || !slices.Contains(transport.ActiveStationIDs(session), stationID) {
 			transport.ValidationError(c)
 			return
 		}
-		view, err := service.ReadReport(c.Request.Context(), session.OrgID, stationID, reportID)
+		view, err := service.ReadReport(c.Request.Context(), transport.ActiveOrgID(session), stationID, reportID)
 		if err != nil {
 			_ = c.Error(err)
 			return

@@ -51,7 +51,7 @@ func OpenShiftHandler(sessions transport.SessionService, service ShiftService) g
 			_ = c.Error(err)
 			return
 		}
-		if !slices.Contains(session.StationIDs, input.StationID) {
+		if !slices.Contains(transport.ActiveStationIDs(session), input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}
@@ -63,7 +63,7 @@ func OpenShiftHandler(sessions transport.SessionService, service ShiftService) g
 			}
 		}
 		request := appshift.OpenRequest{
-			OrgID: session.OrgID, StationID: input.StationID, ActorID: session.UserID, Role: role,
+			OrgID: transport.ActiveOrgID(session), StationID: input.StationID, ActorID: session.UserID, Role: role,
 			OpenedAt: openedAt, Backfilled: input.Backfilled, OriginalEventDate: input.OriginalEventDate,
 			ShiftKE: input.ShiftKE, BackfillReason: input.BackfillReason,
 		}

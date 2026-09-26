@@ -51,12 +51,12 @@ func SubmitHandler(sessions transport.SessionService, service SubmissionService)
 			_ = c.Error(err)
 			return
 		}
-		if !slices.Contains(session.StationIDs, input.StationID) {
+		if !slices.Contains(transport.ActiveStationIDs(session), input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}
 		result, err := service.Submit(c.Request.Context(), appsubmission.Request{
-			OrgID: session.OrgID, StationID: input.StationID, ShiftID: input.ShiftID, DraftID: input.DraftID,
+			OrgID: transport.ActiveOrgID(session), StationID: input.StationID, ShiftID: input.ShiftID, DraftID: input.DraftID,
 			ClaimToken: input.ClaimToken, ExpectedRevision: input.Revision, ActorID: session.UserID,
 			IdempotencyKey: idempotencyKey, Payload: append([]byte(nil), input.Payload...),
 		})

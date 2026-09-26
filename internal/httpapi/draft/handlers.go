@@ -41,7 +41,7 @@ func ClaimDraftHandler(sessions transport.SessionService, service DraftService) 
 			_ = c.Error(err)
 			return
 		}
-		if !slices.Contains(session.StationIDs, input.StationID) {
+		if !slices.Contains(transport.ActiveStationIDs(session), input.StationID) {
 			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 			return
 		}

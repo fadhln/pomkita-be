@@ -19,6 +19,7 @@ type Service interface {
 	Login(context.Context, string, string) (string, appjwt.Claims, error)
 	Logout(context.Context, uuid.UUID) error
 	ReadSession(context.Context, string) (appjwt.SessionView, error)
+	SetActiveContext(context.Context, uuid.UUID, []string, uuid.UUID, uuid.UUID) error
 }
 
 // LoginRequest contains session login credentials.
@@ -27,11 +28,18 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+// ActiveContextRequest selects the active organization and station for a session.
+type ActiveContextRequest struct {
+	OrgID     uuid.UUID `json:"org_id"`
+	StationID uuid.UUID `json:"station_id"`
+}
+
 // RegisterRoutes registers login, logout, and session routes.
 func RegisterRoutes(router gin.IRoutes, verifier transport.TokenVerifier, service Service, secure bool) {
 	router.POST("/login", transport.RequireCSRF, loginHandler(service, secure))
 	router.DELETE("/logout", transport.AuthMiddleware(verifier), transport.RequireCSRF, logoutHandler(service, secure))
 	router.GET("/session", transport.AuthMiddleware(verifier), sessionHandler(service))
+	router.POST("/session/active-context", transport.AuthMiddleware(verifier), transport.RequireCSRF, activeContextHandler(service))
 }
 
 func loginHandler(service Service, secure bool) gin.HandlerFunc {
@@ -76,6 +84,34 @@ func logoutHandler(service Service, secure bool) gin.HandlerFunc {
 		}
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("pomkita_session", "", -1, "/", "", secure, true)
+		c.Status(http.StatusNoContent)
+	}
+}
+
+func activeContextHandler(service Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if service == nil {
+			transport.WriteError(c, http.StatusInternalServerError, "internal_error")
+			return
+		}
+		var input ActiveContextRequest
+		if !transport.DecodeRequest(c, &input) {
+			return
+		}
+		if input.OrgID == uuid.Nil || input.StationID == uuid.Nil {
+			transport.ValidationError(c)
+			return
+		}
+		view, err := service.ReadSession(c.Request.Context(), c.GetString("raw_token"))
+		if err != nil {
+			_ = c.Error(err)
+			return
+		}
+		claims := c.MustGet("jwt_claims").(appjwt.Claims)
+		if err := service.SetActiveContext(c.Request.Context(), claims.JTI, view.Roles, input.OrgID, input.StationID); err != nil {
+			_ = c.Error(err)
+			return
+		}
 		c.Status(http.StatusNoContent)
 	}
 }

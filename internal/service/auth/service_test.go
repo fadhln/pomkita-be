@@ -12,11 +12,15 @@ import (
 )
 
 type repositoryStub struct {
-	user       User
-	userErr    error
-	read       appjwt.SessionView
-	readErr    error
-	createdJTI uuid.UUID
+	user                                            User
+	userErr                                         error
+	read                                            appjwt.SessionView
+	readErr                                         error
+	createdJTI                                      uuid.UUID
+	orgEnabled                                      bool
+	stationEnabled                                  bool
+	setContextErr                                   error
+	setContextJTI, setContextOrg, setContextStation uuid.UUID
 }
 
 type usernameRepositoryStub struct {
@@ -40,6 +44,16 @@ func (r *repositoryStub) FindUserByUsername(context.Context, string) (User, erro
 func (r *repositoryStub) ReadSession(context.Context, uuid.UUID, uuid.UUID) (appjwt.SessionView, error) {
 	return r.read, r.readErr
 }
+func (r *repositoryStub) EnabledOrganization(context.Context, uuid.UUID) (bool, error) {
+	return r.orgEnabled, nil
+}
+func (r *repositoryStub) EnabledStation(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
+	return r.stationEnabled, nil
+}
+func (r *repositoryStub) SetActiveContext(_ context.Context, jti, orgID, stationID uuid.UUID, _ time.Time) error {
+	r.setContextJTI, r.setContextOrg, r.setContextStation = jti, orgID, stationID
+	return r.setContextErr
+}
 
 type tokenStoreStub struct {
 	key     appjwt.Key
@@ -60,6 +74,44 @@ func (s *tokenStoreStub) Session(context.Context, uuid.UUID) (appjwt.Session, er
 func (s *tokenStoreStub) RevokeSession(_ context.Context, jti uuid.UUID, _ time.Time) error {
 	s.revoked = jti
 	return nil
+}
+
+func TestService_SetActiveContextPersistsForSuperadmin(t *testing.T) {
+	jti, orgID, stationID := uuid.New(), uuid.New(), uuid.New()
+	repository := &repositoryStub{orgEnabled: true, stationEnabled: true}
+	service := NewService(repository, nil)
+	if err := service.SetActiveContext(context.Background(), jti, []string{"Superadmin"}, orgID, stationID); err != nil {
+		t.Fatalf("set active context: %v", err)
+	}
+	if repository.setContextJTI != jti || repository.setContextOrg != orgID || repository.setContextStation != stationID {
+		t.Fatalf("stored context: jti=%s org=%s station=%s", repository.setContextJTI, repository.setContextOrg, repository.setContextStation)
+	}
+}
+
+func TestService_SetActiveContextRejectsForbiddenAndInvalidTargets(t *testing.T) {
+	jti, orgID, stationID := uuid.New(), uuid.New(), uuid.New()
+	for _, test := range []struct {
+		name                       string
+		roles                      []string
+		orgEnabled, stationEnabled bool
+		want                       error
+	}{
+		{name: "non superadmin", roles: []string{"Owner"}, orgEnabled: true, stationEnabled: true, want: ErrActiveContextForbidden},
+		{name: "disabled organization", roles: []string{"Superadmin"}, stationEnabled: true, want: ErrActiveContextNotFound},
+		{name: "station missing or disabled", roles: []string{"Superadmin"}, orgEnabled: true, want: ErrActiveContextNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &repositoryStub{orgEnabled: test.orgEnabled, stationEnabled: test.stationEnabled}
+			service := NewService(repository, nil)
+			err := service.SetActiveContext(context.Background(), jti, test.roles, orgID, stationID)
+			if !errors.Is(err, test.want) {
+				t.Fatalf("error: got %v, want %v", err, test.want)
+			}
+			if repository.setContextJTI != uuid.Nil {
+				t.Fatal("invalid context was stored")
+			}
+		})
+	}
 }
 
 func TestService_Login_ValidCredentialsCreatesSession(t *testing.T) {

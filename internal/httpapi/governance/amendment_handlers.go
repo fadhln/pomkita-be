@@ -69,7 +69,7 @@ func AmendmentQueueHandler(sessions transport.SessionService, service AmendmentS
 			return
 		}
 		role := firstRole(session.Roles, "Station Admin", "Owner", "Superadmin")
-		result, err := service.ListQueue(c.Request.Context(), appgovernance.AmendmentQueueRequest{OrgID: session.OrgID, ActorID: session.UserID, Role: role, StationIDs: session.StationIDs})
+		result, err := service.ListQueue(c.Request.Context(), appgovernance.AmendmentQueueRequest{OrgID: transport.ActiveOrgID(session), ActorID: session.UserID, Role: role, StationIDs: transport.ActiveStationIDs(session)})
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -105,7 +105,7 @@ func AmendmentRequestHandler(sessions transport.SessionService, service Amendmen
 			items = append(items, appgovernance.AmendmentItem{TargetKind: item.TargetKind, TargetLogicalID: item.TargetLogicalID, Field: item.Field, OldValue: []byte(item.OldValue), NewValue: []byte(item.NewValue)})
 		}
 		role := firstRole(session.Roles, "Supervisor")
-		result, err := service.Request(c.Request.Context(), appgovernance.AmendmentRequest{OrgID: session.OrgID, StationID: input.StationID, ShiftID: input.ShiftID, BaseReportID: input.BaseReportID, RequesterID: session.UserID, Role: role, Reason: input.Reason, StaleCheckHash: staleHash, IsBreakGlass: input.IsBreakGlass, BreakGlassReason: input.BreakGlassReason, Items: items})
+		result, err := service.Request(c.Request.Context(), appgovernance.AmendmentRequest{OrgID: transport.ActiveOrgID(session), StationID: input.StationID, ShiftID: input.ShiftID, BaseReportID: input.BaseReportID, RequesterID: session.UserID, Role: role, Reason: input.Reason, StaleCheckHash: staleHash, IsBreakGlass: input.IsBreakGlass, BreakGlassReason: input.BreakGlassReason, Items: items})
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -134,7 +134,7 @@ func AmendmentApproveHandler(sessions transport.SessionService, service Amendmen
 			return
 		}
 		role := firstRole(session.Roles, "Station Admin", "Owner", "Superadmin")
-		result, err := service.Approve(c.Request.Context(), appgovernance.ApproveAmendmentRequest{OrgID: session.OrgID, StationID: input.StationID, AmendmentID: amendmentID, ApproverID: session.UserID, Role: role, StaleCheckHash: staleHash})
+		result, err := service.Approve(c.Request.Context(), appgovernance.ApproveAmendmentRequest{OrgID: transport.ActiveOrgID(session), StationID: input.StationID, AmendmentID: amendmentID, ApproverID: session.UserID, Role: role, StaleCheckHash: staleHash})
 		if err != nil {
 			_ = c.Error(err)
 			return
@@ -158,7 +158,7 @@ func AmendmentRejectHandler(sessions transport.SessionService, service Amendment
 			return
 		}
 		role := firstRole(session.Roles, "Station Admin", "Owner", "Superadmin")
-		if err := service.Reject(c.Request.Context(), appgovernance.RejectAmendmentRequest{OrgID: session.OrgID, StationID: input.StationID, AmendmentID: amendmentID, ApproverID: session.UserID, Role: role, RejectionReason: input.RejectionReason}); err != nil {
+		if err := service.Reject(c.Request.Context(), appgovernance.RejectAmendmentRequest{OrgID: transport.ActiveOrgID(session), StationID: input.StationID, AmendmentID: amendmentID, ApproverID: session.UserID, Role: role, RejectionReason: input.RejectionReason}); err != nil {
 			_ = c.Error(err)
 			return
 		}
@@ -176,7 +176,12 @@ func readSession(c *gin.Context, sessions transport.SessionService, stationID uu
 		_ = c.Error(err)
 		return transport.SessionView{}, false
 	}
-	if !slices.Contains(session.StationIDs, stationID) && !slices.Contains(session.Roles, "Owner") && !slices.Contains(session.Roles, "Superadmin") {
+	if session.ActiveContext != nil {
+		if session.ActiveContext.StationID != stationID {
+			transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
+			return transport.SessionView{}, false
+		}
+	} else if !slices.Contains(session.StationIDs, stationID) && !slices.Contains(session.Roles, "Owner") && !slices.Contains(session.Roles, "Superadmin") {
 		transport.WriteError(c, http.StatusForbidden, "station_scope_forbidden")
 		return transport.SessionView{}, false
 	}

@@ -213,7 +213,7 @@ func readAdminActor(c *gin.Context, sessions transport.SessionService) (appident
 		_ = c.Error(err)
 		return appidentity.Actor{}, false
 	}
-	return appidentity.Actor{UserID: view.UserID, OrgID: view.OrgID, Roles: view.Roles}, true
+	return appidentity.Actor{UserID: view.UserID, OrgID: transport.ActiveOrgID(view), Roles: view.Roles}, true
 }
 
 func queryUUID(c *gin.Context, name string) (uuid.UUID, bool) {

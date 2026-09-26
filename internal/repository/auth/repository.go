@@ -125,7 +125,58 @@ func (r *AuthRepository) ReadSession(ctx context.Context, jti, subject uuid.UUID
 			seenStations[row.StationID] = struct{}{}
 		}
 	}
-	return appjwt.SessionView{UserID: identity.UserID, Username: identity.Username, DisplayName: identity.DisplayName, Roles: roles, OrgID: identity.OrgID, StationIDs: stationIDs}, nil
+	activeContext, err := r.ReadActiveContext(ctx, jti)
+	if err != nil {
+		return appjwt.SessionView{}, fmt.Errorf("read active session context: %w", err)
+	}
+	return appjwt.SessionView{UserID: identity.UserID, Username: identity.Username, DisplayName: identity.DisplayName, Roles: roles, OrgID: identity.OrgID, StationIDs: stationIDs, ActiveContext: activeContext}, nil
+}
+
+// ReadActiveContext reads the organization and station selected for one session.
+func (r *AuthRepository) ReadActiveContext(ctx context.Context, jti uuid.UUID) (*appjwt.ActiveContext, error) {
+	if r == nil || r.db == nil {
+		return nil, appauth.ErrDependencyUnavailable
+	}
+	var row struct {
+		OrgID     uuid.UUID
+		StationID uuid.UUID
+	}
+	err := r.db.WithContext(ctx).Table("session_active_context").Select("org_id, station_id").Where("jti = ?", jti).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read active context: %w", err)
+	}
+	return &appjwt.ActiveContext{OrgID: row.OrgID, StationID: row.StationID}, nil
+}
+
+// SetActiveContext replaces the context stored for one session.
+func (r *AuthRepository) SetActiveContext(ctx context.Context, jti, orgID, stationID uuid.UUID, updatedAt time.Time) error {
+	if r == nil || r.db == nil {
+		return appauth.ErrDependencyUnavailable
+	}
+	return r.db.WithContext(ctx).Exec(`insert into session_active_context (jti, org_id, station_id, updated_at) values (?, ?, ?, ?) on conflict (jti) do update set org_id = excluded.org_id, station_id = excluded.station_id, updated_at = excluded.updated_at`, jti, orgID, stationID, updatedAt.UTC()).Error
+}
+
+// EnabledOrganization reports whether an organization exists and is enabled.
+func (r *AuthRepository) EnabledOrganization(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	if r == nil || r.db == nil {
+		return false, appauth.ErrDependencyUnavailable
+	}
+	var count int64
+	err := r.db.WithContext(ctx).Table("organizations").Where("org_id = ? and enabled = true", orgID).Count(&count).Error
+	return count == 1, err
+}
+
+// EnabledStation reports whether an enabled station belongs to an organization.
+func (r *AuthRepository) EnabledStation(ctx context.Context, orgID, stationID uuid.UUID) (bool, error) {
+	if r == nil || r.db == nil {
+		return false, appauth.ErrDependencyUnavailable
+	}
+	var count int64
+	err := r.db.WithContext(ctx).Table("stations").Where("org_id = ? and station_id = ? and enabled = true", orgID, stationID).Count(&count).Error
+	return count == 1, err
 }
 
 // ActiveKey loads the one active signing key and resolves its secret reference.
