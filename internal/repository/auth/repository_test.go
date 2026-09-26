@@ -68,6 +68,16 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	if view.ActiveContext == nil || view.ActiveContext.OrgID != orgID || view.ActiveContext.StationID != stationID {
 		t.Fatalf("active context: got %+v", view.ActiveContext)
 	}
+	var preference struct {
+		OrgID     uuid.UUID `gorm:"column:preferred_org_id"`
+		StationID uuid.UUID `gorm:"column:preferred_station_id"`
+	}
+	if err := store.DB.Table("users").Select("preferred_org_id, preferred_station_id").Where("user_id = ?", userID).Take(&preference).Error; err != nil {
+		t.Fatalf("read saved context preference: %v", err)
+	}
+	if preference.OrgID != orgID || preference.StationID != stationID {
+		t.Fatalf("saved context preference: got org=%s station=%s", preference.OrgID, preference.StationID)
+	}
 	_, otherClaims, err := tokens.Issue(ctx, userID)
 	if err != nil {
 		t.Fatalf("issue second session: %v", err)

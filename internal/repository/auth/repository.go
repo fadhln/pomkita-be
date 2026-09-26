@@ -156,7 +156,19 @@ func (r *AuthRepository) SetActiveContext(ctx context.Context, jti, orgID, stati
 	if r == nil || r.db == nil {
 		return appauth.ErrDependencyUnavailable
 	}
-	return r.db.WithContext(ctx).Exec(`insert into session_active_context (jti, org_id, station_id, updated_at) values (?, ?, ?, ?) on conflict (jti) do update set org_id = excluded.org_id, station_id = excluded.station_id, updated_at = excluded.updated_at`, jti, orgID, stationID, updatedAt.UTC()).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`insert into session_active_context (jti, org_id, station_id, updated_at) values (?, ?, ?, ?) on conflict (jti) do update set org_id = excluded.org_id, station_id = excluded.station_id, updated_at = excluded.updated_at`, jti, orgID, stationID, updatedAt.UTC()).Error; err != nil {
+			return fmt.Errorf("store session active context: %w", err)
+		}
+		result := tx.Exec(`update users set preferred_org_id = ?, preferred_station_id = ? where user_id = (select user_id from sessions where jti = ?)`, orgID, stationID, jti)
+		if result.Error != nil {
+			return fmt.Errorf("store account context preference: %w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return errors.New("session user was not found for context preference")
+		}
+		return nil
+	})
 }
 
 // OrganizationExists reports whether an organization exists.
