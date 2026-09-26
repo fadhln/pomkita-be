@@ -14,6 +14,7 @@ The router exposes the versioned paths below.
 | Session | `POST /api/v1/login` |
 | Session | `DELETE /api/v1/logout` |
 | Session | `GET /api/v1/session` |
+| Session | `POST /api/v1/session/active-context` |
 | Shift | `POST /api/v1/shifts` |
 | Shift | `GET /api/v1/shifts` |
 | Shift | `GET /api/v1/shifts/{id}` |
@@ -41,6 +42,19 @@ All JSON objects use `snake_case`. Mutation payloads reject unknown fields.
 Money and volume values are decimal strings. Every response includes
 `X-Request-ID` and errors use the stable `code`, `message`, `request_id`, and
 `field_errors` shape.
+
+## Active context
+
+A Superadmin can set both values for the current login session with
+`POST /api/v1/session/active-context`. The request requires the
+`X-Requested-With` header and a JSON body with `org_id` and `station_id`.
+Both targets must be enabled, and the station must belong to the organization.
+The server returns `204 No Content` after the update.
+
+`GET /api/v1/session` returns `active_context` with `org_id` and `station_id`.
+It returns `null` when this session has no active context. The context changes
+request scope only. It does not change the authenticated user or role grants.
+Another login session keeps its own context.
 
 ## Naming rules
 
