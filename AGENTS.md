@@ -52,3 +52,13 @@ Use a small commit. Start the commit subject with the backend phase when applica
 ## Completion gate
 
 For an implementation or a defect fix, do not mark work complete when the red step did not occur. Do not mark work complete when a required check fails. Do not hide a failed check. State the failure and its cause.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in Plane project `POM / pomkita`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Use the single-context layout. See `docs/agents/domain.md`.
