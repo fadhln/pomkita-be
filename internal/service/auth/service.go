@@ -29,8 +29,8 @@ type User struct {
 type Repository interface {
 	FindUserByUsername(context.Context, string) (User, error)
 	ReadSession(context.Context, uuid.UUID, uuid.UUID) (appjwt.SessionView, error)
-	EnabledOrganization(context.Context, uuid.UUID) (bool, error)
-	EnabledStation(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	OrganizationExists(context.Context, uuid.UUID) (bool, error)
+	StationInOrganization(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 	SetActiveContext(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, time.Time) error
 }
 
@@ -43,7 +43,7 @@ var (
 	ErrDependencyUnavailable = domain.NewError(domain.CategoryDependency, "dependency_unavailable")
 	// ErrActiveContextForbidden identifies an actor that cannot change session context.
 	ErrActiveContextForbidden = domain.NewError(domain.CategoryAuthorization, "active_context_forbidden")
-	// ErrActiveContextNotFound identifies an absent or disabled organization or station.
+	// ErrActiveContextNotFound identifies an absent organization or station outside the organization.
 	ErrActiveContextNotFound = domain.NewError(domain.CategoryNotFound, "active_context_target_not_found")
 	// ErrActiveContextInvalid identifies missing context identifiers.
 	ErrActiveContextInvalid = domain.NewError(domain.CategoryValidation, "invalid_active_context")
@@ -87,7 +87,7 @@ func (s *Service) Logout(ctx context.Context, jti uuid.UUID) error {
 	return s.tokens.Logout(ctx, jti)
 }
 
-// SetActiveContext stores an enabled organization and station for one session.
+// SetActiveContext stores an existing organization and station for one session.
 func (s *Service) SetActiveContext(ctx context.Context, jti uuid.UUID, roles []string, orgID, stationID uuid.UUID) error {
 	if s == nil || s.repository == nil {
 		return ErrDependencyUnavailable
@@ -105,18 +105,18 @@ func (s *Service) SetActiveContext(ctx context.Context, jti uuid.UUID, roles []s
 	if jti == uuid.Nil || orgID == uuid.Nil || stationID == uuid.Nil {
 		return ErrActiveContextInvalid
 	}
-	orgEnabled, err := s.repository.EnabledOrganization(ctx, orgID)
+	orgExists, err := s.repository.OrganizationExists(ctx, orgID)
 	if err != nil {
 		return fmt.Errorf("check active organization: %w", err)
 	}
-	if !orgEnabled {
+	if !orgExists {
 		return ErrActiveContextNotFound
 	}
-	stationEnabled, err := s.repository.EnabledStation(ctx, orgID, stationID)
+	stationExists, err := s.repository.StationInOrganization(ctx, orgID, stationID)
 	if err != nil {
 		return fmt.Errorf("check active station: %w", err)
 	}
-	if !stationEnabled {
+	if !stationExists {
 		return ErrActiveContextNotFound
 	}
 	if err := s.repository.SetActiveContext(ctx, jti, orgID, stationID, time.Now().UTC()); err != nil {

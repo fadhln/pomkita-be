@@ -7,11 +7,47 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
 	appreconciliation "github.com/fadhln/pomkita-be/internal/service/reconciliation"
 	appsubmission "github.com/fadhln/pomkita-be/internal/service/submission"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
+
+func TestSubmissionRepository_Submit_RejectsDisabledOrganization(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.UTC)
+	orgID, stationID, userID := uuid.New(), uuid.New(), uuid.New()
+	shiftID, draftID, claimToken, policySetID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	if err := store.DB.Table("organizations").Create(map[string]any{"org_id": orgID, "name": "Disabled Org", "enabled": false, "created_at": now}).Error; err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	if err := store.DB.Create(&StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create station: %v", err)
+	}
+	if err := store.DB.Create(&UserModel{UserID: userID, OrgID: orgID, DisplayName: "Supervisor", Email: "disabled-submit@example.com", Username: "disabled-submit", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := store.DB.Create(&ShiftModel{ShiftID: shiftID, OrgID: orgID, StationID: stationID, StationSeq: 1, SupervisorID: userID, OpenedAt: now, TimezoneSnapshot: "UTC", BusinessDate: "2026-01-02", Status: "open", PriceMapSnapshot: []byte(`{"hash_version":1,"items":[]}`), PriceMapHash: make([]byte, 32)}).Error; err != nil {
+		t.Fatalf("create shift: %v", err)
+	}
+	if err := store.DB.Create(&ShiftDraftModel{DraftID: draftID, OrgID: orgID, StationID: stationID, ShiftID: shiftID, OwnedBy: &userID, ClaimToken: &claimToken, ClaimExpiresAt: ptrTime(now.Add(time.Hour)), Status: "editing", Revision: 1, UpdatedBy: &userID, UpdatedAt: now}).Error; err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	if err := store.DB.Create(&PolicySnapshotSetModel{SetID: policySetID, OrgID: orgID, StationID: stationID, ShiftID: &shiftID, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create policy snapshot set: %v", err)
+	}
+	service := appsubmission.NewService(NewSubmissionRepository(store), submissionClock{value: now})
+	request := appsubmission.Request{OrgID: orgID, StationID: stationID, ShiftID: shiftID, DraftID: draftID, ClaimToken: claimToken, ExpectedRevision: 1, ActorID: userID, IdempotencyKey: "disabled-submit", Payload: []byte(`{"readings":[],"sales":[],"losses":[]}`)}
+
+	_, err := service.Submit(ctx, request)
+	var scopeErr *domain.Error
+	if !errors.As(err, &scopeErr) || scopeErr.Code != "org_disabled" {
+		t.Fatalf("submit error: got %v, want org_disabled", err)
+	}
+}
 
 func TestSubmissionRepository_Submit_IsIdempotentByRequestHash(t *testing.T) {
 	ctx := context.Background()

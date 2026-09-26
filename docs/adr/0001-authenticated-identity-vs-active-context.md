@@ -12,11 +12,15 @@ The identity contains the user and role grants. The server reads it from the ver
 A context change does not change the identity or its role grants.
 
 Store the active organization and station against the login session ID.
-Allow a Superadmin to set both values in one CSRF-protected request.
-Accept only an enabled organization and an enabled station in that organization.
+Accept an existing organization and station in one CSRF-protected request.
+The station must belong to the organization. The target records may be disabled.
+A disabled scope is read-only for operational work. Reads remain available for
+historical review. Reject each operational write with `org_disabled` or
+`station_disabled` as an HTTP 409 conflict.
 
 Use the active organization and station for scoped requests when the session has a context.
-Keep current scope rules when the session has no context.
+Keep current scope rules when the session has no context. Allow a Superadmin to
+re-enable an organization or station through its administration endpoint.
 
 ## Consequences
 

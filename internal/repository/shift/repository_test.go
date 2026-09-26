@@ -6,9 +6,46 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fadhln/pomkita-be/internal/domain"
 	appshift "github.com/fadhln/pomkita-be/internal/service/shift"
 	"github.com/google/uuid"
 )
+
+func TestShiftRepository_OpenShift_RejectsDisabledOrganization(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	now := time.Date(2026, 1, 2, 14, 30, 0, 0, time.UTC)
+	orgID, stationID, actorID := uuid.New(), uuid.New(), uuid.New()
+	if err := store.DB.Table("organizations").Create(map[string]any{"org_id": orgID, "name": "Disabled Org", "enabled": false, "created_at": now}).Error; err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+	if err := store.DB.Create(&StationModel{Name: "Station", OrgID: orgID, StationID: stationID, Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create station: %v", err)
+	}
+	dispenserID, nozzleID := uuid.New(), uuid.New()
+	if err := store.DB.Create(&UserModel{UserID: actorID, OrgID: orgID, DisplayName: "Supervisor", Email: "supervisor@example.com", Username: "supervisor", PasswordHash: "hash", Enabled: true, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := store.DB.Create(&DispenserModel{OrgID: orgID, StationID: stationID, DispenserID: dispenserID}).Error; err != nil {
+		t.Fatalf("create dispenser: %v", err)
+	}
+	if err := store.DB.Create(&NozzleModel{OrgID: orgID, StationID: stationID, NozzleID: nozzleID, DispenserID: dispenserID, MeterMax: Decimal("99999.9")}).Error; err != nil {
+		t.Fatalf("create nozzle: %v", err)
+	}
+	if err := store.DB.Exec(`insert into dispenser_nozzle_map(org_id,station_id,dispenser_id,nozzle_id,valid_period) values(?,?,?,?,tstzrange(?,?,'[)'))`, orgID, stationID, dispenserID, nozzleID, now.Add(-time.Hour), now.Add(time.Hour)).Error; err != nil {
+		t.Fatalf("create nozzle map: %v", err)
+	}
+	if err := store.DB.Exec(`insert into dispenser_prices(org_id,station_id,nozzle_id,price,valid_period,created_by) values(?,?,?,?,tstzrange(?,?,'[)'),?)`, orgID, stationID, nozzleID, Decimal("10000"), now.Add(-time.Hour), now.Add(time.Hour), actorID).Error; err != nil {
+		t.Fatalf("create price: %v", err)
+	}
+
+	_, err := NewShiftRepository(store).OpenShift(ctx, appshift.OpenRequest{OrgID: orgID, StationID: stationID, ActorID: actorID, OpenedAt: now})
+	var scopeErr *domain.Error
+	if !errors.As(err, &scopeErr) || scopeErr.Code != "org_disabled" {
+		t.Fatalf("open shift error: got %v, want org_disabled", err)
+	}
+}
 
 func TestShiftRepository_OpenShift_PersistsSnapshotAndDraft(t *testing.T) {
 	ctx := context.Background()

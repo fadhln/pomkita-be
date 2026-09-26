@@ -50,6 +50,7 @@ type StationUpdateRequest struct {
 	Code     *string `json:"code,omitempty"`
 	Address  *string `json:"address,omitempty"`
 	Timezone *string `json:"timezone,omitempty"`
+	Enabled  *bool   `json:"enabled,omitempty"`
 }
 
 // UpdateRequest is kept as a short name for service callers.
@@ -81,6 +82,8 @@ func NewService(repository Repository, clock Clock) *Service {
 var (
 	// ErrForbidden identifies an actor without station authority.
 	ErrForbidden = domain.NewError(domain.CategoryAuthorization, "station_administration_forbidden")
+	// ErrEnabledChangeForbidden identifies an Owner attempt to change station state.
+	ErrEnabledChangeForbidden = domain.NewError(domain.CategoryAuthorization, "station_enabled_change_forbidden")
 	// ErrStationNotFound hides a station outside the permitted scope.
 	ErrStationNotFound = domain.NewError(domain.CategoryNotFound, "station_not_found")
 	// ErrOrganizationScopeRequired identifies a missing Superadmin organization scope.
@@ -166,6 +169,9 @@ func (s *Service) Update(ctx context.Context, actor Actor, orgID, stationID uuid
 	if err := validateUpdate(&request); err != nil {
 		return Station{}, err
 	}
+	if request.Enabled != nil && role != "Superadmin" {
+		return Station{}, ErrEnabledChangeForbidden
+	}
 	return s.repository.Update(ctx, orgID, stationID, request, actor.UserID, timestamp(s.clock))
 }
 
@@ -230,7 +236,7 @@ func validateCreate(request *CreateRequest) error {
 }
 
 func validateUpdate(request *UpdateRequest) error {
-	if request.Name == nil && request.Code == nil && request.Address == nil && request.Timezone == nil {
+	if request.Name == nil && request.Code == nil && request.Address == nil && request.Timezone == nil && request.Enabled == nil {
 		return ErrInvalidRequest
 	}
 	if request.Name != nil {

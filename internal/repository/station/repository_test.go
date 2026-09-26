@@ -47,12 +47,17 @@ func TestRepository_StationLifecycleWritesAuditAndKeepsDisabledStationReadable(t
 	if read.Name != name || read.Enabled {
 		t.Fatalf("disabled station: %+v", read)
 	}
+	enabled := true
+	reenabled, err := NewRepository(database).Update(ctx, orgID, created.StationID, appstation.UpdateRequest{Enabled: &enabled}, actorID, now.Add(3*time.Minute))
+	if err != nil || !reenabled.Enabled {
+		t.Fatalf("re-enable station: result=%+v err=%v", reenabled, err)
+	}
 	var events []store.AuditLogModel
 	if err := database.DB.Where("org_id = ?", orgID).Order("org_sequence").Find(&events).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 3 {
-		t.Fatalf("audit event count: got %d, want 3", len(events))
+	if len(events) != 4 {
+		t.Fatalf("audit event count: got %d, want 4", len(events))
 	}
 	for _, event := range events {
 		var payload map[string]any

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/scope"
 	"github.com/fadhln/pomkita-be/internal/repository/store"
 	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
@@ -55,6 +56,9 @@ func (r *SubmissionRepository) Submit(ctx context.Context, request appsubmission
 	}
 	var result appsubmission.Result
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scope.RequireEnabled(tx, request.OrgID, request.StationID); err != nil {
+			return err
+		}
 		tookOver := false
 		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {

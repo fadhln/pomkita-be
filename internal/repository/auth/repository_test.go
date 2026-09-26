@@ -97,4 +97,27 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	}
 }
 
+func TestAuthRepository_FindsDisabledTargetsForActiveContext(t *testing.T) {
+	ctx := context.Background()
+	store, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	now := time.Now().UTC()
+	orgID, stationID := uuid.New(), uuid.New()
+	if err := store.DB.Table("organizations").Create(map[string]any{"org_id": orgID, "name": "Disabled Org", "enabled": false, "created_at": now}).Error; err != nil {
+		t.Fatalf("create disabled organization: %v", err)
+	}
+	if err := store.DB.Table("stations").Create(map[string]any{"org_id": orgID, "station_id": stationID, "name": "Disabled Station", "enabled": false, "timezone": "UTC", "created_at": now}).Error; err != nil {
+		t.Fatalf("create disabled station: %v", err)
+	}
+	repository := NewAuthRepository(store, nil)
+	orgExists, err := repository.OrganizationExists(ctx, orgID)
+	if err != nil || !orgExists {
+		t.Fatalf("disabled organization exists: got %t, err=%v", orgExists, err)
+	}
+	stationExists, err := repository.StationInOrganization(ctx, orgID, stationID)
+	if err != nil || !stationExists {
+		t.Fatalf("disabled station belongs to organization: got %t, err=%v", stationExists, err)
+	}
+}
+
 var newAuthTestStore = testsupport.NewStore

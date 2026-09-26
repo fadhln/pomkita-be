@@ -43,11 +43,16 @@ func TestRepository_CreateOrganizationAndFirstStationWritesAuditAtomically(t *te
 	if err != nil || read.Enabled {
 		t.Fatalf("disabled read: %v, enabled=%v", err, read.Enabled)
 	}
+	enabled := true
+	reenabled, err := NewRepository(database).Update(ctx, created.OrgID, apporg.UpdateRequest{Enabled: &enabled}, uuid.New(), now.Add(3*time.Minute))
+	if err != nil || !reenabled.Enabled {
+		t.Fatalf("re-enable organization: result=%+v err=%v", reenabled, err)
+	}
 	if err := database.DB.Table("audit_log").Where("org_id = ?", created.OrgID).Count(&auditCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if auditCount != 3 {
-		t.Fatalf("audit count after changes: got %d, want 3", auditCount)
+	if auditCount != 4 {
+		t.Fatalf("audit count after changes: got %d, want 4", auditCount)
 	}
 }
 

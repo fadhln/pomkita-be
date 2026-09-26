@@ -118,6 +118,9 @@ func (r *Repository) Update(ctx context.Context, orgID, stationID uuid.UUID, req
 		if request.Timezone != nil {
 			row.Timezone, updates["timezone"] = *request.Timezone, *request.Timezone
 		}
+		if request.Enabled != nil {
+			row.Enabled, updates["enabled"] = *request.Enabled, *request.Enabled
+		}
 		if err := tx.Model(&store.StationModel{}).Where("org_id = ? and station_id = ?", orgID, stationID).Updates(updates).Error; err != nil {
 			if isUniqueViolation(err) {
 				return appstation.ErrCodeConflict

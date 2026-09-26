@@ -12,6 +12,7 @@ import (
 	"time"
 
 	auditrepository "github.com/fadhln/pomkita-be/internal/repository/audit"
+	"github.com/fadhln/pomkita-be/internal/repository/scope"
 	"github.com/fadhln/pomkita-be/internal/repository/store"
 	appaudit "github.com/fadhln/pomkita-be/internal/service/audit"
 	appgovernance "github.com/fadhln/pomkita-be/internal/service/governance"
@@ -107,6 +108,9 @@ func (r *GovernanceRepository) Acknowledge(ctx context.Context, request appgover
 	}
 	var result appgovernance.Acknowledgement
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scope.RequireEnabled(tx, request.OrgID, request.StationID); err != nil {
+			return err
+		}
 		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return fmt.Errorf("lock acknowledgement station: %w", err)
@@ -237,6 +241,9 @@ func (r *GovernanceRepository) RequestAmendment(ctx context.Context, request app
 	}
 	var result appgovernance.Amendment
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scope.RequireEnabled(tx, request.OrgID, request.StationID); err != nil {
+			return err
+		}
 		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound
@@ -311,6 +318,9 @@ func (r *GovernanceRepository) RejectAmendment(ctx context.Context, request appg
 		return appgovernance.ErrDependencyUnavailable
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scope.RequireEnabled(tx, request.OrgID, request.StationID); err != nil {
+			return err
+		}
 		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound
@@ -359,6 +369,9 @@ func (r *GovernanceRepository) ApproveAmendment(ctx context.Context, request app
 	}
 	var result appgovernance.Amendment
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := scope.RequireEnabled(tx, request.OrgID, request.StationID); err != nil {
+			return err
+		}
 		var station store.StationModel
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("org_id = ? and station_id = ?", request.OrgID, request.StationID).First(&station).Error; err != nil {
 			return appgovernance.ErrAmendmentNotFound

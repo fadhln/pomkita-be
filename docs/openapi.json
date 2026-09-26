@@ -2169,6 +2169,9 @@
           "code": {
             "type": "string"
           },
+          "enabled": {
+            "type": "boolean"
+          },
           "name": {
             "type": "string"
           },
@@ -2786,7 +2789,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Request an amendment"
+        "summary": "Request an amendment",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/amendments/{id}/approve": {
@@ -2893,7 +2902,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Approve an amendment"
+        "summary": "Approve an amendment",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/amendments/{id}/reject": {
@@ -2993,7 +3008,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Reject an amendment"
+        "summary": "Reject an amendment",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/anomalies": {
@@ -3789,7 +3810,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Claim a draft"
+        "summary": "Claim a draft",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/drafts/evidence": {
@@ -3885,7 +3912,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Stage draft evidence"
+        "summary": "Stage draft evidence",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/drafts/heartbeat": {
@@ -3974,7 +4007,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Renew a draft lease"
+        "summary": "Renew a draft lease",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/drafts/losses": {
@@ -4070,7 +4109,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Write a draft loss"
+        "summary": "Write a draft loss",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/drafts/readings": {
@@ -4166,7 +4211,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Write a draft reading"
+        "summary": "Write a draft reading",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/drafts/sales": {
@@ -4262,7 +4313,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Write draft sales"
+        "summary": "Write draft sales",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/login": {
@@ -5467,7 +5524,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Acknowledge a report"
+        "summary": "Acknowledge a report",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/reports/{id}/printout": {
@@ -5998,7 +6061,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Open a shift"
+        "summary": "Open a shift",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/shifts/{id}": {
@@ -6576,7 +6645,7 @@
                 "example": {
                   "summary": "Request example",
                   "value": {
-                    "name": "Main Updated"
+                    "enabled": true
                   }
                 }
               },
@@ -6713,6 +6782,7 @@
           ],
           "403": [
             "station_administration_forbidden",
+            "station_enabled_change_forbidden",
             "csrf_required"
           ],
           "404": [
@@ -6974,7 +7044,13 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Submit a report"
+        "summary": "Submit a report",
+        "x-stable-error-codes": {
+          "409": [
+            "org_disabled",
+            "station_disabled"
+          ]
+        }
       }
     },
     "/api/v1/users": {
