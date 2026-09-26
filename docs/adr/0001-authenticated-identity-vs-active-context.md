@@ -26,3 +26,17 @@ re-enable an organization or station through its administration endpoint.
 
 Each login session can select a different context.
 A session read returns the active context, or `null` when no context is set.
+
+## Saved context preference
+
+Save the latest context change for the account. Read this preference after the
+server issues a new login token. Seed only the new session with the preference.
+Do not change an active session when another session changes its context.
+
+Use the saved organization and station when both records exist and the station
+belongs to that organization. Do not require enabled targets. A disabled target
+is still valid for historical reads.
+
+If the saved organization or station is invalid, leave the new session without
+an active context. Use the existing identity defaults for that session. Do not
+choose a station in this fallback. This keeps identity and context separate.
