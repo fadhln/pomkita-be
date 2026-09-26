@@ -177,8 +177,8 @@ func (r *AuthRepository) ReadContextPreference(ctx context.Context, userID uuid.
 		return nil, appauth.ErrDependencyUnavailable
 	}
 	var preference struct {
-		OrgID     *uuid.UUID
-		StationID *uuid.UUID
+		OrgID     *uuid.UUID `gorm:"column:preferred_org_id"`
+		StationID *uuid.UUID `gorm:"column:preferred_station_id"`
 	}
 	if err := r.db.WithContext(ctx).Table("users").
 		Select("preferred_org_id, preferred_station_id").

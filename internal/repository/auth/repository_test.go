@@ -6,8 +6,11 @@ import (
 	"time"
 
 	appjwt "github.com/fadhln/pomkita-be/internal/jwt"
+	"github.com/fadhln/pomkita-be/internal/repository/store"
 	"github.com/fadhln/pomkita-be/internal/repository/testsupport"
+	appauth "github.com/fadhln/pomkita-be/internal/service/auth"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
@@ -131,3 +134,78 @@ func TestAuthRepository_FindsDisabledTargetsForActiveContext(t *testing.T) {
 }
 
 var newAuthTestStore = testsupport.NewStore
+
+func TestAuthRepository_LoginRestoresPreferenceWithoutChangingActiveSessions(t *testing.T) {
+	ctx := context.Background()
+	database, cleanup := newAuthTestStore(t, ctx)
+	defer cleanup()
+	now := time.Now().UTC()
+	orgOne, orgTwo := uuid.New(), uuid.New()
+	stationOne, stationTwo := uuid.New(), uuid.New()
+	userID := uuid.New()
+	for id, name := range map[uuid.UUID]string{orgOne: "Home Org", orgTwo: "Other Org"} {
+		if err := database.DB.Create(&store.OrganizationModel{OrgID: id, Name: name, CreatedAt: now}).Error; err != nil {
+			t.Fatalf("create organization: %v", err)
+		}
+	}
+	for orgID, stationID := range map[uuid.UUID]uuid.UUID{orgOne: stationOne, orgTwo: stationTwo} {
+		if err := database.DB.Create(&store.StationModel{OrgID: orgID, StationID: stationID, Name: "Station", Timezone: "UTC", CreatedAt: now}).Error; err != nil {
+			t.Fatalf("create station: %v", err)
+		}
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	if err := database.DB.Create(&store.UserModel{UserID: userID, OrgID: orgOne, DisplayName: "Superadmin", Email: "admin@example.com", Username: "admin", PasswordHash: string(passwordHash), Enabled: true, CreatedAt: now}).Error; err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := database.DB.Create(&store.JWTKeyModel{KID: "key-1", SecretRef: "key-ref", Status: "active", ActivatedAt: now.Add(-time.Hour), MaxTokenExpiry: now.Add(24 * time.Hour)}).Error; err != nil {
+		t.Fatalf("create JWT key: %v", err)
+	}
+	repository := NewAuthRepository(database, map[string]string{"key-ref": "test-secret"})
+	tokens := appjwt.NewService(repository, appjwt.Config{Issuer: "test", Audience: "test", Now: func() time.Time { return now }})
+	service := appauth.NewService(repository, tokens)
+
+	firstToken, firstClaims, err := service.Login(ctx, "admin", "correct-password")
+	if err != nil {
+		t.Fatalf("first login: %v", err)
+	}
+	if err := service.SetActiveContext(ctx, firstClaims.JTI, []string{"Superadmin"}, orgOne, stationOne); err != nil {
+		t.Fatalf("set first session context: %v", err)
+	}
+	if err := service.Logout(ctx, firstClaims.JTI); err != nil {
+		t.Fatalf("logout first session: %v", err)
+	}
+
+	_, secondClaims, err := service.Login(ctx, "admin", "correct-password")
+	if err != nil {
+		t.Fatalf("second login: %v", err)
+	}
+	secondView, err := repository.ReadSession(ctx, secondClaims.JTI, userID)
+	if err != nil || secondView.ActiveContext == nil || secondView.ActiveContext.OrgID != orgOne || secondView.ActiveContext.StationID != stationOne {
+		t.Fatalf("second login context: view=%+v err=%v", secondView.ActiveContext, err)
+	}
+	_, thirdClaims, err := service.Login(ctx, "admin", "correct-password")
+	if err != nil {
+		t.Fatalf("third login: %v", err)
+	}
+	if err := service.SetActiveContext(ctx, secondClaims.JTI, []string{"Superadmin"}, orgTwo, stationTwo); err != nil {
+		t.Fatalf("change second session context: %v", err)
+	}
+	thirdView, err := repository.ReadSession(ctx, thirdClaims.JTI, userID)
+	if err != nil || thirdView.ActiveContext == nil || thirdView.ActiveContext.OrgID != orgOne || thirdView.ActiveContext.StationID != stationOne {
+		t.Fatalf("existing third session context changed: view=%+v err=%v", thirdView.ActiveContext, err)
+	}
+	_, fourthClaims, err := service.Login(ctx, "admin", "correct-password")
+	if err != nil {
+		t.Fatalf("fourth login: %v", err)
+	}
+	fourthView, err := repository.ReadSession(ctx, fourthClaims.JTI, userID)
+	if err != nil || fourthView.ActiveContext == nil || fourthView.ActiveContext.OrgID != orgTwo || fourthView.ActiveContext.StationID != stationTwo {
+		t.Fatalf("latest login context: view=%+v err=%v", fourthView.ActiveContext, err)
+	}
+	if firstToken == "" {
+		t.Fatal("first login returned an empty token")
+	}
+}
