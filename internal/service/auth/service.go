@@ -32,6 +32,7 @@ type Repository interface {
 	OrganizationExists(context.Context, uuid.UUID) (bool, error)
 	StationInOrganization(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 	SetActiveContext(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, time.Time) error
+	ReadContextPreference(context.Context, uuid.UUID) (*appjwt.ActiveContext, error)
 }
 
 var (
@@ -76,7 +77,35 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 	if !user.Enabled || user.PasswordHash == "" || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
 		return "", appjwt.Claims{}, ErrInvalidCredentials
 	}
-	return s.tokens.Issue(ctx, user.UserID)
+	token, claims, err := s.tokens.Issue(ctx, user.UserID)
+	if err != nil {
+		return "", appjwt.Claims{}, err
+	}
+	preference, err := s.repository.ReadContextPreference(ctx, user.UserID)
+	if err != nil {
+		return "", appjwt.Claims{}, fmt.Errorf("read account context preference: %w", err)
+	}
+	if preference == nil {
+		return token, claims, nil
+	}
+	orgExists, err := s.repository.OrganizationExists(ctx, preference.OrgID)
+	if err != nil {
+		return "", appjwt.Claims{}, fmt.Errorf("check preferred organization: %w", err)
+	}
+	if !orgExists {
+		return token, claims, nil
+	}
+	stationExists, err := s.repository.StationInOrganization(ctx, preference.OrgID, preference.StationID)
+	if err != nil {
+		return "", appjwt.Claims{}, fmt.Errorf("check preferred station: %w", err)
+	}
+	if !stationExists {
+		return token, claims, nil
+	}
+	if err := s.repository.SetActiveContext(ctx, claims.JTI, preference.OrgID, preference.StationID, time.Now().UTC()); err != nil {
+		return "", appjwt.Claims{}, fmt.Errorf("restore account context preference: %w", err)
+	}
+	return token, claims, nil
 }
 
 // Logout revokes a session by its verified token identifier.

@@ -19,6 +19,7 @@ type repositoryStub struct {
 	createdJTI                                      uuid.UUID
 	orgExists                                       bool
 	stationExists                                   bool
+	preference                                      *appjwt.ActiveContext
 	setContextErr                                   error
 	setContextJTI, setContextOrg, setContextStation uuid.UUID
 }
@@ -49,6 +50,9 @@ func (r *repositoryStub) OrganizationExists(context.Context, uuid.UUID) (bool, e
 }
 func (r *repositoryStub) StationInOrganization(context.Context, uuid.UUID, uuid.UUID) (bool, error) {
 	return r.stationExists, nil
+}
+func (r *repositoryStub) ReadContextPreference(context.Context, uuid.UUID) (*appjwt.ActiveContext, error) {
+	return r.preference, nil
 }
 func (r *repositoryStub) SetActiveContext(_ context.Context, jti, orgID, stationID uuid.UUID, _ time.Time) error {
 	r.setContextJTI, r.setContextOrg, r.setContextStation = jti, orgID, stationID
@@ -146,6 +150,66 @@ func TestService_Login_ValidCredentialsCreatesSession(t *testing.T) {
 	}
 	if token == "" || claims.Subject != userID {
 		t.Fatalf("login result: token=%q subject=%s", token, claims.Subject)
+	}
+}
+
+func TestService_Login_RestoresSavedContextForNewSession(t *testing.T) {
+	userID := uuid.New()
+	orgID, stationID := uuid.New(), uuid.New()
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	repository := &repositoryStub{
+		user:       User{UserID: userID, PasswordHash: string(hash), Enabled: true},
+		preference: &appjwt.ActiveContext{OrgID: orgID, StationID: stationID},
+		orgExists:  true, stationExists: true,
+	}
+	tokens := appjwt.NewService(&tokenStoreStub{key: appjwt.Key{KID: "key-1", Secret: "test-secret", Status: appjwt.KeyActive}}, appjwt.Config{Issuer: "test", Audience: "test"})
+	service := NewService(repository, tokens)
+
+	_, claims, err := service.Login(context.Background(), "user@example.com", "correct-password")
+
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if repository.setContextJTI != claims.JTI || repository.setContextOrg != orgID || repository.setContextStation != stationID {
+		t.Fatalf("restored context: jti=%s org=%s station=%s", repository.setContextJTI, repository.setContextOrg, repository.setContextStation)
+	}
+}
+
+func TestService_Login_InvalidSavedContextFallsBackToIdentityDefaults(t *testing.T) {
+	userID := uuid.New()
+	orgID, stationID := uuid.New(), uuid.New()
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	for _, test := range []struct {
+		name                     string
+		orgExists, stationExists bool
+	}{
+		{name: "organization no longer exists", orgExists: false, stationExists: true},
+		{name: "station no longer belongs to organization", orgExists: true, stationExists: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &repositoryStub{
+				user:       User{UserID: userID, PasswordHash: string(hash), Enabled: true},
+				preference: &appjwt.ActiveContext{OrgID: orgID, StationID: stationID},
+				orgExists:  test.orgExists, stationExists: test.stationExists,
+			}
+			tokens := appjwt.NewService(&tokenStoreStub{key: appjwt.Key{KID: "key-1", Secret: "test-secret", Status: appjwt.KeyActive}}, appjwt.Config{Issuer: "test", Audience: "test"})
+			service := NewService(repository, tokens)
+
+			_, _, err := service.Login(context.Background(), "user@example.com", "correct-password")
+
+			if err != nil {
+				t.Fatalf("login with invalid saved context: %v", err)
+			}
+			if repository.setContextJTI != uuid.Nil {
+				t.Fatalf("invalid context was seeded: org=%s station=%s", repository.setContextOrg, repository.setContextStation)
+			}
+		})
 	}
 }
 

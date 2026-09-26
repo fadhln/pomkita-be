@@ -64,6 +64,14 @@ It returns `null` when this session has no active context. The context changes
 request scope only. It does not change the authenticated user or role grants.
 Another login session keeps its own context.
 
+The latest successful context change also saves an account preference.
+A later login on any device starts with that organization and station when both
+records still exist and the station still belongs to the organization.
+Disabled targets are valid for this preference. If a target is missing or the
+station does not belong to the organization, the new session has no active
+context. The existing identity defaults then apply. The server does not choose a
+station for this fallback.
+
 ## Naming rules
 
 - Go files use lower snake case without phase prefixes.
