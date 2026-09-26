@@ -48,8 +48,16 @@ Money and volume values are decimal strings. Every response includes
 A Superadmin can set both values for the current login session with
 `POST /api/v1/session/active-context`. The request requires the
 `X-Requested-With` header and a JSON body with `org_id` and `station_id`.
-Both targets must be enabled, and the station must belong to the organization.
-The server returns `204 No Content` after the update.
+Both targets must exist. The station must belong to the organization. A disabled
+organization or station can remain the active context so a Superadmin can inspect
+historical data. Reads continue to work in a disabled scope. Operational writes,
+such as shift opening, draft changes, report submission, acknowledgements, and
+amendments, return HTTP 409 with `org_disabled` when the organization is disabled, or
+`station_disabled` when only the station is disabled. The server returns `204
+No Content` after the context update.
+
+A Superadmin can re-enable an organization with `PATCH /api/v1/organizations/{id}`
+and a station with `PATCH /api/v1/stations/{id}` by setting `enabled` to `true`.
 
 `GET /api/v1/session` returns `active_context` with `org_id` and `station_id`.
 It returns `null` when this session has no active context. The context changes

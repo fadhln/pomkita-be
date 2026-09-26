@@ -186,6 +186,7 @@ func decorateIdentityContract(document *huma.OpenAPI) {
 	decorateOrganizationContract(document)
 	decorateStationContract(document)
 	decorateAdminUsersContract(document)
+	decorateDisabledScopeContract(document)
 }
 
 func decorateAdminUsersContract(document *huma.OpenAPI) {
@@ -290,6 +291,34 @@ func decorateOrganizationContract(document *huma.OpenAPI) {
 	}
 }
 
+func decorateDisabledScopeContract(document *huma.OpenAPI) {
+	paths := []string{
+		"/api/v1/shifts",
+		"/api/v1/drafts/claim",
+		"/api/v1/drafts/heartbeat",
+		"/api/v1/drafts/readings",
+		"/api/v1/drafts/sales",
+		"/api/v1/drafts/losses",
+		"/api/v1/drafts/evidence",
+		"/api/v1/submissions",
+		"/api/v1/reports/{id}/acknowledgement",
+		"/api/v1/amendments",
+		"/api/v1/amendments/{id}/approve",
+		"/api/v1/amendments/{id}/reject",
+	}
+	for _, path := range paths {
+		item := document.Paths[path]
+		if item == nil || item.Post == nil {
+			continue
+		}
+		ensureProblemResponses(item.Post, "409")
+		if item.Post.Extensions == nil {
+			item.Post.Extensions = make(map[string]any)
+		}
+		item.Post.Extensions["x-stable-error-codes"] = map[string][]string{"409": {"org_disabled", "station_disabled"}}
+	}
+}
+
 func decorateStationContract(document *huma.OpenAPI) {
 	if item := document.Paths["/api/v1/stations"]; item != nil {
 		if item.Get != nil {
@@ -310,7 +339,7 @@ func decorateStationContract(document *huma.OpenAPI) {
 			ensureProblemResponses(item.Get, "400", "401", "403", "404", "422", "500", "503")
 		}
 		if item.Patch != nil {
-			decorateOperation(item.Patch, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"station_administration_forbidden", "csrf_required"}, "404": {"station_not_found"}, "409": {"station_code_conflict"}, "422": {"organization_scope_required", "invalid_station_request"}}, map[string]any{"name": "Main Updated"}, true)
+			decorateOperation(item.Patch, []string{"Owner", "Superadmin"}, map[string][]string{"401": {"invalid_session"}, "403": {"station_administration_forbidden", "station_enabled_change_forbidden", "csrf_required"}, "404": {"station_not_found"}, "409": {"station_code_conflict"}, "422": {"organization_scope_required", "invalid_station_request"}}, map[string]any{"enabled": true}, true)
 			ensureProblemResponses(item.Patch, "400", "401", "403", "404", "409", "422", "500", "503")
 		}
 		trimResponses(document, "/api/v1/stations/{id}", http.MethodGet, "200", "400", "401", "403", "404", "422", "500", "503")

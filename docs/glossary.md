@@ -14,3 +14,10 @@ The context does not add or remove role grants.
 ## Session
 
 One login and its verified token. A user can have more than one session.
+
+## Disabled scope
+
+An organization or station with `enabled` set to `false`.
+The server permits reads in this scope for historical review.
+The server rejects operational writes in this scope.
+A Superadmin can re-enable the organization or station.
