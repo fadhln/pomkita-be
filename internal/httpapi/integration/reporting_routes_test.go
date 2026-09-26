@@ -62,3 +62,7 @@ func (s *SessionStub) Logout(context.Context, uuid.UUID) error { return nil }
 func (s *SessionStub) ReadSession(context.Context, string) (SessionView, error) {
 	return s.view, nil
 }
+
+func (s *SessionStub) SetActiveContext(context.Context, uuid.UUID, []string, uuid.UUID, uuid.UUID) error {
+	return nil
+}

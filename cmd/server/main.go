@@ -98,7 +98,7 @@ func main() {
 		Policy: policyService, PolicyRead: policyService, Audit: reportingService, AuditVerify: auditService,
 		Anomalies: reportingService, Reports: reportingService, DeniedAudit: deniedAudit,
 		Users: identityService, Account: accountService, Organization: organizationService, Station: stationService,
-		AccountLimiter: accountapi.NewLimiter(5, time.Minute, time.Now), LatestMigration: 16,
+		AccountLimiter: accountapi.NewLimiter(5, time.Minute, time.Now), LatestMigration: 17,
 	}
 	router := httpapi.NewRouterWithDependencySet(cfg.Environment, cfg.CorsAllowedOrigins, dependencies)
 

@@ -41,6 +41,9 @@ func (s *versionedSessionStub) Logout(context.Context, uuid.UUID) error { return
 func (s *versionedSessionStub) ReadSession(context.Context, string) (appjwt.SessionView, error) {
 	return s.view, nil
 }
+func (s *versionedSessionStub) SetActiveContext(context.Context, uuid.UUID, []string, uuid.UUID, uuid.UUID) error {
+	return nil
+}
 
 func TestVersionedHealthAndReadyRoutes_AreNotRegistered(t *testing.T) {
 	router := testRouter("test", nil, readyStub{}, nil, nil)
