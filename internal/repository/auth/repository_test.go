@@ -55,12 +55,26 @@ func TestAuthRepository_LoadsUserScopeAndPersistsJWTSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issue session: %v", err)
 	}
+	if err := repository.SetActiveContext(ctx, claims.JTI, orgID, stationID, now); err != nil {
+		t.Fatalf("set session active context: %v", err)
+	}
 	view, err := repository.ReadSession(ctx, claims.JTI, userID)
 	if err != nil {
 		t.Fatalf("read session view: %v", err)
 	}
 	if view.UserID != userID || view.Username != "test-user" || view.OrgID != orgID || len(view.Roles) != 1 || view.Roles[0] != "Supervisor" || len(view.StationIDs) != 1 || view.StationIDs[0] != stationID {
 		t.Fatalf("session view: got %+v", view)
+	}
+	if view.ActiveContext == nil || view.ActiveContext.OrgID != orgID || view.ActiveContext.StationID != stationID {
+		t.Fatalf("active context: got %+v", view.ActiveContext)
+	}
+	_, otherClaims, err := tokens.Issue(ctx, userID)
+	if err != nil {
+		t.Fatalf("issue second session: %v", err)
+	}
+	otherView, err := repository.ReadSession(ctx, otherClaims.JTI, userID)
+	if err != nil || otherView.ActiveContext != nil {
+		t.Fatalf("second session context: view=%+v err=%v", otherView.ActiveContext, err)
 	}
 	if err := store.DB.Table("user_station_roles").Create(map[string]any{
 		"org_id": orgID, "station_id": stationID, "user_id": userID, "role": "Owner",
