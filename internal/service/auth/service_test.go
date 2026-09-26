@@ -178,6 +178,41 @@ func TestService_Login_RestoresSavedContextForNewSession(t *testing.T) {
 	}
 }
 
+func TestService_Login_InvalidSavedContextFallsBackToIdentityDefaults(t *testing.T) {
+	userID := uuid.New()
+	orgID, stationID := uuid.New(), uuid.New()
+	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	for _, test := range []struct {
+		name                     string
+		orgExists, stationExists bool
+	}{
+		{name: "organization no longer exists", orgExists: false, stationExists: true},
+		{name: "station no longer belongs to organization", orgExists: true, stationExists: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &repositoryStub{
+				user:       User{UserID: userID, PasswordHash: string(hash), Enabled: true},
+				preference: &appjwt.ActiveContext{OrgID: orgID, StationID: stationID},
+				orgExists:  test.orgExists, stationExists: test.stationExists,
+			}
+			tokens := appjwt.NewService(&tokenStoreStub{key: appjwt.Key{KID: "key-1", Secret: "test-secret", Status: appjwt.KeyActive}}, appjwt.Config{Issuer: "test", Audience: "test"})
+			service := NewService(repository, tokens)
+
+			_, _, err := service.Login(context.Background(), "user@example.com", "correct-password")
+
+			if err != nil {
+				t.Fatalf("login with invalid saved context: %v", err)
+			}
+			if repository.setContextJTI != uuid.Nil {
+				t.Fatalf("invalid context was seeded: org=%s station=%s", repository.setContextOrg, repository.setContextStation)
+			}
+		})
+	}
+}
+
 func TestService_Login_InvalidCredentialsReturnsAuthenticationError(t *testing.T) {
 	hash, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.MinCost)
 	if err != nil {
