@@ -29,8 +29,8 @@ type User struct {
 type Repository interface {
 	FindUserByUsername(context.Context, string) (User, error)
 	ReadSession(context.Context, uuid.UUID, uuid.UUID) (appjwt.SessionView, error)
-	EnabledOrganization(context.Context, uuid.UUID) (bool, error)
-	EnabledStation(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+	OrganizationExists(context.Context, uuid.UUID) (bool, error)
+	StationInOrganization(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 	SetActiveContext(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, time.Time) error
 }
 
@@ -105,18 +105,18 @@ func (s *Service) SetActiveContext(ctx context.Context, jti uuid.UUID, roles []s
 	if jti == uuid.Nil || orgID == uuid.Nil || stationID == uuid.Nil {
 		return ErrActiveContextInvalid
 	}
-	orgEnabled, err := s.repository.EnabledOrganization(ctx, orgID)
+	orgExists, err := s.repository.OrganizationExists(ctx, orgID)
 	if err != nil {
 		return fmt.Errorf("check active organization: %w", err)
 	}
-	if !orgEnabled {
+	if !orgExists {
 		return ErrActiveContextNotFound
 	}
-	stationEnabled, err := s.repository.EnabledStation(ctx, orgID, stationID)
+	stationExists, err := s.repository.StationInOrganization(ctx, orgID, stationID)
 	if err != nil {
 		return fmt.Errorf("check active station: %w", err)
 	}
-	if !stationEnabled {
+	if !stationExists {
 		return ErrActiveContextNotFound
 	}
 	if err := s.repository.SetActiveContext(ctx, jti, orgID, stationID, time.Now().UTC()); err != nil {

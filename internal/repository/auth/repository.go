@@ -159,23 +159,23 @@ func (r *AuthRepository) SetActiveContext(ctx context.Context, jti, orgID, stati
 	return r.db.WithContext(ctx).Exec(`insert into session_active_context (jti, org_id, station_id, updated_at) values (?, ?, ?, ?) on conflict (jti) do update set org_id = excluded.org_id, station_id = excluded.station_id, updated_at = excluded.updated_at`, jti, orgID, stationID, updatedAt.UTC()).Error
 }
 
-// EnabledOrganization reports whether an organization exists and is enabled.
-func (r *AuthRepository) EnabledOrganization(ctx context.Context, orgID uuid.UUID) (bool, error) {
+// OrganizationExists reports whether an organization exists.
+func (r *AuthRepository) OrganizationExists(ctx context.Context, orgID uuid.UUID) (bool, error) {
 	if r == nil || r.db == nil {
 		return false, appauth.ErrDependencyUnavailable
 	}
 	var count int64
-	err := r.db.WithContext(ctx).Table("organizations").Where("org_id = ? and enabled = true", orgID).Count(&count).Error
+	err := r.db.WithContext(ctx).Table("organizations").Where("org_id = ?", orgID).Count(&count).Error
 	return count == 1, err
 }
 
-// EnabledStation reports whether an enabled station belongs to an organization.
-func (r *AuthRepository) EnabledStation(ctx context.Context, orgID, stationID uuid.UUID) (bool, error) {
+// StationInOrganization reports whether a station belongs to an organization.
+func (r *AuthRepository) StationInOrganization(ctx context.Context, orgID, stationID uuid.UUID) (bool, error) {
 	if r == nil || r.db == nil {
 		return false, appauth.ErrDependencyUnavailable
 	}
 	var count int64
-	err := r.db.WithContext(ctx).Table("stations").Where("org_id = ? and station_id = ? and enabled = true", orgID, stationID).Count(&count).Error
+	err := r.db.WithContext(ctx).Table("stations").Where("org_id = ? and station_id = ?", orgID, stationID).Count(&count).Error
 	return count == 1, err
 }
 
